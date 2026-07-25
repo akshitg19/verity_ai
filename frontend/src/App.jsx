@@ -299,22 +299,6 @@ export default function App() {
     invalidateEditedRow(affectedRow);
   };
 
-  // Lines that can be sent to the judge: have text and were readable
-  // (an unreadable line whose text the student typed in counts).
-  const toJudgeLines = (lineArr) =>
-    [...lineArr]
-      .sort((a, b) => a.row - b.row)
-      .map((line, index) => ({
-        ...line,
-        line_number: index + 1,
-      }))
-      .filter((l) => l.text.trim() && l.text !== "UNREADABLE")
-      .map((l) => ({
-        row: l.row,
-        line_number: l.line_number,
-        latex: l.text,
-      }));
-
   // Re-judge the whole page. Free (pure SymPy server-side), so it runs on
   // every finished line and every manual correction.
   const recheck = async (lineArr, problemText = problemRef.current) => {
