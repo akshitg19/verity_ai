@@ -1,8 +1,57 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 
 const LINE_HEIGHT = 64;
+const NOTEBOOK_ROWS = 24;
+const NOTEBOOK_HEIGHT = NOTEBOOK_ROWS * LINE_HEIGHT;
+const TOOLBAR_HEIGHT = 64;
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const LINE_PAD = 16;
+const ERASER_RADIUS = 18;
+
+function distanceToSegment(point, start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+
+  if (dx === 0 && dy === 0) {
+    return Math.hypot(point.x - start.x, point.y - start.y);
+  }
+
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      ((point.x - start.x) * dx + (point.y - start.y) * dy) /
+        (dx * dx + dy * dy)
+    )
+  );
+
+  const closestX = start.x + t * dx;
+  const closestY = start.y + t * dy;
+
+  return Math.hypot(point.x - closestX, point.y - closestY);
+}
+
+function strokeTouchesPoint(stroke, point) {
+  const points = stroke.points;
+
+  if (points.length === 1) {
+    return (
+      Math.hypot(point.x - points[0].x, point.y - points[0].y) <=
+      ERASER_RADIUS
+    );
+  }
+
+  for (let index = 1; index < points.length; index += 1) {
+    if (
+      distanceToSegment(point, points[index - 1], points[index]) <=
+      ERASER_RADIUS
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 function getVerdictStatus(verdict) {
   if (!verdict) return null;
@@ -102,6 +151,7 @@ function renderLineToPng(lineStrokes) {
 export default function App() {
   const canvasRef = useRef(null);
   const [strokes, setStrokes] = useState([]); // finished strokes
+  const [activeTool, setActiveTool] = useState("pen");
   const currentStroke = useRef(null); // stroke in progress
   const activePointerId = useRef(null);
   const transcriptionRequestId = useRef(0);
@@ -141,6 +191,23 @@ export default function App() {
     if (e.pointerType === "touch") return; // palm rejection
     if (activePointerId.current !== null) return;
     const firstPoint = getPoint(e);
+    if (activeTool === "eraser") {
+      const strokeIndex = strokes.findLastIndex((stroke) =>
+        strokeTouchesPoint(stroke, firstPoint)
+      );
+
+      if (strokeIndex === -1) return;
+
+      const removedStroke = strokes[strokeIndex];
+      const updatedStrokes = strokes.filter(
+        (_, index) => index !== strokeIndex
+      );
+
+      setStrokes(updatedStrokes);
+      invalidateEditedRow(getStrokeRow(removedStroke));
+      return;
+    }
+
     activePointerId.current = e.pointerId;
 
     // The visible handwriting no longer matches the last transcription.
@@ -194,21 +261,43 @@ export default function App() {
     drawFrame();
   };
 
-  // Lines that can be sent to the judge: have text and were readable
-  // (an unreadable line whose text the student typed in counts).
-  const toJudgeLines = (lineArr) =>
-    [...lineArr]
-      .sort((a, b) => a.row - b.row)
-      .map((line, index) => ({
-        ...line,
-        line_number: index + 1,
-      }))
-      .filter((l) => l.text.trim() && l.text !== "UNREADABLE")
-      .map((l) => ({
-        row: l.row,
-        line_number: l.line_number,
-        latex: l.text,
-      }));
+  // Any edit to handwriting makes that row's old transcription and
+  // all checker feedback stale.
+  const invalidateEditedRow = (row) => {
+    ++transcriptionRequestId.current;
+    ++checkRequestId.current;
+    ++hintRequestId.current;
+
+    transcriptionRowRef.current = null;
+    setTranscribing(false);
+
+    // Remove the old transcription for the edited row.
+    const updatedLines = linesRef.current.filter((line) => line.row !== row);
+    linesRef.current = updatedLines;
+    setLines(updatedLines);
+
+    // Make the edited row active so it can be finished/transcribed again.
+    activeRowRef.current = row;
+    setActiveRow(row);
+
+    // Old verdicts and hints are no longer trustworthy.
+    setVerdictsByLine(new Map());
+    setFirstWrongLine(null);
+    setHintLevel(0);
+    setHintText(null);
+    setHintLoading(false);
+    setLastResult(null);
+  };
+
+  const handleUndo = () => {
+    if (strokes.length === 0 || transcribing) return;
+
+    const removedStroke = strokes[strokes.length - 1];
+    const affectedRow = getStrokeRow(removedStroke);
+
+    setStrokes((previousStrokes) => previousStrokes.slice(0, -1));
+    invalidateEditedRow(affectedRow);
+  };
 
   // Re-judge the whole page. Free (pure SymPy server-side), so it runs on
   // every finished line and every manual correction.
@@ -224,22 +313,52 @@ export default function App() {
     setFirstWrongLine(null);
     setLastResult(null);
 
-    const judgeLines = toJudgeLines(lineArr);
+    const usableLines = [...lineArr]
+      .sort((a, b) => a.row - b.row)
+      .filter(
+        (line) =>
+          line.text.trim() &&
+          line.text !== "UNREADABLE"
+      );
+
+    const typedProblem = problemText.trim();
+
+    // When the textbox is blank, use the first handwritten row as the problem.
+    // When the textbox has text, preserve the existing behavior and treat every
+    // handwritten row as a solution step.
+    const handwrittenProblem = typedProblem ? null : usableLines[0] ?? null;
+
+    const effectiveProblem =
+      typedProblem || handwrittenProblem?.text.trim() || "";
+
+    const solutionLines = typedProblem
+      ? usableLines
+      : usableLines.slice(1);
+
+    const judgeLines = solutionLines.map((line, index) => ({
+      row: line.row,
+      line_number: index + 1,
+      latex: line.text,
+    }));
+
     const stepList = judgeLines.map(({ line_number, latex }) => ({
       line_number,
       latex,
     }));
+
     const rowByLineNumber = new Map(
       judgeLines.map((line) => [line.line_number, line.row])
     );
-    if (!problemText.trim() || stepList.length === 0) {
+
+    if (!effectiveProblem || stepList.length === 0) {
       return;
     }
+
     try {
       const res = await fetch(`${API_BASE}/check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ problem: problemText, steps: stepList }),
+        body: JSON.stringify({ problem: effectiveProblem, steps: stepList }),
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = await res.json();
@@ -522,22 +641,48 @@ export default function App() {
     }
   }, [strokes, drawStroke, verdictsByLine]);
 
-  // Size canvas to window
+  // Keep the notebook at least 24 rows tall so the page can scroll.
   useEffect(() => {
     const canvas = canvasRef.current;
+
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      canvas.width = document.documentElement.clientWidth;
+      canvas.height = Math.max(
+        NOTEBOOK_HEIGHT,
+        window.innerHeight - TOOLBAR_HEIGHT
+      );
+
       drawFrame();
     };
+
     resize();
     window.addEventListener("resize", resize);
+
     return () => window.removeEventListener("resize", resize);
   }, [drawFrame]);
 
-  useEffect(() => {
-    drawFrame();
-  }, [strokes, drawFrame]);
+  const handleClear = () => {
+    ++transcriptionRequestId.current;
+    ++checkRequestId.current;
+    ++hintRequestId.current;
+
+    currentStroke.current = null;
+    activePointerId.current = null;
+    transcriptionRowRef.current = null;
+    activeRowRef.current = null;
+    linesRef.current = [];
+
+    setStrokes([]);
+    setLines([]);
+    setActiveRow(null);
+    setVerdictsByLine(new Map());
+    setFirstWrongLine(null);
+    setHintLevel(0);
+    setHintText(null);
+    setHintLoading(false);
+    setTranscribing(false);
+    setLastResult(null);
+  };
 
   const activeLineNumber =
     activeRow === null
@@ -545,88 +690,186 @@ export default function App() {
       : [...segmentIntoLines(strokes).keys()].sort((a, b) => a - b)
           .indexOf(activeRow) + 1 || null;
 
+  const handwrittenProblemRow =
+    !problem.trim()
+      ? [...lines]
+          .sort((a, b) => a.row - b.row)
+          .find(
+            (line) =>
+              line.text.trim() &&
+              line.text !== "UNREADABLE"
+          )?.row ?? null
+      : null;
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#faf8f2" }}>
+    <div 
+      style={{ 
+        position: "fixed", 
+        inset: 0,
+        overflowY: "auto",
+        overflowX: "hidden", 
+        background: "#faf8f2" 
+      }}
+    >
       <canvas
         ref={canvasRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        style={{ touchAction: "none", display: "block" }}
-      />
-      <input
-        type="text"
-        value={problem}
-        onChange={handleProblemChange}
-        onBlur={handleProblemEditDone}
-        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-        placeholder="Enter the problem, e.g. 3x - 12 = 2x + 5"
-        style={{
-          position: "fixed", top: 12, left: 12, padding: "8px 12px",
-          width: 320, border: "1px solid #ccc", borderRadius: 8,
-          fontFamily: "monospace",
+        style={{ 
+          touchAction: "none", 
+          display: "block",
+          marginTop: TOOLBAR_HEIGHT,
+          background: "#faf8f2",
         }}
       />
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 20,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: 12,
+          boxSizing: "border-box",
+          background: "#faf8f2",
+          borderBottom: "1px solid #d6d6d6",
+        }}
+      >
+        <input
+          type="text"
+          value={problem}
+          onChange={handleProblemChange}
+          onBlur={handleProblemEditDone}
+          onKeyDown={(e) =>
+            e.key === "Enter" && e.currentTarget.blur()
+          }
+          placeholder="Optional problem override — otherwise write the problem on line 1"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: "8px 12px",
+            border: "1px solid #ccc",
+            borderRadius: 8,
+            fontFamily: "monospace",
+          }}
+        />
+
+        <button
+          onClick={() => setActiveTool("pen")}
+          style={{
+            padding: "8px 16px",
+            whiteSpace: "nowrap",
+            background: activeTool === "pen" ? "#dcecff" : "#fff",
+            border: "1px solid #ccc",
+            borderRadius: 8,
+            cursor: "pointer",
+          }}
+        >
+          Pen
+        </button>
+
+        <button
+          onClick={() => setActiveTool("eraser")}
+          style={{
+            padding: "8px 16px",
+            whiteSpace: "nowrap",
+            background: activeTool === "eraser" ? "#dcecff" : "#fff",
+            border: "1px solid #ccc",
+            borderRadius: 8,
+            cursor: "pointer",
+          }}
+        >
+          Eraser
+        </button>
+        <button
+          onClick={handleFinishLine}
+          disabled={
+            transcribing ||
+            strokes.length === 0 ||
+            activeLineNumber === null
+          }
+          style={{
+            padding: "8px 16px",
+            whiteSpace: "nowrap",
+            background: "#fff",
+            border: "1px solid #ccc",
+            borderRadius: 8,
+            opacity:
+              transcribing ||
+              strokes.length === 0 ||
+              activeLineNumber === null
+                ? 0.5
+                : 1,
+            cursor:
+              transcribing ||
+              strokes.length === 0 ||
+              activeLineNumber === null
+                ? "not-allowed"
+                : "pointer",
+          }}
+        >
+          {transcribing
+            ? "Transcribing..."
+            : activeLineNumber === null
+              ? "Finish Line"
+              : `Finish line ${activeLineNumber}`}
+        </button>
+
+        <button
+          onClick={handleUndo}
+          disabled={strokes.length === 0 || transcribing}
+          style={{
+            padding: "8px 16px",
+            whiteSpace: "nowrap",
+            background: "#fff",
+            border: "1px solid #ccc",
+            borderRadius: 8,
+            opacity:
+              strokes.length === 0 || transcribing ? 0.5 : 1,
+            cursor:
+              strokes.length === 0 || transcribing
+                ? "not-allowed"
+                : "pointer",
+          }}
+        >
+          Undo
+        </button>
+
+        <button
+          onClick={handleClear}
+          style={{
+            padding: "8px 16px",
+            whiteSpace: "nowrap",
+            background: "#fff",
+            border: "1px solid #ccc",
+            borderRadius: 8,
+            cursor: "pointer",
+          }}
+        >
+          Clear
+        </button>
+      </div>
+
       {!problem.trim() && (
         <div
           style={{
-            position: "fixed", top: 50, left: 12, fontSize: 12,
-            color: "#a06a3a", fontFamily: "monospace",
+            position: "fixed",
+            top: 60,
+            left: 12,
+            zIndex: 20,
+            fontSize: 12,
+            color: "#a06a3a",
+            fontFamily: "monospace",
           }}
         >
-          Checking is off until you type a problem above -- lines will
-          transcribe but won't be graded.
+          Leave the box blank to use your first handwritten line as the problem.
         </div>
       )}
-      <button
-        onClick={() => {
-          ++transcriptionRequestId.current;
-          ++checkRequestId.current;
-          ++hintRequestId.current;
-          currentStroke.current = null;
-          activePointerId.current = null;
-          transcriptionRowRef.current = null;
-          activeRowRef.current = null;
-          linesRef.current = [];
-          setStrokes([]);
-          setLines([]);
-          setActiveRow(null);
-          setVerdictsByLine(new Map());
-          setFirstWrongLine(null);
-          setHintLevel(0);
-          setHintText(null);
-          setHintLoading(false);
-          setTranscribing(false);
-          setLastResult(null);
-        }}
-        style={{
-          position: "fixed", top: 12, right: 12, padding: "8px 16px",
-          background: "#fff", border: "1px solid #ccc", borderRadius: 8,
-        }}
-      >
-        Clear
-      </button>
-      <button
-        onClick={handleFinishLine}
-        disabled={
-          transcribing || strokes.length === 0 || activeLineNumber === null
-        }
-        style={{
-          position: "fixed", top: 12, right: 96, padding: "8px 16px",
-          background: "#fff", border: "1px solid #ccc", borderRadius: 8,
-          opacity:
-            transcribing || strokes.length === 0 || activeLineNumber === null
-              ? 0.5
-              : 1,
-        }}
-      >
-        {transcribing
-          ? "Transcribing..."
-          : activeLineNumber === null
-          ? "Finish Line"
-          : `Finish line ${activeLineNumber}`}
-      </button>
       {(lastResult?.error || lastResult?.warning) && (
         <div
           style={{
@@ -654,9 +897,12 @@ export default function App() {
           {lines.map((l, index) => {
             const verdict = verdictsByLine.get(l.row);
             const verdictStatus = getVerdictStatus(verdict);
-            const status = l.unreadable
-              ? { label: "couldn't read -- type it here", color: "#a06a3a" }
-              : verdict === undefined
+            const status =
+              l.unreadable
+                ? { label: "couldn't read -- type it here", color: "#a06a3a" }
+                : l.row === handwrittenProblemRow
+                ? { label: "problem", color: "#4b6b9a" }
+                : verdict === undefined
               ? { label: "not checked", color: "#888" }
               : verdictStatus === "valid"
               ? { label: "correct", color: "#28a05a" }
