@@ -1,14 +1,18 @@
 from abc import ABC, abstractmethod
+from typing import Generic, TypeVar
 
-from schemas import LineVerdict, Step
+
+ProblemT = TypeVar("ProblemT")
+StepT = TypeVar("StepT")
+VerdictT = TypeVar("VerdictT")
 
 
-class Judge(ABC):
+class Judge(ABC, Generic[ProblemT, StepT, VerdictT]):
     """A judge verifies whether each step follows from the previous one.
 
     Subject-agnostic contract: swap the judge, keep the product.
     """
 
     @abstractmethod
-    def check(self, problem: str, steps: list[Step]) -> list[LineVerdict]:
+    def check(self, problem: ProblemT, steps: list[StepT]) -> list[VerdictT]:
         ...

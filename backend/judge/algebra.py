@@ -389,7 +389,7 @@ def _classify(ref: Eq, cur: Eq, ref_structural) -> tuple[str, str]:
     return ("algebraic", "Step is not equivalent to previous line")
 
 
-class AlgebraJudge(Judge):
+class AlgebraJudge(Judge[str, Step, LineVerdict]):
     def check(self, problem: str, steps: list[Step]) -> list[LineVerdict]:
         verdicts: list[LineVerdict] = []
 

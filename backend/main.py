@@ -5,10 +5,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from hints import generate_hint
-from judge import AlgebraJudge
+from judge import AlgebraJudge, ChemistryJudge
 from schemas import (
     CheckRequest,
     CheckResponse,
+    ChemistryCheckRequest,
+    ChemistryCheckResponse,
     HintRequest,
     HintResponse,
     TranscribeRequest,
@@ -36,6 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 judge = AlgebraJudge()
+chemistry_judge = ChemistryJudge()
 
 
 @app.get("/health")
@@ -57,6 +60,25 @@ def check_steps(req: CheckRequest):
         None,
     )
     return CheckResponse(verdicts=verdicts, first_wrong_line=first_wrong)
+
+
+@app.post("/chemistry/check", response_model=ChemistryCheckResponse)
+def check_chemistry_steps(req: ChemistryCheckRequest):
+    verdicts = chemistry_judge.check(req.target_smiles, req.steps)
+    if verdicts and verdicts[0].line_number == 0:
+        return ChemistryCheckResponse(
+            verdicts=[],
+            first_wrong_line=None,
+            problem_error=verdicts[0].error_type,
+        )
+    first_wrong = next(
+        (verdict.line_number for verdict in verdicts if verdict.status == "invalid"),
+        None,
+    )
+    return ChemistryCheckResponse(
+        verdicts=verdicts,
+        first_wrong_line=first_wrong,
+    )
 
 
 @app.post("/transcribe", response_model=TranscribeResponse)

@@ -140,6 +140,137 @@ def test_check_parse_error_problem_returns_problem_error_without_verdicts() -> N
     }
 
 
+def test_chemistry_check_accepts_equivalent_structure() -> None:
+    response = client.post(
+        "/chemistry/check",
+        json={
+            "target_smiles": "CCO",
+            "steps": [{"line_number": 1, "smiles": "OCC"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "verdicts": [
+            {
+                "line_number": 1,
+                "valid": True,
+                "error_type": None,
+                "detail": None,
+                "status": "valid",
+            }
+        ],
+        "first_wrong_line": None,
+        "problem_error": None,
+    }
+
+
+def test_chemistry_check_reports_first_structure_mismatch() -> None:
+    response = client.post(
+        "/chemistry/check",
+        json={
+            "target_smiles": "CCO",
+            "steps": [
+                {"line_number": 1, "smiles": "CC"},
+                {"line_number": 2, "smiles": "OCC"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["first_wrong_line"] == 1
+    assert [item["status"] for item in body["verdicts"]] == [
+        "invalid",
+        "valid",
+    ]
+    assert body["verdicts"][0]["error_type"] == "structure_mismatch"
+
+
+def test_chemistry_check_problem_error_hides_step_verdicts() -> None:
+    response = client.post(
+        "/chemistry/check",
+        json={
+            "target_smiles": "C1CC",
+            "steps": [{"line_number": 1, "smiles": "CCO"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "verdicts": [],
+        "first_wrong_line": None,
+        "problem_error": "parse_error",
+    }
+
+
+def test_chemistry_non_student_errors_do_not_set_first_wrong_line() -> None:
+    response = client.post(
+        "/chemistry/check",
+        json={
+            "target_smiles": "CCO",
+            "steps": [
+                {"line_number": 1, "smiles": "C1CC"},
+                {"line_number": 2, "smiles": "CCO>>CC=O"},
+                {"line_number": 3, "smiles": "CC"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["status"] for item in body["verdicts"]] == [
+        "parse_error",
+        "unsupported",
+        "invalid",
+    ]
+    assert body["first_wrong_line"] == 3
+
+
+def test_chemistry_unsupported_target_returns_problem_error() -> None:
+    response = client.post(
+        "/chemistry/check",
+        json={
+            "target_smiles": "CCO.Cl",
+            "steps": [{"line_number": 1, "smiles": "CCO"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "verdicts": [],
+        "first_wrong_line": None,
+        "problem_error": "unsupported",
+    }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"target_smiles": "CCO", "steps": []},
+        {
+            "target_smiles": "CCO",
+            "steps": [{"line_number": 0, "smiles": "CCO"}],
+        },
+        {
+            "target_smiles": "CCO",
+            "steps": [
+                {"line_number": 2, "smiles": "CCO"},
+                {"line_number": 1, "smiles": "CCO"},
+            ],
+        },
+        {
+            "target_smiles": "C" * 2049,
+            "steps": [{"line_number": 1, "smiles": "CCO"}],
+        },
+    ],
+)
+def test_chemistry_check_rejects_invalid_request_shape(payload) -> None:
+    response = client.post("/chemistry/check", json=payload)
+
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize(
     "payload",
     [

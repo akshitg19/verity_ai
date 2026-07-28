@@ -36,3 +36,30 @@ Malformed text that cannot be parsed is reported separately as `parse_error`.
 evidence that the student made a mathematical mistake. If the problem itself
 has either status, `/check` returns it in `problem_error` and leaves `verdicts`
 empty.
+
+## Chemistry MVP scope
+
+`POST /chemistry/check` deterministically compares each student SMILES string
+with a target SMILES structure using RDKit. It is deliberately a molecular
+structure-equivalence exercise, not a chemistry-step or reaction judge.
+
+Supported structures are single connected molecules composed of common organic
+atoms (`C`, `N`, `O`, `S`, `P`, `F`, `Cl`, `Br`, and `I`) with single, double,
+triple, or aromatic bonds. Formal charge and stereochemistry, when present,
+are part of the structure and must match. Equivalent alternative SMILES
+spellings are accepted.
+
+The endpoint returns:
+
+- `valid` when a submitted structure is equivalent to the target;
+- `invalid` with `structure_mismatch` when both structures are supported but
+  differ;
+- `parse_error` for malformed SMILES; and
+- `unsupported` for valid SMILES outside this narrow scope, including salts
+  and other disconnected structures, metals, atom maps, wildcards, isotopes,
+  reactions, and unsupported bond types.
+
+The target is never returned to the caller, so a verdict cannot reveal the
+answer structure. Handwriting-to-structure recognition, chemical naming,
+Lewis structures, reaction balancing, and reaction mechanisms are outside
+this MVP.
