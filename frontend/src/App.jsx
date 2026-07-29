@@ -221,8 +221,10 @@ export default function App() {
   };
 
   const handlePointerDown = (e) => {
+    if (activeTool === "scroll") return;
     if (e.pointerType === "touch") return; // palm rejection
     if (activePointerId.current !== null) return;
+
     const firstPoint = getPoint(e);
     if (activeTool === "eraser") {
       const strokeIndex = strokes.findLastIndex((stroke) =>
@@ -267,6 +269,12 @@ export default function App() {
   };
 
   const handlePointerMove = (e) => {
+    if (e.pointerType === "touch") return;
+
+    if (e.pointerType === "pen") {
+      e.preventDefault();
+    }
+
     if (
       !currentStroke.current ||
       e.pointerId !== activePointerId.current
@@ -279,6 +287,8 @@ export default function App() {
   };
 
   const handlePointerUp = (e) => {
+    if (e.pointerType === "touch") return;
+
     if (
       !currentStroke.current ||
       e.pointerId !== activePointerId.current
@@ -797,7 +807,7 @@ export default function App() {
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         style={{ 
-          touchAction: "none", 
+          touchAction: activeTool === "scroll" ? "pan-y" : "none", 
           display: "block",
           marginTop: TOOLBAR_HEIGHT,
           background: "#faf8f2",
@@ -1137,7 +1147,10 @@ export default function App() {
           </div>
 
           <button
-            onClick={() => setActiveTool("eraser")}
+            onClick={() => {
+              setActiveTool("eraser");
+              setShowPenSettings(false);
+            }}
             style={{
               padding: "10px 16px",
               whiteSpace: "nowrap",
@@ -1159,6 +1172,40 @@ export default function App() {
             }}
           >
             Eraser
+          </button>
+
+          <button
+            type="button"
+            title="Scroll page"
+            aria-label="Scroll page"
+            onClick={() => {
+              setActiveTool("scroll");
+              setShowPenSettings(false);
+            }}
+            style={{
+              width: 42,
+              height: 40,
+              padding: 0,
+              display: "grid",
+              placeItems: "center",
+              background:
+                activeTool === "scroll"
+                  ? COLORS.primaryLight
+                  : COLORS.surface,
+              color:
+                activeTool === "scroll"
+                  ? COLORS.primary
+                  : COLORS.text,
+              border:
+                activeTool === "scroll"
+                  ? `2px solid ${COLORS.primary}`
+                  : `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              fontSize: 18,
+              cursor: "pointer",
+            }}
+          >
+            ✋
           </button>
 
           <button
