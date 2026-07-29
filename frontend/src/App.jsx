@@ -972,87 +972,318 @@ export default function App() {
         </div>
       )}
       {lines.length > 0 && (
-        <div
+        <aside
           style={{
-            position: "fixed", top: 64, right: 12, width: 300,
-            background: "#fff", border: "1px solid #ccc", borderRadius: 8,
-            padding: 12, maxHeight: "60vh", overflowY: "auto",
-            fontFamily: "monospace", fontSize: 13,
+            position: "fixed",
+            top: TOOLBAR_HEIGHT + 16,
+            right: 16,
+            width: 340,
+            maxHeight: `calc(100vh - ${TOOLBAR_HEIGHT + 32}px)`,
+            overflowY: "auto",
+            zIndex: 15,
+            background: COLORS.surface,
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: 16,
+            boxShadow: "0 12px 30px rgba(31, 41, 38, 0.12)",
+            padding: 16,
+            boxSizing: "border-box",
+            fontFamily: "sans-serif",
           }}
         >
-          <div style={{ fontWeight: "bold", marginBottom: 8, fontFamily: "sans-serif" }}>
-            Your work (edit if misread)
-          </div>
-          {lines.map((l, index) => {
-            const verdict = verdictsByLine.get(l.row);
-            const verdictStatus = getVerdictStatus(verdict);
-            const status =
-              l.unreadable
-                ? { label: "couldn't read -- type it here", color: "#a06a3a" }
-                : l.row === handwrittenProblemRow
-                ? { label: "problem", color: "#4b6b9a" }
-                : verdict === undefined
-              ? { label: "not checked", color: "#888" }
-              : verdictStatus === "valid"
-              ? { label: "correct", color: "#28a05a" }
-              : verdictStatus === "invalid"
-              ? { label: verdict.error_type || "wrong", color: "#c83232" }
-              : verdictStatus === "parse_error"
-              ? { label: "couldn't parse", color: "#a06a3a" }
-              : { label: "unsupported", color: "#a06a3a" };
-            return (
-              <div key={l.row} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, color: status.color, fontFamily: "sans-serif" }}>
-                  line {index + 1}: {status.label}
-                </div>
-                <input
-                  type="text"
-                  value={l.text}
-                  placeholder={l.unreadable ? "type what you wrote" : ""}
-                  onChange={(e) => handleLineEdit(l.row, e.target.value)}
-                  onBlur={handleLineEditDone}
-                  onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
-                  style={{
-                    width: "100%", padding: "4px 8px", boxSizing: "border-box",
-                    border: `1px solid ${status.color}`, borderRadius: 4,
-                    fontFamily: "monospace",
-                  }}
-                />
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {firstWrongLine !== null && (
-        <div style={{ position: "fixed", bottom: 12, right: 12, maxWidth: "40vw" }}>
-          {hintText && (
-            <div
-              style={{
-                padding: "10px 16px", marginBottom: 8,
-                background: "#fff", border: "1px solid #ccc", borderRadius: 8,
-              }}
-            >
-              <strong>Hint {hintLevel}/3:</strong> {hintText}
-            </div>
-          )}
-          <button
-            onClick={handleGetHint}
-            disabled={hintLoading || hintLevel >= 3}
+          <div
             style={{
-              padding: "8px 16px", background: "#fff",
-              border: "1px solid #ccc", borderRadius: 8,
-              opacity: hintLoading || hintLevel >= 3 ? 0.5 : 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 4,
             }}
           >
-            {hintLoading
-              ? "Loading..."
-              : hintLevel === 0
-              ? "Get Hint"
-              : hintLevel >= 3
-              ? "No more hints"
-              : "Next Hint"}
-          </button>
-        </div>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: COLORS.text,
+              }}
+            >
+              Live Feedback
+            </div>
+
+            <div
+              style={{
+                padding: "5px 9px",
+                borderRadius: 999,
+                background: transcribing
+                  ? "#fff4d6"
+                  : COLORS.primaryLight,
+                color: transcribing
+                  ? "#946200"
+                  : COLORS.primary,
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              {transcribing ? "Reading…" : "Up to date"}
+            </div>
+          </div>
+
+          <div
+            style={{
+              color: COLORS.muted,
+              fontSize: 13,
+              lineHeight: 1.4,
+              marginBottom: 16,
+            }}
+          >
+            Review what VERITY.ai read. You can correct any misread
+            handwriting before checking continues.
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            {lines.map((line, index) => {
+              const verdict = verdictsByLine.get(line.row);
+              const verdictStatus = getVerdictStatus(verdict);
+              const isProblem = line.row === handwrittenProblemRow;
+
+              const status = line.unreadable
+                ? {
+                    label: "Needs review",
+                    detail: "We could not confidently read this line.",
+                    color: "#a96b1f",
+                    background: "#fff7e8",
+                    symbol: "!",
+                  }
+                : isProblem
+                ? {
+                    label: "Problem",
+                    detail: "This is the question being solved.",
+                    color: "#486b91",
+                    background: "#edf4fb",
+                    symbol: "P",
+                  }
+                : verdict === undefined
+                ? {
+                    label: "Waiting",
+                    detail: "This line has not been checked yet.",
+                    color: COLORS.muted,
+                    background: "#f3f5f4",
+                    symbol: "…",
+                  }
+                : verdictStatus === "valid"
+                ? {
+                    label: "Correct step",
+                    detail: "This follows from the previous line.",
+                    color: "#267a55",
+                    background: "#edf8f2",
+                    symbol: "✓",
+                  }
+                : verdictStatus === "invalid"
+                ? {
+                    label: "Review this step",
+                    detail:
+                      verdict.error_type
+                        ? `Possible ${verdict.error_type.replaceAll("_", " ")}.`
+                        : "This does not follow from the previous line.",
+                    color: COLORS.danger,
+                    background: "#fff0f0",
+                    symbol: "!",
+                  }
+                : verdictStatus === "parse_error"
+                ? {
+                    label: "Could not check",
+                    detail: "Try rewriting or editing the transcription.",
+                    color: "#a96b1f",
+                    background: "#fff7e8",
+                    symbol: "?",
+                  }
+                : {
+                    label: "Not supported yet",
+                    detail: "This type of step is outside the current scope.",
+                    color: "#a96b1f",
+                    background: "#fff7e8",
+                    symbol: "?",
+                  };
+
+              return (
+                <div
+                  key={line.row}
+                  style={{
+                    padding: 12,
+                    borderRadius: 12,
+                    border: `1px solid ${status.color}33`,
+                    background: status.background,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        flexShrink: 0,
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        display: "grid",
+                        placeItems: "center",
+                        background: status.color,
+                        color: "#fff",
+                        fontSize: 13,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {status.symbol}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 8,
+                          marginBottom: 3,
+                        }}
+                      >
+                        <div
+                          style={{
+                            color: COLORS.text,
+                            fontWeight: 700,
+                            fontSize: 14,
+                          }}
+                        >
+                          Line {index + 1}
+                        </div>
+
+                        <div
+                          style={{
+                            color: status.color,
+                            fontSize: 12,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {status.label}
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          color: COLORS.muted,
+                          fontSize: 12,
+                          lineHeight: 1.35,
+                          marginBottom: 8,
+                        }}
+                      >
+                        {status.detail}
+                      </div>
+
+                      <input
+                        type="text"
+                        value={line.text}
+                        placeholder={
+                          line.unreadable
+                            ? "Type what you wrote"
+                            : ""
+                        }
+                        onChange={(event) =>
+                          handleLineEdit(line.row, event.target.value)
+                        }
+                        onBlur={handleLineEditDone}
+                        onKeyDown={(event) =>
+                          event.key === "Enter" &&
+                          event.currentTarget.blur()
+                        }
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          padding: "9px 11px",
+                          border: `1px solid ${COLORS.border}`,
+                          borderRadius: 9,
+                          background: COLORS.surface,
+                          color: COLORS.text,
+                          fontFamily: "monospace",
+                          fontSize: 14,
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {firstWrongLine !== null && (
+            <div
+              style={{
+                marginTop: 14,
+                paddingTop: 14,
+                borderTop: `1px solid ${COLORS.border}`,
+              }}
+            >
+              {hintText && (
+                <div
+                  style={{
+                    marginBottom: 10,
+                    padding: 12,
+                    borderRadius: 10,
+                    background: COLORS.primaryLight,
+                    color: COLORS.text,
+                    lineHeight: 1.45,
+                    fontSize: 13,
+                  }}
+                >
+                  <div
+                    style={{
+                      color: COLORS.primary,
+                      fontWeight: 700,
+                      marginBottom: 4,
+                    }}
+                  >
+                    Hint {hintLevel} of 3
+                  </div>
+                  {hintText}
+                </div>
+              )}
+
+              <button
+                onClick={handleGetHint}
+                disabled={hintLoading || hintLevel >= 3}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  background:
+                    hintLoading || hintLevel >= 3
+                      ? "#d8ddda"
+                      : COLORS.primary,
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 10,
+                  fontWeight: 700,
+                  cursor:
+                    hintLoading || hintLevel >= 3
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                {hintLoading
+                  ? "Preparing hint…"
+                  : hintLevel === 0
+                  ? "Get a hint"
+                  : hintLevel >= 3
+                  ? "All hints shown"
+                  : "Show another hint"}
+              </button>
+            </div>
+          )}
+        </aside>
       )}
     </div>
   );
