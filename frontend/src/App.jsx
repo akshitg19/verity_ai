@@ -3,10 +3,20 @@ import { useRef, useState, useEffect, useCallback } from "react";
 const LINE_HEIGHT = 64;
 const NOTEBOOK_ROWS = 24;
 const NOTEBOOK_HEIGHT = NOTEBOOK_ROWS * LINE_HEIGHT;
-const TOOLBAR_HEIGHT = 64;
+const TOOLBAR_HEIGHT = 72;
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const LINE_PAD = 16;
 const ERASER_RADIUS = 18;
+const COLORS = {
+  background: "#f7f6f2",
+  surface: "#ffffff",
+  primary: "#315e54",
+  primaryLight: "#e4f0ed",
+  text: "#1f2926",
+  muted: "#6f7a76",
+  border: "#d9dfdc",
+  danger: "#c94b4b",
+};
 
 function distanceToSegment(point, start, end) {
   const dx = end.x - start.x;
@@ -731,145 +741,224 @@ export default function App() {
           left: 0,
           right: 0,
           zIndex: 20,
+          height: 72,
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          padding: 12,
+          gap: 16,
+          padding: "0 20px",
           boxSizing: "border-box",
-          background: "#faf8f2",
-          borderBottom: "1px solid #d6d6d6",
+          background: COLORS.surface,
+          borderBottom: `1px solid ${COLORS.border}`,
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.04)",
         }}
       >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            minWidth: 165,
+          }}
+        >
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              display: "grid",
+              placeItems: "center",
+              background: COLORS.primary,
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 20,
+              fontFamily: "sans-serif",
+            }}
+          >
+            V
+          </div>
+
+          <div>
+            <div
+              style={{
+                color: COLORS.text,
+                fontWeight: 700,
+                fontSize: 19,
+                lineHeight: 1.1,
+                fontFamily: "sans-serif",
+              }}
+            >
+              verity.ai
+            </div>
+
+            <div
+              style={{
+                color: COLORS.muted,
+                fontSize: 11,
+                marginTop: 2,
+                fontFamily: "sans-serif",
+              }}
+            >
+              Think it through
+            </div>
+          </div>
+        </div>
+
         <input
           type="text"
           value={problem}
           onChange={handleProblemChange}
           onBlur={handleProblemEditDone}
-          onKeyDown={(e) =>
-            e.key === "Enter" && e.currentTarget.blur()
+          onKeyDown={(event) =>
+            event.key === "Enter" && event.currentTarget.blur()
           }
-          placeholder="Optional problem override — otherwise write the problem on line 1"
+          placeholder="Optional: type the problem instead"
           style={{
             flex: 1,
-            minWidth: 0,
-            padding: "8px 12px",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            fontFamily: "monospace",
+            minWidth: 180,
+            maxWidth: 460,
+            padding: "10px 14px",
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: 10,
+            background: COLORS.background,
+            color: COLORS.text,
+            fontFamily: "sans-serif",
+            fontSize: 14,
+            outline: "none",
           }}
         />
 
-        <button
-          onClick={() => setActiveTool("pen")}
-          style={{
-            padding: "8px 16px",
-            whiteSpace: "nowrap",
-            background: activeTool === "pen" ? "#dcecff" : "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            cursor: "pointer",
-          }}
-        >
-          Pen
-        </button>
-
-        <button
-          onClick={() => setActiveTool("eraser")}
-          style={{
-            padding: "8px 16px",
-            whiteSpace: "nowrap",
-            background: activeTool === "eraser" ? "#dcecff" : "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            cursor: "pointer",
-          }}
-        >
-          Eraser
-        </button>
-        <button
-          onClick={handleFinishLine}
-          disabled={
-            transcribing ||
-            strokes.length === 0 ||
-            activeLineNumber === null
-          }
-          style={{
-            padding: "8px 16px",
-            whiteSpace: "nowrap",
-            background: "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            opacity:
-              transcribing ||
-              strokes.length === 0 ||
-              activeLineNumber === null
-                ? 0.5
-                : 1,
-            cursor:
-              transcribing ||
-              strokes.length === 0 ||
-              activeLineNumber === null
-                ? "not-allowed"
-                : "pointer",
-          }}
-        >
-          {transcribing
-            ? "Transcribing..."
-            : activeLineNumber === null
-              ? "Finish Line"
-              : `Finish line ${activeLineNumber}`}
-        </button>
-
-        <button
-          onClick={handleUndo}
-          disabled={strokes.length === 0 || transcribing}
-          style={{
-            padding: "8px 16px",
-            whiteSpace: "nowrap",
-            background: "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            opacity:
-              strokes.length === 0 || transcribing ? 0.5 : 1,
-            cursor:
-              strokes.length === 0 || transcribing
-                ? "not-allowed"
-                : "pointer",
-          }}
-        >
-          Undo
-        </button>
-
-        <button
-          onClick={handleClear}
-          style={{
-            padding: "8px 16px",
-            whiteSpace: "nowrap",
-            background: "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            cursor: "pointer",
-          }}
-        >
-          Clear
-        </button>
-      </div>
-
-      {!problem.trim() && (
         <div
           style={{
-            position: "fixed",
-            top: 60,
-            left: 12,
-            zIndex: 20,
-            fontSize: 12,
-            color: "#a06a3a",
-            fontFamily: "monospace",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginLeft: "auto",
           }}
         >
-          Leave the box blank to use your first handwritten line as the problem.
+          <button
+            onClick={() => setActiveTool("pen")}
+            style={{
+              padding: "10px 16px",
+              whiteSpace: "nowrap",
+              background:
+                activeTool === "pen"
+                  ? COLORS.primaryLight
+                  : COLORS.surface,
+              color:
+                activeTool === "pen"
+                  ? COLORS.primary
+                  : COLORS.text,
+              border:
+                activeTool === "pen"
+                  ? `2px solid ${COLORS.primary}`
+                  : `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              fontWeight: activeTool === "pen" ? 700 : 500,
+              cursor: "pointer",
+            }}
+          >
+            Pen
+          </button>
+
+          <button
+            onClick={() => setActiveTool("eraser")}
+            style={{
+              padding: "10px 16px",
+              whiteSpace: "nowrap",
+              background:
+                activeTool === "eraser"
+                  ? COLORS.primaryLight
+                  : COLORS.surface,
+              color:
+                activeTool === "eraser"
+                  ? COLORS.primary
+                  : COLORS.text,
+              border:
+                activeTool === "eraser"
+                  ? `2px solid ${COLORS.primary}`
+                  : `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              fontWeight: activeTool === "eraser" ? 700 : 500,
+              cursor: "pointer",
+            }}
+          >
+            Eraser
+          </button>
+
+          <button
+            onClick={handleFinishLine}
+            disabled={
+              transcribing ||
+              strokes.length === 0 ||
+              activeLineNumber === null
+            }
+            style={{
+              padding: "10px 16px",
+              whiteSpace: "nowrap",
+              background: COLORS.primary,
+              color: "#fff",
+              border: "none",
+              borderRadius: 10,
+              fontWeight: 600,
+              opacity:
+                transcribing ||
+                strokes.length === 0 ||
+                activeLineNumber === null
+                  ? 0.4
+                  : 1,
+              cursor:
+                transcribing ||
+                strokes.length === 0 ||
+                activeLineNumber === null
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+          >
+            {transcribing
+              ? "Reading..."
+              : activeLineNumber === null
+                ? "Finish Line"
+                : `Finish Line ${activeLineNumber}`}
+          </button>
+
+          <button
+            onClick={handleUndo}
+            disabled={strokes.length === 0 || transcribing}
+            style={{
+              padding: "10px 16px",
+              whiteSpace: "nowrap",
+              background: COLORS.surface,
+              color: COLORS.text,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              opacity:
+                strokes.length === 0 || transcribing ? 0.4 : 1,
+              cursor:
+                strokes.length === 0 || transcribing
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+          >
+            Undo
+          </button>
+
+          <button
+            onClick={handleClear}
+            style={{
+              padding: "10px 16px",
+              whiteSpace: "nowrap",
+              background: COLORS.surface,
+              color: COLORS.danger,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              cursor: "pointer",
+            }}
+          >
+            New Problem
+          </button>
         </div>
-      )}
+      </div>
+
       {(lastResult?.error || lastResult?.warning) && (
         <div
           style={{
