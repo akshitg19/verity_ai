@@ -3,10 +3,38 @@ import { useRef, useState, useEffect, useCallback } from "react";
 const LINE_HEIGHT = 64;
 const NOTEBOOK_ROWS = 24;
 const NOTEBOOK_HEIGHT = NOTEBOOK_ROWS * LINE_HEIGHT;
-const TOOLBAR_HEIGHT = 64;
+const TOOLBAR_HEIGHT = 72;
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const LINE_PAD = 16;
 const ERASER_RADIUS = 18;
+const FEEDBACK_PANEL_WIDTH = 360;
+const PAGE_GAP = 16;
+const COLORS = {
+  background: "#f7f6f2",
+  surface: "#ffffff",
+  primary: "#315e54",
+  primaryLight: "#e4f0ed",
+  text: "#1f2926",
+  muted: "#6f7a76",
+  border: "#d9dfdc",
+  danger: "#c94b4b",
+};
+
+const PEN_WIDTHS = [
+  { label: "Extra thin", value: 1.5 },
+  { label: "Thin", value: 2.5 },
+  { label: "Medium", value: 4 },
+  { label: "Thick", value: 6 },
+  { label: "Extra thick", value: 9 },
+];
+
+const PEN_COLORS = [
+  { label: "Black", value: "#1f2926" },
+  { label: "Blue", value: "#315f8a" },
+  { label: "Green", value: "#315e54" },
+  { label: "Purple", value: "#75466f" },
+  { label: "Red", value: "#a94a4a" },
+];
 
 function distanceToSegment(point, start, end) {
   const dx = end.x - start.x;
@@ -156,11 +184,18 @@ export default function App() {
   const activePointerId = useRef(null);
   const transcriptionRequestId = useRef(0);
   const transcriptionRowRef = useRef(null);
+  const processingRowsRef = useRef(new Set());
+  const rowQueueRef = useRef([]);
+  const queueRunningRef = useRef(false);
+  const rowIdleTimerRef = useRef(null);
+  const dirtyRowsRef = useRef(new Set());
+  const strokesRef = useRef([]);
   const checkRequestId = useRef(0);
   const hintRequestId = useRef(0);
   const problemRef = useRef("");
   const linesRef = useRef([]);
   const activeRowRef = useRef(null);
+  const penSettingsRef = useRef(null);
   const [transcribing, setTranscribing] = useState(false);
   const [lastResult, setLastResult] = useState(null); // { error } | { warning }
 
@@ -177,6 +212,10 @@ export default function App() {
   const [hintText, setHintText] = useState(null);
   const [hintLoading, setHintLoading] = useState(false);
 
+  const [penColor, setPenColor] = useState("#1f2926");
+  const [penWidth, setPenWidth] = useState(4);
+  const [showPenSettings, setShowPenSettings] = useState(false);
+
   const getPoint = (e) => {
     const rect = canvasRef.current.getBoundingClientRect();
     return {
@@ -188,9 +227,17 @@ export default function App() {
   };
 
   const handlePointerDown = (e) => {
+    if (activeTool === "scroll") return;
     if (e.pointerType === "touch") return; // palm rejection
     if (activePointerId.current !== null) return;
+
+    if (rowIdleTimerRef.current) {
+      clearTimeout(rowIdleTimerRef.current);
+      rowIdleTimerRef.current = null;
+    }
+
     const firstPoint = getPoint(e);
+
     if (activeTool === "eraser") {
       const strokeIndex = strokes.findLastIndex((stroke) =>
         strokeTouchesPoint(stroke, firstPoint)
@@ -203,21 +250,49 @@ export default function App() {
         (_, index) => index !== strokeIndex
       );
 
+      strokesRef.current = updatedStrokes;
       setStrokes(updatedStrokes);
       invalidateEditedRow(getStrokeRow(removedStroke));
       return;
     }
 
+    const newRow = Math.floor(firstPoint.y / LINE_HEIGHT);
+    const previousRow = activeRowRef.current;
+
+    const movedToLowerRow =
+      previousRow !== null &&
+      newRow > previousRow;
+
+    if (movedToLowerRow) {
+      queueRow(previousRow);
+    }
+
     activePointerId.current = e.pointerId;
 
-    // The visible handwriting no longer matches the last transcription.
-    // Hide dependent feedback until this row is finished again.
-    ++transcriptionRequestId.current;
-    transcriptionRowRef.current = null;
+    if (transcriptionRowRef.current === newRow) {
+      ++transcriptionRequestId.current;
+      transcriptionRowRef.current = null;
+      processingRowsRef.current.delete(newRow);
+
+      rowQueueRef.current = rowQueueRef.current.filter(
+        (row) => row !== newRow
+      );
+    }
+
+    // The written work changed, so existing verdicts and hints may be stale.
+    // This does not cancel transcription running for a different row.
     ++checkRequestId.current;
     ++hintRequestId.current;
-    setTranscribing(false);
-    setVerdictsByLine(new Map());
+
+    // Preserve verdicts above the row being edited.
+    // This row and every later row may now be affected.
+    setVerdictsByLine((currentVerdicts) =>
+      new Map(
+        [...currentVerdicts].filter(
+          ([verdictRow]) => verdictRow < newRow
+        )
+      )
+    );
     setFirstWrongLine(null);
     setHintLevel(0);
     setHintText(null);
@@ -225,10 +300,21 @@ export default function App() {
     setLastResult(null);
 
     canvasRef.current.setPointerCapture(e.pointerId);
-    currentStroke.current = { points: [firstPoint], pointerType: e.pointerType };
+    currentStroke.current = { 
+      points: [firstPoint], 
+      pointerType: e.pointerType,
+      color: penColor,
+      width: penWidth, 
+    };
   };
 
   const handlePointerMove = (e) => {
+    if (e.pointerType === "touch") return;
+
+    if (e.pointerType === "pen") {
+      e.preventDefault();
+    }
+
     if (
       !currentStroke.current ||
       e.pointerId !== activePointerId.current
@@ -241,6 +327,8 @@ export default function App() {
   };
 
   const handlePointerUp = (e) => {
+    if (e.pointerType === "touch") return;
+
     if (
       !currentStroke.current ||
       e.pointerId !== activePointerId.current
@@ -249,9 +337,27 @@ export default function App() {
     currentStroke.current = null;
     activePointerId.current = null;
     const row = getStrokeRow(finished);
+
+    // This row's handwriting no longer matches its saved transcription.
+    dirtyRowsRef.current.add(row);
+
     activeRowRef.current = row;
     setActiveRow(row);
-    setStrokes((prev) => [...prev, finished]);
+
+    setStrokes((previousStrokes) => {
+      const updatedStrokes = [...previousStrokes, finished];
+      strokesRef.current = updatedStrokes;
+      return updatedStrokes;
+    });
+
+    if (rowIdleTimerRef.current) {
+      clearTimeout(rowIdleTimerRef.current);
+    }
+
+    rowIdleTimerRef.current = setTimeout(() => {
+      queueRow(row);
+      rowIdleTimerRef.current = null;
+    }, 1500);
   };
 
   const handlePointerCancel = (e) => {
@@ -261,27 +367,50 @@ export default function App() {
     drawFrame();
   };
 
-  // Any edit to handwriting makes that row's old transcription and
-  // all checker feedback stale.
   const invalidateEditedRow = (row) => {
-    ++transcriptionRequestId.current;
+    // Only this row needs handwriting transcription again.
+    dirtyRowsRef.current.add(row);
+
     ++checkRequestId.current;
     ++hintRequestId.current;
 
-    transcriptionRowRef.current = null;
-    setTranscribing(false);
+    // Remove this row from the waiting queue so its newest version
+    // can be queued again after the user finishes editing.
+    rowQueueRef.current = rowQueueRef.current.filter(
+      (queuedRow) => queuedRow !== row
+    );
 
-    // Remove the old transcription for the edited row.
-    const updatedLines = linesRef.current.filter((line) => line.row !== row);
+    processingRowsRef.current.delete(row);
+
+    // Cancel transcription only if this exact row is currently processing.
+    if (transcriptionRowRef.current === row) {
+      ++transcriptionRequestId.current;
+      transcriptionRowRef.current = null;
+    }
+
+    // Remove only this row's old transcription.
+    const updatedLines = linesRef.current.filter(
+      (line) => line.row !== row
+    );
+
     linesRef.current = updatedLines;
     setLines(updatedLines);
 
-    // Make the edited row active so it can be finished/transcribed again.
+    // Make the edited row active so the idle timer or Check Line button
+    // can submit it again.
     activeRowRef.current = row;
     setActiveRow(row);
 
-    // Old verdicts and hints are no longer trustworthy.
-    setVerdictsByLine(new Map());
+    // Keep verdicts above the edited row.
+    // Verdicts for this row and everything below it are now stale.
+    setVerdictsByLine((currentVerdicts) =>
+      new Map(
+        [...currentVerdicts].filter(
+          ([verdictRow]) => verdictRow < row
+        )
+      )
+    );
+
     setFirstWrongLine(null);
     setHintLevel(0);
     setHintText(null);
@@ -295,13 +424,21 @@ export default function App() {
     const removedStroke = strokes[strokes.length - 1];
     const affectedRow = getStrokeRow(removedStroke);
 
-    setStrokes((previousStrokes) => previousStrokes.slice(0, -1));
+    setStrokes((previousStrokes) => {
+      const updatedStrokes = previousStrokes.slice(0, -1);
+      strokesRef.current = updatedStrokes;
+      return updatedStrokes;
+    });
     invalidateEditedRow(affectedRow);
   };
 
   // Re-judge the whole page. Free (pure SymPy server-side), so it runs on
   // every finished line and every manual correction.
-  const recheck = async (lineArr, problemText = problemRef.current) => {
+  const recheck = async (
+    lineArr, 
+    problemText = problemRef.current,
+    changedRow = null
+  ) => {
     const requestId = ++checkRequestId.current;
     ++hintRequestId.current;
 
@@ -309,7 +446,17 @@ export default function App() {
     setHintLevel(0);
     setHintText(null);
     setHintLoading(false);
-    setVerdictsByLine(new Map());
+    setVerdictsByLine((currentVerdicts) => {
+      if (changedRow === null) {
+        return new Map();
+      }
+
+      return new Map(
+        [...currentVerdicts].filter(
+          ([row]) => row < changedRow
+        )
+      );
+    });
     setFirstWrongLine(null);
     setLastResult(null);
 
@@ -376,14 +523,37 @@ export default function App() {
         return;
       }
 
-      setVerdictsByLine(
-        new Map(
-          data.verdicts
-            .filter((v) => v.line_number > 0)
-            .map((v) => [rowByLineNumber.get(v.line_number), v])
-            .filter(([row]) => row !== undefined)
-        )
+      const returnedVerdicts = new Map(
+        data.verdicts
+          .filter((verdict) => verdict.line_number > 0)
+          .map((verdict) => [
+            rowByLineNumber.get(verdict.line_number),
+            verdict,
+          ])
+          .filter(([row]) => row !== undefined)
       );
+
+      setVerdictsByLine((currentVerdicts) => {
+        if (changedRow === null) {
+          return returnedVerdicts;
+        }
+
+        // Preserve verdicts above the changed row.
+        const mergedVerdicts = new Map(
+          [...currentVerdicts].filter(
+            ([row]) => row < changedRow
+          )
+        );
+
+        // Replace verdicts for the changed row and every later row.
+        for (const [row, verdict] of returnedVerdicts) {
+          if (row >= changedRow) {
+            mergedVerdicts.set(row, verdict);
+          }
+        }
+
+        return mergedVerdicts;
+      });
       setFirstWrongLine(
         data.first_wrong_line > 0 ? data.first_wrong_line : null
       );
@@ -419,60 +589,153 @@ export default function App() {
     recheck(linesRef.current, problemRef.current);
   };
 
-  const handleFinishLine = async () => {
-    const segLines = segmentIntoLines(strokes);
-    const targetRow = activeRowRef.current;
-    if (segLines.size === 0 || targetRow === null || !segLines.has(targetRow)) {
+  const processRow = async (targetRow) => {
+    const segLines = segmentIntoLines(strokesRef.current);
+
+    if (
+      targetRow === null ||
+      !segLines.has(targetRow)
+    ) {
       return;
     }
+
     const requestId = ++transcriptionRequestId.current;
     transcriptionRowRef.current = targetRow;
+
     const lineStrokes = segLines.get(targetRow);
-
     const dataUrl = renderLineToPng(lineStrokes);
-    const imageBase64 = dataUrl.split(",")[1]; // strip "data:image/png;base64,"
+    const imageBase64 = dataUrl.split(",")[1];
 
-    setTranscribing(true);
     setLastResult(null);
 
-    let text, unreadable;
     try {
-      const res = await fetch(`${API_BASE}/transcribe`, {
+      const response = await fetch(`${API_BASE}/transcribe`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_base64: imageBase64 }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          image_base64: imageBase64,
+        }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || `${res.status} ${res.statusText}`);
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+
+        throw new Error(
+          body?.detail ||
+            `${response.status} ${response.statusText}`
+        );
       }
-      const data = await res.json();
-      if (requestId !== transcriptionRequestId.current) return;
-      text = data.text;
-      unreadable = data.unreadable;
-    } catch (e) {
-      if (requestId !== transcriptionRequestId.current) return;
-      transcriptionRowRef.current = null;
-      setLastResult({ error: e.message });
-      setTranscribing(false);
+
+      const data = await response.json();
+
+      // The request was canceled because this row was edited or cleared.
+      if (requestId !== transcriptionRequestId.current) {
+        return;
+      }
+
+      const newLines = [
+        ...linesRef.current.filter(
+          (line) => line.row !== targetRow
+        ),
+        {
+          row: targetRow,
+          text: data.unreadable ? "" : data.text,
+          unreadable: data.unreadable,
+        },
+      ].sort((a, b) => a.row - b.row);
+
+      linesRef.current = newLines;
+      setLines(newLines);
+
+      // This transcription now matches the current handwriting.
+      dirtyRowsRef.current.delete(targetRow);
+
+      if (activeRowRef.current === targetRow) {
+        activeRowRef.current = null;
+        setActiveRow(null);
+      }
+
+      await recheck(
+        newLines,
+        problemRef.current,
+        targetRow
+      );
+    } catch (error) {
+      if (requestId !== transcriptionRequestId.current) {
+        return;
+      }
+
+      setLastResult({
+        error: error.message,
+      });
+    } finally {
+      if (transcriptionRowRef.current === targetRow) {
+        transcriptionRowRef.current = null;
+      }
+    }
+  };
+
+  const runRowQueue = async () => {
+    if (queueRunningRef.current) {
       return;
     }
-    if (requestId !== transcriptionRequestId.current) return;
-    transcriptionRowRef.current = null;
-    setTranscribing(false);
 
-    // Upsert this line (re-finishing a row replaces its transcription).
-    const newLines = [
-      ...linesRef.current.filter((l) => l.row !== targetRow),
-      { row: targetRow, text: unreadable ? "" : text, unreadable },
-    ].sort((a, b) => a.row - b.row);
-    linesRef.current = newLines;
-    setLines(newLines);
-    if (activeRowRef.current === targetRow) {
-      activeRowRef.current = null;
-      setActiveRow(null);
+    queueRunningRef.current = true;
+    setTranscribing(true);
+
+    try {
+      while (rowQueueRef.current.length > 0) {
+        const targetRow = rowQueueRef.current.shift();
+
+        await processRow(targetRow);
+
+        processingRowsRef.current.delete(targetRow);
+      }
+    } finally {
+      queueRunningRef.current = false;
+      transcriptionRowRef.current = null;
+      setTranscribing(false);
     }
-    await recheck(newLines);
+  };
+
+  const queueRow = (targetRow) => {
+    if (targetRow === null) {
+      return;
+    }
+
+    const alreadyTranscribed = linesRef.current.some(
+      (line) => line.row === targetRow
+    );
+
+    if (
+      alreadyTranscribed &&
+      !dirtyRowsRef.current.has(targetRow)
+    ) {
+      return;
+    }
+
+    const segLines = segmentIntoLines(strokesRef.current);
+
+    if (!segLines.has(targetRow)) {
+      return;
+    }
+
+    // Do not queue the same row more than once.
+    if (processingRowsRef.current.has(targetRow)) {
+      return;
+    }
+
+    processingRowsRef.current.add(targetRow);
+    rowQueueRef.current.push(targetRow);
+
+    // Start the queue without blocking handwriting input.
+    void runRowQueue();
+  };
+
+  const handleFinishLine = () => {
+    queueRow(activeRowRef.current);
   };
 
   // Manual correction in the side panel: update text, clear the unreadable
@@ -485,7 +748,13 @@ export default function App() {
     }
     ++checkRequestId.current;
     ++hintRequestId.current;
-    setVerdictsByLine(new Map());
+    setVerdictsByLine((currentVerdicts) =>
+      new Map(
+        [...currentVerdicts].filter(
+          ([verdictRow]) => verdictRow < row
+        )
+      )
+    );
     setFirstWrongLine(null);
     setHintLevel(0);
     setHintText(null);
@@ -502,8 +771,12 @@ export default function App() {
     });
   };
 
-  const handleLineEditDone = () => {
-    recheck(linesRef.current);
+  const handleLineEditDone = (row) => {
+    recheck(
+      linesRef.current,
+      problemRef.current,
+      row
+    );
   };
 
   const handleGetHint = async () => {
@@ -544,17 +817,36 @@ export default function App() {
   const drawStroke = useCallback((ctx, stroke) => {
     const pts = stroke.points;
     if (pts.length === 0) return;
+
+    const strokeColor = stroke.color ?? "#1f2926";
+    const strokeWidth = stroke.width ?? 4;
+
+    ctx.strokeStyle = strokeColor;
+    ctx.fillStyle = strokeColor;
+    ctx.lineWidth = strokeWidth;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
     if (pts.length === 1) {
       ctx.beginPath();
-      ctx.arc(pts[0].x, pts[0].y, ctx.lineWidth / 2, 0, Math.PI * 2);
+      ctx.arc(
+        pts[0].x,
+        pts[0].y,
+        strokeWidth / 2,
+        0,
+        Math.PI * 2
+      );
       ctx.fill();
       return;
     }
+
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
+
     for (let i = 1; i < pts.length; i++) {
       ctx.lineTo(pts[i].x, pts[i].y);
     }
+
     ctx.stroke();
   }, []);
 
@@ -646,7 +938,12 @@ export default function App() {
     const canvas = canvasRef.current;
 
     const resize = () => {
-      canvas.width = document.documentElement.clientWidth;
+      canvas.width = Math.max(
+        640,
+        document.documentElement.clientWidth -
+          FEEDBACK_PANEL_WIDTH -
+          PAGE_GAP * 3
+      );
       canvas.height = Math.max(
         NOTEBOOK_HEIGHT,
         window.innerHeight - TOOLBAR_HEIGHT
@@ -661,10 +958,42 @@ export default function App() {
     return () => window.removeEventListener("resize", resize);
   }, [drawFrame]);
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        penSettingsRef.current &&
+        !penSettingsRef.current.contains(event.target)
+      ) {
+        setShowPenSettings(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    strokesRef.current = strokes;
+  }, [strokes]);
+
   const handleClear = () => {
     ++transcriptionRequestId.current;
     ++checkRequestId.current;
     ++hintRequestId.current;
+
+    if (rowIdleTimerRef.current) {
+      clearTimeout(rowIdleTimerRef.current);
+      rowIdleTimerRef.current = null;
+    }
+
+    rowQueueRef.current = [];
+    processingRowsRef.current.clear();
+    dirtyRowsRef.current.clear();
+    queueRunningRef.current = false;
+    strokesRef.current = [];
 
     currentStroke.current = null;
     activePointerId.current = null;
@@ -718,10 +1047,11 @@ export default function App() {
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         style={{ 
-          touchAction: "none", 
+          touchAction: activeTool === "scroll" ? "pan-y" : "none", 
           display: "block",
           marginTop: TOOLBAR_HEIGHT,
           background: "#faf8f2",
+          borderRight: `1px solid ${COLORS.border}`,
         }}
       />
       <div
@@ -731,145 +1061,464 @@ export default function App() {
           left: 0,
           right: 0,
           zIndex: 20,
+          height: 72,
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          padding: 12,
+          gap: 16,
+          padding: "0 20px",
           boxSizing: "border-box",
-          background: "#faf8f2",
-          borderBottom: "1px solid #d6d6d6",
+          background: COLORS.surface,
+          borderBottom: `1px solid ${COLORS.border}`,
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.04)",
         }}
       >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            minWidth: 165,
+          }}
+        >
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              display: "grid",
+              placeItems: "center",
+              background: COLORS.primary,
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 20,
+              fontFamily: "sans-serif",
+            }}
+          >
+            V
+          </div>
+
+          <div>
+            <div
+              style={{
+                color: COLORS.text,
+                fontWeight: 700,
+                fontSize: 19,
+                lineHeight: 1.1,
+                fontFamily: "sans-serif",
+              }}
+            >
+              verity.ai
+            </div>
+
+            <div
+              style={{
+                color: COLORS.muted,
+                fontSize: 11,
+                marginTop: 2,
+                fontFamily: "sans-serif",
+              }}
+            >
+              Think it through
+            </div>
+          </div>
+        </div>
+
         <input
           type="text"
           value={problem}
           onChange={handleProblemChange}
           onBlur={handleProblemEditDone}
-          onKeyDown={(e) =>
-            e.key === "Enter" && e.currentTarget.blur()
-          }
-          placeholder="Optional problem override — otherwise write the problem on line 1"
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.currentTarget.blur();
+            }
+          }}
+          placeholder="Optional: type the problem instead"
           style={{
             flex: 1,
-            minWidth: 0,
-            padding: "8px 12px",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            fontFamily: "monospace",
+            minWidth: 180,
+            maxWidth: 460,
+            padding: "10px 14px",
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: 10,
+            background: COLORS.background,
+            color: COLORS.text,
+            fontFamily: "sans-serif",
+            fontSize: 14,
+            outline: "none",
           }}
         />
 
-        <button
-          onClick={() => setActiveTool("pen")}
-          style={{
-            padding: "8px 16px",
-            whiteSpace: "nowrap",
-            background: activeTool === "pen" ? "#dcecff" : "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            cursor: "pointer",
-          }}
-        >
-          Pen
-        </button>
-
-        <button
-          onClick={() => setActiveTool("eraser")}
-          style={{
-            padding: "8px 16px",
-            whiteSpace: "nowrap",
-            background: activeTool === "eraser" ? "#dcecff" : "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            cursor: "pointer",
-          }}
-        >
-          Eraser
-        </button>
-        <button
-          onClick={handleFinishLine}
-          disabled={
-            transcribing ||
-            strokes.length === 0 ||
-            activeLineNumber === null
-          }
-          style={{
-            padding: "8px 16px",
-            whiteSpace: "nowrap",
-            background: "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            opacity:
-              transcribing ||
-              strokes.length === 0 ||
-              activeLineNumber === null
-                ? 0.5
-                : 1,
-            cursor:
-              transcribing ||
-              strokes.length === 0 ||
-              activeLineNumber === null
-                ? "not-allowed"
-                : "pointer",
-          }}
-        >
-          {transcribing
-            ? "Transcribing..."
-            : activeLineNumber === null
-              ? "Finish Line"
-              : `Finish line ${activeLineNumber}`}
-        </button>
-
-        <button
-          onClick={handleUndo}
-          disabled={strokes.length === 0 || transcribing}
-          style={{
-            padding: "8px 16px",
-            whiteSpace: "nowrap",
-            background: "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            opacity:
-              strokes.length === 0 || transcribing ? 0.5 : 1,
-            cursor:
-              strokes.length === 0 || transcribing
-                ? "not-allowed"
-                : "pointer",
-          }}
-        >
-          Undo
-        </button>
-
-        <button
-          onClick={handleClear}
-          style={{
-            padding: "8px 16px",
-            whiteSpace: "nowrap",
-            background: "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 8,
-            cursor: "pointer",
-          }}
-        >
-          Clear
-        </button>
-      </div>
-
-      {!problem.trim() && (
         <div
           style={{
-            position: "fixed",
-            top: 60,
-            left: 12,
-            zIndex: 20,
-            fontSize: 12,
-            color: "#a06a3a",
-            fontFamily: "monospace",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginLeft: "auto",
           }}
         >
-          Leave the box blank to use your first handwritten line as the problem.
+          <div
+          ref={penSettingsRef} 
+          style={{ position: "relative" }}
+          >
+            <div
+              style={{
+                height: 40,
+                display: "flex",
+                alignItems: "stretch",
+                border:
+                  activeTool === "pen"
+                    ? `2px solid ${COLORS.primary}`
+                    : `1px solid ${COLORS.border}`,
+                borderRadius: 10,
+                background:
+                  activeTool === "pen"
+                    ? COLORS.primaryLight
+                    : COLORS.surface,
+                overflow: "hidden",
+                boxSizing: "border-box",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setActiveTool("pen")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "0 13px",
+                  background: "transparent",
+                  color:
+                    activeTool === "pen"
+                      ? COLORS.primary
+                      : COLORS.text,
+                  border: "none",
+                  fontWeight: activeTool === "pen" ? 700 : 500,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                <span
+                  style={{
+                    width: Math.max(7, Math.min(penWidth + 4, 14)),
+                    height: Math.max(7, Math.min(penWidth + 4, 14)),
+                    flexShrink: 0,
+                    borderRadius: "50%",
+                    background: penColor,
+                    boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.12)",
+                    transition: "width 0.15s ease, height 0.15s ease",
+                  }}
+                />
+
+                <span>Pen</span>
+              </button>
+
+              <button
+                type="button"
+                title="Pen settings"
+                aria-label="Open pen settings"
+                onClick={() => {
+                  setActiveTool("pen");
+                  setShowPenSettings((current) => !current);
+                }}
+                style={{
+                  width: 32,
+                  padding: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  background: showPenSettings
+                    ? "rgba(49, 94, 84, 0.1)"
+                    : "transparent",
+                  color:
+                    activeTool === "pen"
+                      ? COLORS.primary
+                      : COLORS.muted,
+                  border: "none",
+                  borderLeft: `1px solid ${COLORS.border}`,
+                  cursor: "pointer",
+                }}
+              >
+                <span
+                  style={{
+                    display: "inline-block",
+                    fontSize: 10,
+                    lineHeight: 1,
+                    transform: showPenSettings
+                      ? "rotate(180deg)"
+                      : "rotate(0deg)",
+                    transition: "transform 0.15s ease",
+                  }}
+                >
+                  ▼
+                </span>
+              </button>
+            </div>
+
+            {showPenSettings && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: 48,
+                  left: 0,
+                  zIndex: 50,
+                  width: 250,
+                  padding: 16,
+                  boxSizing: "border-box",
+                  background: COLORS.surface,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: 14,
+                  boxShadow: "0 12px 30px rgba(31, 41, 38, 0.16)",
+                  fontFamily: "sans-serif",
+                }}
+              >
+                <div
+                  style={{
+                    marginBottom: 10,
+                    color: COLORS.text,
+                    fontSize: 13,
+                    fontWeight: 700,
+                  }}
+                >
+                  Thickness
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    marginBottom: 18,
+                  }}
+                >
+                  {PEN_WIDTHS.map((option) => {
+                    const selected = penWidth === option.value;
+                    const previewSize = Math.max(
+                      5,
+                      Math.min(option.value + 3, 13)
+                    );
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        title={option.label}
+                        aria-label={`${option.label} pen thickness`}
+                        onClick={() => {
+                          setPenWidth(option.value);
+                          setActiveTool("pen");
+                        }}
+                        style={{
+                          flex: 1,
+                          height: 38,
+                          padding: 0,
+                          display: "grid",
+                          placeItems: "center",
+                          background: selected
+                            ? COLORS.primaryLight
+                            : COLORS.background,
+                          border: selected
+                            ? `2px solid ${COLORS.primary}`
+                            : `1px solid ${COLORS.border}`,
+                          borderRadius: 9,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: previewSize,
+                            height: previewSize,
+                            borderRadius: "50%",
+                            background: penColor,
+                          }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div
+                  style={{
+                    marginBottom: 10,
+                    color: COLORS.text,
+                    fontSize: 13,
+                    fontWeight: 700,
+                  }}
+                >
+                  Color
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                  }}
+                >
+                  {PEN_COLORS.map((option) => {
+                    const selected = penColor === option.value;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        title={option.label}
+                        aria-label={`${option.label} pen color`}
+                        onClick={() => {
+                          setPenColor(option.value);
+                          setActiveTool("pen");
+                        }}
+                        style={{
+                          width: 30,
+                          height: 30,
+                          flexShrink: 0,
+                          padding: 0,
+                          borderRadius: "50%",
+                          background: option.value,
+                          border: `3px solid ${COLORS.surface}`,
+                          boxShadow: selected
+                            ? `0 0 0 2px ${COLORS.primary}`
+                            : `0 0 0 1px ${COLORS.border}`,
+                          cursor: "pointer",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => {
+              setActiveTool("eraser");
+              setShowPenSettings(false);
+            }}
+            style={{
+              padding: "10px 16px",
+              whiteSpace: "nowrap",
+              background:
+                activeTool === "eraser"
+                  ? COLORS.primaryLight
+                  : COLORS.surface,
+              color:
+                activeTool === "eraser"
+                  ? COLORS.primary
+                  : COLORS.text,
+              border:
+                activeTool === "eraser"
+                  ? `2px solid ${COLORS.primary}`
+                  : `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              fontWeight: activeTool === "eraser" ? 700 : 500,
+              cursor: "pointer",
+            }}
+          >
+            Eraser
+          </button>
+
+          <button
+            type="button"
+            title="Scroll page"
+            aria-label="Scroll page"
+            onClick={() => {
+              setActiveTool("scroll");
+              setShowPenSettings(false);
+            }}
+            style={{
+              width: 42,
+              height: 40,
+              padding: 0,
+              display: "grid",
+              placeItems: "center",
+              background:
+                activeTool === "scroll"
+                  ? COLORS.primaryLight
+                  : COLORS.surface,
+              color:
+                activeTool === "scroll"
+                  ? COLORS.primary
+                  : COLORS.text,
+              border:
+                activeTool === "scroll"
+                  ? `2px solid ${COLORS.primary}`
+                  : `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              fontSize: 18,
+              cursor: "pointer",
+            }}
+          >
+            ✋
+          </button>
+
+          <button
+            onClick={handleFinishLine}
+            disabled={
+              strokes.length === 0 ||
+              activeLineNumber === null
+            }
+            style={{
+              padding: "10px 16px",
+              whiteSpace: "nowrap",
+              background: COLORS.primary,
+              color: "#fff",
+              border: "none",
+              borderRadius: 10,
+              fontWeight: 600,
+              opacity:
+                strokes.length === 0 ||
+                activeLineNumber === null
+                  ? 0.4
+                  : 1,
+              cursor:
+                strokes.length === 0 ||
+                activeLineNumber === null
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+          >
+            {activeLineNumber === null
+              ? "Check Line"
+              : `Check Line ${activeLineNumber}`}
+          </button>
+
+          <button
+            onClick={handleUndo}
+            disabled={strokes.length === 0 || transcribing}
+            style={{
+              padding: "10px 16px",
+              whiteSpace: "nowrap",
+              background: COLORS.surface,
+              color: COLORS.text,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              opacity:
+                strokes.length === 0 || transcribing ? 0.4 : 1,
+              cursor:
+                strokes.length === 0 || transcribing
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+          >
+            Undo
+          </button>
+
+          <button
+            onClick={handleClear}
+            style={{
+              padding: "10px 16px",
+              whiteSpace: "nowrap",
+              background: COLORS.surface,
+              color: COLORS.danger,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              cursor: "pointer",
+            }}
+          >
+            New Problem
+          </button>
         </div>
-      )}
+      </div>
+
       {(lastResult?.error || lastResult?.warning) && (
         <div
           style={{
@@ -882,89 +1531,376 @@ export default function App() {
           {lastResult.warning ? "Notice" : "Error"}: {lastResult.warning ?? lastResult.error}
         </div>
       )}
-      {lines.length > 0 && (
+      <aside
+        style={{
+          position: "fixed",
+          top: TOOLBAR_HEIGHT + 16,
+          right: PAGE_GAP,
+          width: FEEDBACK_PANEL_WIDTH,
+          maxHeight: `calc(100vh - ${TOOLBAR_HEIGHT + 32}px)`,
+          overflowY: "auto",
+          zIndex: 15,
+          background: COLORS.surface,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 16,
+          boxShadow: "0 12px 30px rgba(31, 41, 38, 0.12)",
+          padding: 16,
+          boxSizing: "border-box",
+          fontFamily: "sans-serif",
+        }}
+      >
         <div
           style={{
-            position: "fixed", top: 64, right: 12, width: 300,
-            background: "#fff", border: "1px solid #ccc", borderRadius: 8,
-            padding: 12, maxHeight: "60vh", overflowY: "auto",
-            fontFamily: "monospace", fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 4,
           }}
         >
-          <div style={{ fontWeight: "bold", marginBottom: 8, fontFamily: "sans-serif" }}>
-            Your work (edit if misread)
+          <div
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              color: COLORS.text,
+            }}
+          >
+            Live Feedback
           </div>
-          {lines.map((l, index) => {
-            const verdict = verdictsByLine.get(l.row);
+
+          <div
+            style={{
+              padding: "5px 9px",
+              borderRadius: 999,
+              background: transcribing
+                ? "#fff4d6"
+                : COLORS.primaryLight,
+              color: transcribing
+                ? "#946200"
+                : COLORS.primary,
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            {transcribing ? "Reading…" : "Up to date"}
+          </div>
+        </div>
+
+        <div
+          style={{
+            color: COLORS.muted,
+            fontSize: 13,
+            lineHeight: 1.4,
+            marginBottom: 16,
+          }}
+        >
+          Review what verity.ai read. You can correct any misread
+          handwriting before checking continues.
+        </div>
+
+        {lines.length === 0 ? (
+          <div
+            style={{
+              minHeight: 260,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              padding: 24,
+              boxSizing: "border-box",
+              borderRadius: 12,
+              background: COLORS.background,
+              border: `1px dashed ${COLORS.border}`,
+            }}
+          >
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                display: "grid",
+                placeItems: "center",
+                marginBottom: 14,
+                borderRadius: "50%",
+                background: COLORS.primaryLight,
+                color: COLORS.primary,
+                fontSize: 22,
+                fontWeight: 700,
+              }}
+            >
+              ✎
+            </div>
+
+            <div
+              style={{
+                marginBottom: 7,
+                color: COLORS.text,
+                fontSize: 16,
+                fontWeight: 700,
+              }}
+            >
+              Start writing your problem
+            </div>
+
+            <div
+              style={{
+                maxWidth: 240,
+                color: COLORS.muted,
+                fontSize: 13,
+                lineHeight: 1.5,
+              }}
+            >
+              Write the problem on the first line, then finish the line
+              to begin receiving live feedback.
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+          {lines.map((line, index) => {
+            const verdict = verdictsByLine.get(line.row);
             const verdictStatus = getVerdictStatus(verdict);
-            const status =
-              l.unreadable
-                ? { label: "couldn't read -- type it here", color: "#a06a3a" }
-                : l.row === handwrittenProblemRow
-                ? { label: "problem", color: "#4b6b9a" }
-                : verdict === undefined
-              ? { label: "not checked", color: "#888" }
+            const isProblem = line.row === handwrittenProblemRow;
+
+            const status = line.unreadable
+              ? {
+                  label: "Needs review",
+                  detail: "We could not confidently read this line.",
+                  color: "#a96b1f",
+                  background: "#fff7e8",
+                  symbol: "!",
+                }
+              : isProblem
+              ? {
+                  label: "Problem",
+                  detail: "This is the question being solved.",
+                  color: "#486b91",
+                  background: "#edf4fb",
+                  symbol: "P",
+                }
+              : verdict === undefined
+              ? {
+                  label: "Waiting",
+                  detail: "This line has not been checked yet.",
+                  color: COLORS.muted,
+                  background: "#f3f5f4",
+                  symbol: "…",
+                }
               : verdictStatus === "valid"
-              ? { label: "correct", color: "#28a05a" }
+              ? {
+                  label: "Correct step",
+                  detail: "This follows from the previous line.",
+                  color: "#267a55",
+                  background: "#edf8f2",
+                  symbol: "✓",
+                }
               : verdictStatus === "invalid"
-              ? { label: verdict.error_type || "wrong", color: "#c83232" }
+              ? {
+                  label: "Review this step",
+                  detail:
+                    verdict.error_type
+                      ? `Possible ${verdict.error_type.replaceAll("_", " ")}.`
+                      : "This does not follow from the previous line.",
+                  color: COLORS.danger,
+                  background: "#fff0f0",
+                  symbol: "!",
+                }
               : verdictStatus === "parse_error"
-              ? { label: "couldn't parse", color: "#a06a3a" }
-              : { label: "unsupported", color: "#a06a3a" };
+              ? {
+                  label: "Could not check",
+                  detail: "Try rewriting or editing the transcription.",
+                  color: "#a96b1f",
+                  background: "#fff7e8",
+                  symbol: "?",
+                }
+              : {
+                  label: "Not supported yet",
+                  detail: "This type of step is outside the current scope.",
+                  color: "#a96b1f",
+                  background: "#fff7e8",
+                  symbol: "?",
+                };
+
             return (
-              <div key={l.row} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, color: status.color, fontFamily: "sans-serif" }}>
-                  line {index + 1}: {status.label}
-                </div>
-                <input
-                  type="text"
-                  value={l.text}
-                  placeholder={l.unreadable ? "type what you wrote" : ""}
-                  onChange={(e) => handleLineEdit(l.row, e.target.value)}
-                  onBlur={handleLineEditDone}
-                  onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
+              <div
+                key={line.row}
+                style={{
+                  padding: 12,
+                  borderRadius: 12,
+                  border: `1px solid ${status.color}33`,
+                  background: status.background,
+                }}
+              >
+                <div
                   style={{
-                    width: "100%", padding: "4px 8px", boxSizing: "border-box",
-                    border: `1px solid ${status.color}`, borderRadius: 4,
-                    fontFamily: "monospace",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 10,
                   }}
-                />
+                >
+                  <div
+                    style={{
+                      flexShrink: 0,
+                      width: 28,
+                      height: 28,
+                      borderRadius: "50%",
+                      display: "grid",
+                      placeItems: "center",
+                      background: status.color,
+                      color: "#fff",
+                      fontSize: 13,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {status.symbol}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        marginBottom: 3,
+                      }}
+                    >
+                      <div
+                        style={{
+                          color: COLORS.text,
+                          fontWeight: 700,
+                          fontSize: 14,
+                        }}
+                      >
+                        Line {index + 1}
+                      </div>
+
+                      <div
+                        style={{
+                          color: status.color,
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {status.label}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        color: COLORS.muted,
+                        fontSize: 12,
+                        lineHeight: 1.35,
+                        marginBottom: 8,
+                      }}
+                    >
+                      {status.detail}
+                    </div>
+
+                    <input
+                      type="text"
+                      value={line.text}
+                      placeholder={
+                        line.unreadable
+                          ? "Type what you wrote"
+                          : ""
+                      }
+                      onChange={(event) =>
+                        handleLineEdit(line.row, event.target.value)
+                      }
+                      onBlur={() => handleLineEditDone(line.row)}
+                      onKeyDown={(event) =>
+                        event.key === "Enter" &&
+                        event.currentTarget.blur()
+                      }
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "9px 11px",
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: 9,
+                        background: COLORS.surface,
+                        color: COLORS.text,
+                        fontFamily: "monospace",
+                        fontSize: 14,
+                        outline: "none",
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             );
           })}
         </div>
       )}
-      {firstWrongLine !== null && (
-        <div style={{ position: "fixed", bottom: 12, right: 12, maxWidth: "40vw" }}>
-          {hintText && (
-            <div
-              style={{
-                padding: "10px 16px", marginBottom: 8,
-                background: "#fff", border: "1px solid #ccc", borderRadius: 8,
-              }}
-            >
-              <strong>Hint {hintLevel}/3:</strong> {hintText}
-            </div>
-          )}
-          <button
-            onClick={handleGetHint}
-            disabled={hintLoading || hintLevel >= 3}
+
+        {firstWrongLine !== null && (
+          <div
             style={{
-              padding: "8px 16px", background: "#fff",
-              border: "1px solid #ccc", borderRadius: 8,
-              opacity: hintLoading || hintLevel >= 3 ? 0.5 : 1,
+              marginTop: 14,
+              paddingTop: 14,
+              borderTop: `1px solid ${COLORS.border}`,
             }}
           >
-            {hintLoading
-              ? "Loading..."
-              : hintLevel === 0
-              ? "Get Hint"
-              : hintLevel >= 3
-              ? "No more hints"
-              : "Next Hint"}
-          </button>
-        </div>
-      )}
+            {hintText && (
+              <div
+                style={{
+                  marginBottom: 10,
+                  padding: 12,
+                  borderRadius: 10,
+                  background: COLORS.primaryLight,
+                  color: COLORS.text,
+                  lineHeight: 1.45,
+                  fontSize: 13,
+                }}
+              >
+                <div
+                  style={{
+                    color: COLORS.primary,
+                    fontWeight: 700,
+                    marginBottom: 4,
+                  }}
+                >
+                  Hint {hintLevel} of 3
+                </div>
+                {hintText}
+              </div>
+            )}
+
+            <button
+              onClick={handleGetHint}
+              disabled={hintLoading || hintLevel >= 3}
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                background:
+                  hintLoading || hintLevel >= 3
+                    ? "#d8ddda"
+                    : COLORS.primary,
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                fontWeight: 700,
+                cursor:
+                  hintLoading || hintLevel >= 3
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {hintLoading
+                ? "Preparing hint…"
+                : hintLevel === 0
+                ? "Get a hint"
+                : hintLevel >= 3
+                ? "All hints shown"
+                : "Show another hint"}
+            </button>
+          </div>
+        )}
+      </aside>
     </div>
   );
 }
