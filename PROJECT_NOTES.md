@@ -331,191 +331,66 @@ A schema change should usually be made through its own pull request or clearly d
 
 ---
 
-# 4. Week-by-Week Plan
+# 4. Frontend Improvement To-Do List
 
-## Week 1 — Complete the Basic Spine
+Person 1 owns the frontend and feedback experience. Person 2 owns backend
+equation coverage and deterministic judging, and Person 3 owns transcription
+and hint services. Adding support for quadratics, systems, inequalities, or
+other equation types is therefore not a frontend task. The team should agree
+on those types before the frontend exposes them.
 
-The goal is to make one algebra problem travel through the complete system:
+Completed items stay visible and are crossed out so the team can track
+progress without keeping the old Week 1–4 plan.
 
-```text
-Write
-→ Detect Line
-→ Transcribe
-→ Check
-→ Flag
-```
+## Canvas and Tablet Experience
 
-### Person 1
+- [x] ~~Capture stylus strokes with palm rejection and pressure support.~~
+- [x] ~~Provide pen, eraser, and scroll tools.~~
+- [x] ~~Provide pen color and thickness controls.~~
+- [x] ~~Add ruled writing rows and group handwriting by row.~~
+- [x] ~~Export a completed handwritten line and send it for transcription.~~
+- [ ] Add undo for the most recent stroke.
+- [ ] Improve stroke smoothing so handwriting feels more natural.
+- [ ] Highlight the active writing row.
+- [ ] Improve automatic line completion while keeping the manual action as a fallback.
+- [ ] Test the complete writing flow on iPad and Samsung tablets.
 
-* Finish the drawing canvas
-* Record stylus strokes
-* Add ruled writing rows
-* Detect or manually confirm when a line is finished
-* Export a finished line as a PNG
-* Send the image to `/transcribe`
-* Send the returned text to `/check`
-* Display the verdict on the correct handwritten line
+## Feedback Experience
 
-### Person 2
+- [x] ~~Show separate states for correct, incorrect, unsupported, and unreadable work.~~
+- [x] ~~Underline the first confirmed incorrect line.~~
+- [x] ~~Display transcribed lines in an editable feedback panel.~~
+- [x] ~~Recheck the work after a transcription is corrected.~~
+- [x] ~~Display the three-level hint flow.~~
+- [ ] Rewrite feedback in student-friendly language.
+- [ ] Tailor feedback readability to the agreed grade range.
+- [ ] Make the next action obvious after a correct, incorrect, unsupported, or unreadable result.
+- [ ] Improve loading, empty, offline, and API-error states.
+- [ ] Add a subtle success animation without distracting from the student's work.
 
-* Confirm that the current `/check` endpoint is stable
-* Add tests for the existing algebra judge
-* Improve support for basic one-variable linear equations
-* Return clear results for:
+## Interface and Accessibility
 
-  * Correct steps
-  * Incorrect steps
-  * Unsupported steps
-* Document the request and response expected by `/check`
+- [ ] Finalize the visual hierarchy of the canvas, toolbar, and feedback panel.
+- [ ] Check text size, contrast, button size, and keyboard focus states.
+- [ ] Make the layout responsive across tablet and laptop screen sizes.
+- [ ] Add clear labels or tooltips for unfamiliar controls.
+- [ ] Ensure status is communicated with text and icons, not color alone.
 
-### Person 3
+## Integration and Validation
 
-* Confirm that `/transcribe` is running
-* Test the endpoint through FastAPI `/docs`
-* Test several handwritten math images
-* Improve the Gemini prompt
-* Return clean, structured transcription output
-* Begin collecting examples of handwriting that fails
+- [ ] Confirm the frontend handles every documented backend status safely.
+- [ ] Keep unsupported equation types clearly separate from student mistakes.
+- [ ] Test valid, invalid, unsupported, unreadable, and corrected-transcription flows.
+- [ ] Run short usability sessions with students in the target grade range.
+- [ ] Turn usability findings into prioritized frontend fixes.
+- [ ] Verify the final demo flow on the actual presentation device.
 
-### End-of-Week Goal
+## Team Decisions Needed
 
-A student can write one supported algebra problem and the app correctly identifies an incorrect line.
-
----
-
-## Week 2 — Hints and Interface Improvement
-
-The goal is to make the app feel like a tutoring product rather than only a technical test.
-
-### Person 1
-
-* Improve the canvas interface
-* Show which line is currently active
-* Underline flagged lines clearly
-* Add controls for requesting hints
-* Display the three hint levels
-* Add reset and new-problem controls
-* Improve loading and error states
-
-### Person 2
-
-* Continue expanding algebra coverage
-* Add more judge tests
-* Improve explanations returned by the judge
-* Create structured error categories, such as:
-
-  * Sign error
-  * Arithmetic error
-  * Incorrect division
-  * Incorrect distribution
-* Ensure the judge returns enough information for hints without returning the answer
-
-### Person 3
-
-* Build the hint endpoint
-* Create the three hint levels:
-
-  1. Where to look
-  2. What type of mistake occurred
-  3. A conceptual explanation
-* Test that hints do not reveal the answer
-* Add fallback hint templates
-* Test transcription with more handwriting samples
-
-### End-of-Week Goal
-
-The algebra workflow works end to end and a student can request increasingly detailed hints for a flagged line.
-
----
-
-## Week 3 — Chemistry and Student Testing
-
-The goal is to add one narrow chemistry demonstration and test the application with real users.
-
-### Person 1
-
-* Add any drawing tools needed for chemistry
-* Make molecular structures easy to draw
-* Ensure the canvas handles lines, letters, and bonds
-* Connect chemistry drawings to the transcription or recognition endpoint
-* Display chemistry verdicts in the interface
-
-### Person 2
-
-* Build the chemistry judge
-* Integrate RDKit
-* Define a narrow set of supported molecule types
-* Compare expected and submitted structures
-* Detect simple issues such as:
-
-  * Missing atoms
-  * Incorrect bonds
-  * Incorrect connectivity
-* Add tests for the rehearsed chemistry examples
-
-### Person 3
-
-* Test recognition of hand-drawn molecular structures
-* Integrate or test MolScribe if needed
-* Organize a test session with approximately five students
-* Record:
-
-  * Incorrect line segmentation
-  * Incorrect transcription
-  * Slow responses
-  * Confusing hints
-  * Interface problems
-* Create a prioritized list of failures to fix
-
-### End-of-Week Goal
-
-The app reliably demonstrates algebra and has at least one narrow chemistry example that works under controlled conditions.
-
----
-
-## Week 4 — Bug Fixing and Demo Preparation
-
-The goal is stability, not new features.
-
-Everyone should stop adding major functionality by approximately the middle of the week.
-
-### Person 1
-
-* Fix interface bugs
-* Improve tablet responsiveness
-* Test on iPad and Samsung if available
-* Improve the visual presentation
-* Practice the exact demo flow
-
-### Person 2
-
-* Fix judge errors
-* Improve handling of unsupported problems
-* Confirm all demo problems return the expected verdicts
-* Add regression tests for previously fixed bugs
-
-### Person 3
-
-* Fix transcription failures
-* Improve prompt reliability
-* Reduce confusing hints
-* Test API latency
-* Prepare backup handwriting images or typed inputs in case live transcription fails
-
-### Team Tasks
-
-* Select the exact demo problems
-* Rehearse the presentation
-* Test the project from a clean startup
-* Write setup instructions
-* Confirm all environment variables are documented
-* Confirm the app works from the presentation device
-* Prepare a fallback recorded demo
-* Freeze major feature development
-
-### End-of-Week Goal
-
-The application works consistently for the planned demonstration and the team knows how to recover if one part fails live.
+- [ ] Agree on the target grade range for the first version.
+- [ ] Agree on the backend equation types supported in the first version.
+- [ ] Agree on the exact demo problems and expected feedback.
+- [ ] Confirm the API contract before adding subject-specific frontend flows.
 
 ---
 
