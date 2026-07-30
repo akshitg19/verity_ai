@@ -12,6 +12,10 @@ MathText = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1, max_length=256),
 ]
+SmilesText = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=2_048),
+]
 LineNumber = Annotated[int, Field(ge=1, le=1000)]
 ErrorType = Literal[
     "sign",
@@ -65,6 +69,57 @@ class LineVerdict(BaseModel):
 
 class CheckResponse(BaseModel):
     verdicts: list[LineVerdict]
+    first_wrong_line: int | None = None
+    problem_error: Literal["parse_error", "unsupported"] | None = None
+
+
+# Chemistry intentionally has its own request and verdict models. This keeps
+# the established algebra `/check` contract unchanged while preserving the
+# same product-level status semantics for the chemistry endpoint.
+ChemistryErrorType = Literal[
+    "structure_mismatch",
+    "parse_error",
+    "unsupported",
+]
+
+
+class ChemistryStep(BaseModel):
+    line_number: LineNumber
+    smiles: SmilesText
+
+
+class ChemistryCheckRequest(BaseModel):
+    target_smiles: SmilesText
+    steps: Annotated[list[ChemistryStep], Field(min_length=1, max_length=50)]
+
+    @model_validator(mode="after")
+    def steps_are_unique_and_ordered(self):
+        numbers = [step.line_number for step in self.steps]
+        if numbers != sorted(set(numbers)):
+            raise ValueError("step line numbers must be unique and increasing")
+        return self
+
+
+class ChemistryLineVerdict(BaseModel):
+    line_number: int  # line 0 is reserved for an invalid target structure
+    valid: bool
+    error_type: ChemistryErrorType | None = None
+    detail: str | None = None  # machine detail, never the target structure
+
+    @computed_field
+    @property
+    def status(self) -> VerdictStatus:
+        if self.valid:
+            return "valid"
+        if self.error_type == "unsupported":
+            return "unsupported"
+        if self.error_type == "parse_error":
+            return "parse_error"
+        return "invalid"
+
+
+class ChemistryCheckResponse(BaseModel):
+    verdicts: list[ChemistryLineVerdict]
     first_wrong_line: int | None = None
     problem_error: Literal["parse_error", "unsupported"] | None = None
 
