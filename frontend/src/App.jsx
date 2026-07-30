@@ -1127,7 +1127,7 @@ export default function App() {
           type="text"
           value={problem}
           onChange={handleProblemChange}
-          onBlur={() => handleLineEditDone(line.row)}
+          onBlur={handleProblemEditDone}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.currentTarget.blur();
@@ -1811,7 +1811,7 @@ export default function App() {
                       onChange={(event) =>
                         handleLineEdit(line.row, event.target.value)
                       }
-                      onBlur={handleLineEditDone}
+                      onBlur={() => handleLineEditDone(line.row)}
                       onKeyDown={(event) =>
                         event.key === "Enter" &&
                         event.currentTarget.blur()
