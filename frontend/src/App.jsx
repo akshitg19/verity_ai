@@ -184,6 +184,12 @@ export default function App() {
   const activePointerId = useRef(null);
   const transcriptionRequestId = useRef(0);
   const transcriptionRowRef = useRef(null);
+  const processingRowsRef = useRef(new Set());
+  const rowQueueRef = useRef([]);
+  const queueRunningRef = useRef(false);
+  const rowIdleTimerRef = useRef(null);
+  const dirtyRowsRef = useRef(new Set());
+  const strokesRef = useRef([]);
   const checkRequestId = useRef(0);
   const hintRequestId = useRef(0);
   const problemRef = useRef("");
@@ -225,7 +231,13 @@ export default function App() {
     if (e.pointerType === "touch") return; // palm rejection
     if (activePointerId.current !== null) return;
 
+    if (rowIdleTimerRef.current) {
+      clearTimeout(rowIdleTimerRef.current);
+      rowIdleTimerRef.current = null;
+    }
+
     const firstPoint = getPoint(e);
+
     if (activeTool === "eraser") {
       const strokeIndex = strokes.findLastIndex((stroke) =>
         strokeTouchesPoint(stroke, firstPoint)
@@ -238,21 +250,49 @@ export default function App() {
         (_, index) => index !== strokeIndex
       );
 
+      strokesRef.current = updatedStrokes;
       setStrokes(updatedStrokes);
       invalidateEditedRow(getStrokeRow(removedStroke));
       return;
     }
 
+    const newRow = Math.floor(firstPoint.y / LINE_HEIGHT);
+    const previousRow = activeRowRef.current;
+
+    const movedToLowerRow =
+      previousRow !== null &&
+      newRow > previousRow;
+
+    if (movedToLowerRow) {
+      queueRow(previousRow);
+    }
+
     activePointerId.current = e.pointerId;
 
-    // The visible handwriting no longer matches the last transcription.
-    // Hide dependent feedback until this row is finished again.
-    ++transcriptionRequestId.current;
-    transcriptionRowRef.current = null;
+    if (transcriptionRowRef.current === newRow) {
+      ++transcriptionRequestId.current;
+      transcriptionRowRef.current = null;
+      processingRowsRef.current.delete(newRow);
+
+      rowQueueRef.current = rowQueueRef.current.filter(
+        (row) => row !== newRow
+      );
+    }
+
+    // The written work changed, so existing verdicts and hints may be stale.
+    // This does not cancel transcription running for a different row.
     ++checkRequestId.current;
     ++hintRequestId.current;
-    setTranscribing(false);
-    setVerdictsByLine(new Map());
+
+    // Preserve verdicts above the row being edited.
+    // This row and every later row may now be affected.
+    setVerdictsByLine((currentVerdicts) =>
+      new Map(
+        [...currentVerdicts].filter(
+          ([verdictRow]) => verdictRow < newRow
+        )
+      )
+    );
     setFirstWrongLine(null);
     setHintLevel(0);
     setHintText(null);
@@ -297,9 +337,27 @@ export default function App() {
     currentStroke.current = null;
     activePointerId.current = null;
     const row = getStrokeRow(finished);
+
+    // This row's handwriting no longer matches its saved transcription.
+    dirtyRowsRef.current.add(row);
+
     activeRowRef.current = row;
     setActiveRow(row);
-    setStrokes((prev) => [...prev, finished]);
+
+    setStrokes((previousStrokes) => {
+      const updatedStrokes = [...previousStrokes, finished];
+      strokesRef.current = updatedStrokes;
+      return updatedStrokes;
+    });
+
+    if (rowIdleTimerRef.current) {
+      clearTimeout(rowIdleTimerRef.current);
+    }
+
+    rowIdleTimerRef.current = setTimeout(() => {
+      queueRow(row);
+      rowIdleTimerRef.current = null;
+    }, 1500);
   };
 
   const handlePointerCancel = (e) => {
@@ -309,27 +367,50 @@ export default function App() {
     drawFrame();
   };
 
-  // Any edit to handwriting makes that row's old transcription and
-  // all checker feedback stale.
   const invalidateEditedRow = (row) => {
-    ++transcriptionRequestId.current;
+    // Only this row needs handwriting transcription again.
+    dirtyRowsRef.current.add(row);
+
     ++checkRequestId.current;
     ++hintRequestId.current;
 
-    transcriptionRowRef.current = null;
-    setTranscribing(false);
+    // Remove this row from the waiting queue so its newest version
+    // can be queued again after the user finishes editing.
+    rowQueueRef.current = rowQueueRef.current.filter(
+      (queuedRow) => queuedRow !== row
+    );
 
-    // Remove the old transcription for the edited row.
-    const updatedLines = linesRef.current.filter((line) => line.row !== row);
+    processingRowsRef.current.delete(row);
+
+    // Cancel transcription only if this exact row is currently processing.
+    if (transcriptionRowRef.current === row) {
+      ++transcriptionRequestId.current;
+      transcriptionRowRef.current = null;
+    }
+
+    // Remove only this row's old transcription.
+    const updatedLines = linesRef.current.filter(
+      (line) => line.row !== row
+    );
+
     linesRef.current = updatedLines;
     setLines(updatedLines);
 
-    // Make the edited row active so it can be finished/transcribed again.
+    // Make the edited row active so the idle timer or Check Line button
+    // can submit it again.
     activeRowRef.current = row;
     setActiveRow(row);
 
-    // Old verdicts and hints are no longer trustworthy.
-    setVerdictsByLine(new Map());
+    // Keep verdicts above the edited row.
+    // Verdicts for this row and everything below it are now stale.
+    setVerdictsByLine((currentVerdicts) =>
+      new Map(
+        [...currentVerdicts].filter(
+          ([verdictRow]) => verdictRow < row
+        )
+      )
+    );
+
     setFirstWrongLine(null);
     setHintLevel(0);
     setHintText(null);
@@ -343,13 +424,21 @@ export default function App() {
     const removedStroke = strokes[strokes.length - 1];
     const affectedRow = getStrokeRow(removedStroke);
 
-    setStrokes((previousStrokes) => previousStrokes.slice(0, -1));
+    setStrokes((previousStrokes) => {
+      const updatedStrokes = previousStrokes.slice(0, -1);
+      strokesRef.current = updatedStrokes;
+      return updatedStrokes;
+    });
     invalidateEditedRow(affectedRow);
   };
 
   // Re-judge the whole page. Free (pure SymPy server-side), so it runs on
   // every finished line and every manual correction.
-  const recheck = async (lineArr, problemText = problemRef.current) => {
+  const recheck = async (
+    lineArr, 
+    problemText = problemRef.current,
+    changedRow = null
+  ) => {
     const requestId = ++checkRequestId.current;
     ++hintRequestId.current;
 
@@ -357,7 +446,17 @@ export default function App() {
     setHintLevel(0);
     setHintText(null);
     setHintLoading(false);
-    setVerdictsByLine(new Map());
+    setVerdictsByLine((currentVerdicts) => {
+      if (changedRow === null) {
+        return new Map();
+      }
+
+      return new Map(
+        [...currentVerdicts].filter(
+          ([row]) => row < changedRow
+        )
+      );
+    });
     setFirstWrongLine(null);
     setLastResult(null);
 
@@ -424,14 +523,37 @@ export default function App() {
         return;
       }
 
-      setVerdictsByLine(
-        new Map(
-          data.verdicts
-            .filter((v) => v.line_number > 0)
-            .map((v) => [rowByLineNumber.get(v.line_number), v])
-            .filter(([row]) => row !== undefined)
-        )
+      const returnedVerdicts = new Map(
+        data.verdicts
+          .filter((verdict) => verdict.line_number > 0)
+          .map((verdict) => [
+            rowByLineNumber.get(verdict.line_number),
+            verdict,
+          ])
+          .filter(([row]) => row !== undefined)
       );
+
+      setVerdictsByLine((currentVerdicts) => {
+        if (changedRow === null) {
+          return returnedVerdicts;
+        }
+
+        // Preserve verdicts above the changed row.
+        const mergedVerdicts = new Map(
+          [...currentVerdicts].filter(
+            ([row]) => row < changedRow
+          )
+        );
+
+        // Replace verdicts for the changed row and every later row.
+        for (const [row, verdict] of returnedVerdicts) {
+          if (row >= changedRow) {
+            mergedVerdicts.set(row, verdict);
+          }
+        }
+
+        return mergedVerdicts;
+      });
       setFirstWrongLine(
         data.first_wrong_line > 0 ? data.first_wrong_line : null
       );
@@ -467,60 +589,153 @@ export default function App() {
     recheck(linesRef.current, problemRef.current);
   };
 
-  const handleFinishLine = async () => {
-    const segLines = segmentIntoLines(strokes);
-    const targetRow = activeRowRef.current;
-    if (segLines.size === 0 || targetRow === null || !segLines.has(targetRow)) {
+  const processRow = async (targetRow) => {
+    const segLines = segmentIntoLines(strokesRef.current);
+
+    if (
+      targetRow === null ||
+      !segLines.has(targetRow)
+    ) {
       return;
     }
+
     const requestId = ++transcriptionRequestId.current;
     transcriptionRowRef.current = targetRow;
+
     const lineStrokes = segLines.get(targetRow);
-
     const dataUrl = renderLineToPng(lineStrokes);
-    const imageBase64 = dataUrl.split(",")[1]; // strip "data:image/png;base64,"
+    const imageBase64 = dataUrl.split(",")[1];
 
-    setTranscribing(true);
     setLastResult(null);
 
-    let text, unreadable;
     try {
-      const res = await fetch(`${API_BASE}/transcribe`, {
+      const response = await fetch(`${API_BASE}/transcribe`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_base64: imageBase64 }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          image_base64: imageBase64,
+        }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || `${res.status} ${res.statusText}`);
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+
+        throw new Error(
+          body?.detail ||
+            `${response.status} ${response.statusText}`
+        );
       }
-      const data = await res.json();
-      if (requestId !== transcriptionRequestId.current) return;
-      text = data.text;
-      unreadable = data.unreadable;
-    } catch (e) {
-      if (requestId !== transcriptionRequestId.current) return;
-      transcriptionRowRef.current = null;
-      setLastResult({ error: e.message });
-      setTranscribing(false);
+
+      const data = await response.json();
+
+      // The request was canceled because this row was edited or cleared.
+      if (requestId !== transcriptionRequestId.current) {
+        return;
+      }
+
+      const newLines = [
+        ...linesRef.current.filter(
+          (line) => line.row !== targetRow
+        ),
+        {
+          row: targetRow,
+          text: data.unreadable ? "" : data.text,
+          unreadable: data.unreadable,
+        },
+      ].sort((a, b) => a.row - b.row);
+
+      linesRef.current = newLines;
+      setLines(newLines);
+
+      // This transcription now matches the current handwriting.
+      dirtyRowsRef.current.delete(targetRow);
+
+      if (activeRowRef.current === targetRow) {
+        activeRowRef.current = null;
+        setActiveRow(null);
+      }
+
+      await recheck(
+        newLines,
+        problemRef.current,
+        targetRow
+      );
+    } catch (error) {
+      if (requestId !== transcriptionRequestId.current) {
+        return;
+      }
+
+      setLastResult({
+        error: error.message,
+      });
+    } finally {
+      if (transcriptionRowRef.current === targetRow) {
+        transcriptionRowRef.current = null;
+      }
+    }
+  };
+
+  const runRowQueue = async () => {
+    if (queueRunningRef.current) {
       return;
     }
-    if (requestId !== transcriptionRequestId.current) return;
-    transcriptionRowRef.current = null;
-    setTranscribing(false);
 
-    // Upsert this line (re-finishing a row replaces its transcription).
-    const newLines = [
-      ...linesRef.current.filter((l) => l.row !== targetRow),
-      { row: targetRow, text: unreadable ? "" : text, unreadable },
-    ].sort((a, b) => a.row - b.row);
-    linesRef.current = newLines;
-    setLines(newLines);
-    if (activeRowRef.current === targetRow) {
-      activeRowRef.current = null;
-      setActiveRow(null);
+    queueRunningRef.current = true;
+    setTranscribing(true);
+
+    try {
+      while (rowQueueRef.current.length > 0) {
+        const targetRow = rowQueueRef.current.shift();
+
+        await processRow(targetRow);
+
+        processingRowsRef.current.delete(targetRow);
+      }
+    } finally {
+      queueRunningRef.current = false;
+      transcriptionRowRef.current = null;
+      setTranscribing(false);
     }
-    await recheck(newLines);
+  };
+
+  const queueRow = (targetRow) => {
+    if (targetRow === null) {
+      return;
+    }
+
+    const alreadyTranscribed = linesRef.current.some(
+      (line) => line.row === targetRow
+    );
+
+    if (
+      alreadyTranscribed &&
+      !dirtyRowsRef.current.has(targetRow)
+    ) {
+      return;
+    }
+
+    const segLines = segmentIntoLines(strokesRef.current);
+
+    if (!segLines.has(targetRow)) {
+      return;
+    }
+
+    // Do not queue the same row more than once.
+    if (processingRowsRef.current.has(targetRow)) {
+      return;
+    }
+
+    processingRowsRef.current.add(targetRow);
+    rowQueueRef.current.push(targetRow);
+
+    // Start the queue without blocking handwriting input.
+    void runRowQueue();
+  };
+
+  const handleFinishLine = () => {
+    queueRow(activeRowRef.current);
   };
 
   // Manual correction in the side panel: update text, clear the unreadable
@@ -533,7 +748,13 @@ export default function App() {
     }
     ++checkRequestId.current;
     ++hintRequestId.current;
-    setVerdictsByLine(new Map());
+    setVerdictsByLine((currentVerdicts) =>
+      new Map(
+        [...currentVerdicts].filter(
+          ([verdictRow]) => verdictRow < row
+        )
+      )
+    );
     setFirstWrongLine(null);
     setHintLevel(0);
     setHintText(null);
@@ -550,8 +771,12 @@ export default function App() {
     });
   };
 
-  const handleLineEditDone = () => {
-    recheck(linesRef.current);
+  const handleLineEditDone = (row) => {
+    recheck(
+      linesRef.current,
+      problemRef.current,
+      row
+    );
   };
 
   const handleGetHint = async () => {
@@ -750,10 +975,25 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    strokesRef.current = strokes;
+  }, [strokes]);
+
   const handleClear = () => {
     ++transcriptionRequestId.current;
     ++checkRequestId.current;
     ++hintRequestId.current;
+
+    if (rowIdleTimerRef.current) {
+      clearTimeout(rowIdleTimerRef.current);
+      rowIdleTimerRef.current = null;
+    }
+
+    rowQueueRef.current = [];
+    processingRowsRef.current.clear();
+    dirtyRowsRef.current.clear();
+    queueRunningRef.current = false;
+    strokesRef.current = [];
 
     currentStroke.current = null;
     activePointerId.current = null;
@@ -887,10 +1127,12 @@ export default function App() {
           type="text"
           value={problem}
           onChange={handleProblemChange}
-          onBlur={handleProblemEditDone}
-          onKeyDown={(event) =>
-            event.key === "Enter" && event.currentTarget.blur()
-          }
+          onBlur={() => handleLineEditDone(line.row)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.currentTarget.blur();
+            }
+          }}
           placeholder="Optional: type the problem instead"
           style={{
             flex: 1,
@@ -1211,7 +1453,6 @@ export default function App() {
           <button
             onClick={handleFinishLine}
             disabled={
-              transcribing ||
               strokes.length === 0 ||
               activeLineNumber === null
             }
@@ -1224,24 +1465,20 @@ export default function App() {
               borderRadius: 10,
               fontWeight: 600,
               opacity:
-                transcribing ||
                 strokes.length === 0 ||
                 activeLineNumber === null
                   ? 0.4
                   : 1,
               cursor:
-                transcribing ||
                 strokes.length === 0 ||
                 activeLineNumber === null
                   ? "not-allowed"
                   : "pointer",
             }}
           >
-            {transcribing
-              ? "Reading..."
-              : activeLineNumber === null
-                ? "Finish Line"
-                : `Finish Line ${activeLineNumber}`}
+            {activeLineNumber === null
+              ? "Check Line"
+              : `Check Line ${activeLineNumber}`}
           </button>
 
           <button
@@ -1356,7 +1593,7 @@ export default function App() {
             marginBottom: 16,
           }}
         >
-          Review what VERITY.ai read. You can correct any misread
+          Review what verity.ai read. You can correct any misread
           handwriting before checking continues.
         </div>
 
