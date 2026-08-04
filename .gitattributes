@@ -1,0 +1,16 @@
+# Normalize every text file to LF inside the repository, regardless of the
+# contributor's platform or local core.autocrlf setting.
+* text=auto
+
+# Shell scripts must be checked out with LF even on Windows. A CRLF copy
+# fails on macOS and Linux with "bad interpreter: /usr/bin/env bash^M".
+*.sh text eol=lf
+
+# PowerShell scripts are Windows-only entry points; keep them CRLF.
+*.ps1 text eol=crlf
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.ico binary
+*.woff binary
+*.woff2 binary

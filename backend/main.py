@@ -24,7 +24,7 @@ from transcription import (
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="CheckMate API")
+app = FastAPI(title="verity.ai API")
 
 CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS",
