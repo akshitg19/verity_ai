@@ -43,6 +43,83 @@ Checklist:
 
 ---
 
+## Product intuitiveness and hint-strategy notes (read before building further)
+
+Gaps found by actually using the app, recorded here so they are decided
+deliberately rather than by default. Nothing in this section is built yet and
+none of it should be started before the chemistry base flow lands.
+
+### The hint strategy has a ceiling worth naming
+
+Hints today are a fixed deterministic lookup: `line_number` plus `error_type`
+selects a pre-written template. That design is the whole reason the "cannot
+leak the answer" guarantee is structural instead of a polite instruction to a
+model. The hint generator has no access to the problem, the solution, or the
+student's work, so there is nothing available for it to leak.
+
+The cost of that guarantee is that a hint can only ever be as specific as its
+category. For a sign error or an unbalanced charge, naming the category is
+genuinely most of the help a student needs. For a hard problem it will feel
+thin, and chemistry is where it will show first, because the useful hint
+usually depends on reasoning about the particular structure in front of the
+student rather than on which category their mistake falls into.
+
+Two directions to evaluate, and this needs an explicit decision rather than
+drifting into one:
+
+1. **A wording layer only.** An AI rephrases the hint to sound like a tutor
+   while still receiving nothing but the same fixed category. The structural
+   guarantee survives intact because the model still never sees the problem or
+   the answer; only the prose changes.
+2. **Trading some guarantee for adaptiveness.** Give a model enough context to
+   tutor genuinely on hard problems, accepting a smaller but real leak risk in
+   exchange. This is a product decision about what verity.ai promises, not a
+   technical one, and it should be made in the open with the team rather than
+   discovered later in a demo.
+
+### The app is a checker, not yet something a student would live in
+
+Testing made clear that verity.ai currently behaves like a single-canvas
+checker rather than a note-taking app anyone would choose for daily homework.
+The right bar to measure against is Apple Notes or Samsung Notes, since that is
+what students already use: multiple pages and notes, folders or notebooks to
+organise them, easy navigation back through past work, and a genuinely richer
+set of canvas tools.
+
+verity.ai needs the equivalent structure:
+
+- Creating, naming, and switching between multiple problem sets or notes.
+- Folder or subject organisation, so algebra and chemistry live in separate
+  spaces rather than sharing one surface.
+- A page model, rather than one continuous canvas that grows forever.
+
+### One page holding several problems is not detected
+
+Observed directly: a student finishes a problem, draws a rough horizontal line
+across the page, and starts the next problem underneath it. The app does not
+register that as a boundary at all. Segmentation currently understands rows
+within a single problem, and has no concept of "this row is a separator, and a
+new problem begins below it," so the second problem is read as a continuation
+of the first.
+
+This needs detection logic of its own. Options worth evaluating:
+
+- Treat a long, roughly horizontal stroke with little vertical variance as a
+  divider rather than as content.
+- Start a new problem automatically past a large enough vertical gap.
+- Make the existing "New Problem" action reachable through a light in-canvas
+  gesture instead of only a toolbar click.
+
+The mechanism matters less than the requirement behind it: a student writing
+problem after problem down one page, drawing dividers casually as they go,
+should never have to think about how the tool segments their work.
+
+None of this blocks current chemistry work, but it should be prioritised once
+the chemistry base flow (Phase 8) is stable, since it determines whether the
+product holds up in a real demo session covering more than one problem.
+
+---
+
 ## Topic scope
 
 ### Math (grades 6-12)
@@ -172,7 +249,7 @@ Current state: 85 backend test functions across 5 files, CI runs backend pytest 
 
 | Done | Item | Action |
 |------|---|---|
-| [ ] | `README.md` | Still titled and written as CheckMate. Rename to verity.ai in the title and prose (repo name can stay `checkmate-ai`) |
+| [x] | `README.md` | Done. Retitled to verity.ai, and PROJECT_NOTES.md plus the default Vite `frontend/README.md` were folded into it. The GitHub repo is now `verity_ai`, so the old product name is gone from the codebase entirely |
 | [ ] | `frontend/README.md` | Untouched default Vite template text ("React + Vite... two official plugins"). Replace with three lines pointing at the root README, or delete |
 | [ ] | `frontend/src/assets/react.svg`, `vite.svg` | Default template assets. Check for references (`grep -r "react.svg" frontend/src`), delete if unused |
 | [ ] | `frontend/src/assets/hero.png` | Verify it is actually rendered somewhere; delete if not |
