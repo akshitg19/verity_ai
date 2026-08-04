@@ -9,6 +9,7 @@ if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   exit 1
 fi
 
+rm -rf venv
 "$PYTHON_BIN" -m venv --clear venv
 ./venv/bin/python -m pip install --upgrade pip
 ./venv/bin/python -m pip install -r requirements.txt

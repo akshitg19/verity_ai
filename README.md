@@ -15,7 +15,7 @@ mistakes without revealing the answer.
 Each developer creates their own `backend/venv` and `frontend/node_modules`.
 Never commit either directory or share Google Cloud credentials.
 
-## First-time setup
+## Setup
 
 ### macOS or Linux
 

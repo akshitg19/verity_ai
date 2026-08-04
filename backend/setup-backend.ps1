@@ -1,6 +1,14 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
+if (Test-Path venv) {
+    try {
+        Remove-Item -Recurse -Force venv
+    } catch {
+        throw "Could not remove backend\venv. Stop any running backend server, close shells that activated it, and run this script again."
+    }
+}
+
 $python = Get-Command py -ErrorAction SilentlyContinue
 if ($python) {
     & py -3.11 -m venv --clear venv
