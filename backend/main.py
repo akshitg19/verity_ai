@@ -16,9 +16,12 @@ from schemas import (
     FunctionalGroupCheckRequest,
     HintRequest,
     HintResponse,
+    StructureTranscribeRequest,
+    StructureTranscribeResponse,
     TranscribeRequest,
     TranscribeResponse,
 )
+from structure_recognition import transcribe_structure
 from transcription import (
     TranscriptionInputError,
     TranscriptionServiceError,
@@ -141,6 +144,21 @@ def transcribe(req: TranscribeRequest):
             detail="Transcription is temporarily unavailable",
         ) from exc
     return TranscribeResponse(text=text, unreadable=unreadable)
+
+
+@app.post("/chemistry/transcribe", response_model=StructureTranscribeResponse)
+def transcribe_chemistry_structure(req: StructureTranscribeRequest):
+    try:
+        smiles, unreadable = transcribe_structure(req.image_base64)
+    except TranscriptionInputError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except TranscriptionServiceError as exc:
+        logger.exception("Gemini structure recognition failed")
+        raise HTTPException(
+            status_code=503,
+            detail="Structure recognition is temporarily unavailable",
+        ) from exc
+    return StructureTranscribeResponse(smiles=smiles, unreadable=unreadable)
 
 
 @app.post("/hint", response_model=HintResponse)

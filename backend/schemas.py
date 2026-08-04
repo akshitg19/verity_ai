@@ -199,6 +199,15 @@ class TranscribeResponse(BaseModel):
     unreadable: bool = False  # model could not read the line at all
 
 
+class StructureTranscribeRequest(BaseModel):
+    image_base64: Annotated[str, Field(min_length=1, max_length=7_000_000)]
+
+
+class StructureTranscribeResponse(BaseModel):
+    smiles: str
+    unreadable: bool = False  # model could not read the drawing at all
+
+
 # Hint generation receives no problem or step content, so its input cannot
 # accidentally expose a solved value to a template or future model call.
 # The error type spans every subject's categories: a hint is keyed by the

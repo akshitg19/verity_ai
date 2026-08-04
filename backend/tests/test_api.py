@@ -333,6 +333,52 @@ def test_transcribe_hides_service_error(_mock_transcribe) -> None:
     assert response.json() == {"detail": "Transcription is temporarily unavailable"}
 
 
+@patch("main.transcribe_structure", return_value=("CC(=O)OC", False))
+def test_chemistry_transcribe_contract(mock_transcribe) -> None:
+    response = client.post(
+        "/chemistry/transcribe", json={"image_base64": "mock-image"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"smiles": "CC(=O)OC", "unreadable": False}
+    mock_transcribe.assert_called_once_with("mock-image")
+
+
+@patch("main.transcribe_structure", return_value=("", True))
+def test_chemistry_transcribe_reports_unreadable_drawing(_mock_transcribe) -> None:
+    response = client.post(
+        "/chemistry/transcribe", json={"image_base64": "mock-image"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"smiles": "", "unreadable": True}
+
+
+@patch(
+    "main.transcribe_structure",
+    side_effect=TranscriptionInputError("image_base64 must contain a PNG image"),
+)
+def test_chemistry_transcribe_maps_bad_input_to_422(_mock_transcribe) -> None:
+    response = client.post("/chemistry/transcribe", json={"image_base64": "bad"})
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "image_base64 must contain a PNG image"}
+
+
+@patch(
+    "main.transcribe_structure",
+    side_effect=TranscriptionServiceError("service-account@secret-project expired"),
+)
+def test_chemistry_transcribe_hides_service_error(_mock_transcribe) -> None:
+    response = client.post("/chemistry/transcribe", json={"image_base64": "valid"})
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Structure recognition is temporarily unavailable"
+    }
+    assert "secret-project" not in response.text
+
+
 def test_functional_group_check_accepts_a_matching_molecule() -> None:
     response = client.post(
         "/chemistry/functional-group",
