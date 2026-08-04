@@ -216,6 +216,17 @@ export default function App() {
   const [penWidth, setPenWidth] = useState(4);
   const [showPenSettings, setShowPenSettings] = useState(false);
 
+  // Chemistry mode. A molecular structure is one 2D drawing rather than a
+  // sequence of written lines, so it needs none of the row bookkeeping
+  // above: one canvas, one PNG, one SMILES, one verdict.
+  const [mode, setMode] = useState("math");
+  const [targetSmiles, setTargetSmiles] = useState("");
+  const [structureSmiles, setStructureSmiles] = useState("");
+  const [structureRead, setStructureRead] = useState(false);
+  const [structureUnreadable, setStructureUnreadable] = useState(false);
+  const [structureVerdict, setStructureVerdict] = useState(null);
+  const structureRequestId = useRef(0);
+
   const getPoint = (e) => {
     const rect = canvasRef.current.getBoundingClientRect();
     return {
@@ -252,7 +263,26 @@ export default function App() {
 
       strokesRef.current = updatedStrokes;
       setStrokes(updatedStrokes);
-      invalidateEditedRow(getStrokeRow(removedStroke));
+      if (mode === "chemistry") {
+        invalidateStructure();
+      } else {
+        invalidateEditedRow(getStrokeRow(removedStroke));
+      }
+      return;
+    }
+
+    if (mode === "chemistry") {
+      // One drawing, no rows: skip the row tracking, queueing, and
+      // per-row verdict invalidation the math flow needs.
+      activePointerId.current = e.pointerId;
+      invalidateStructure();
+      canvasRef.current.setPointerCapture(e.pointerId);
+      currentStroke.current = {
+        points: [firstPoint],
+        pointerType: e.pointerType,
+        color: penColor,
+        width: penWidth,
+      };
       return;
     }
 
@@ -336,6 +366,18 @@ export default function App() {
     const finished = currentStroke.current;
     currentStroke.current = null;
     activePointerId.current = null;
+
+    if (mode === "chemistry") {
+      // No auto-transcribe on pen idle: the student says when the drawing
+      // is finished, because a molecule has no equivalent of a line ending.
+      setStrokes((previousStrokes) => {
+        const updatedStrokes = [...previousStrokes, finished];
+        strokesRef.current = updatedStrokes;
+        return updatedStrokes;
+      });
+      return;
+    }
+
     const row = getStrokeRow(finished);
 
     // This row's handwriting no longer matches its saved transcription.
@@ -429,7 +471,11 @@ export default function App() {
       strokesRef.current = updatedStrokes;
       return updatedStrokes;
     });
-    invalidateEditedRow(affectedRow);
+    if (mode === "chemistry") {
+      invalidateStructure();
+    } else {
+      invalidateEditedRow(affectedRow);
+    }
   };
 
   // Re-judge the whole page. Free (pure SymPy server-side), so it runs on
@@ -779,6 +825,186 @@ export default function App() {
     );
   };
 
+  // --- Chemistry mode -------------------------------------------------
+  // Deliberately separate from the row-based math handlers above rather
+  // than generalising them: the two flows share the canvas and the panel's
+  // visual language, but nothing about their segmentation model.
+
+  const invalidateStructure = () => {
+    ++structureRequestId.current;
+    ++hintRequestId.current;
+    setStructureRead(false);
+    setStructureSmiles("");
+    setStructureUnreadable(false);
+    setStructureVerdict(null);
+    setHintLevel(0);
+    setHintText(null);
+    setHintLoading(false);
+    setLastResult(null);
+  };
+
+  const handleModeChange = (nextMode) => {
+    if (nextMode === mode) return;
+
+    // Switching subject starts a clean page. Carrying algebra ink into a
+    // structure drawing (or the reverse) would only produce nonsense for
+    // whichever recogniser runs next.
+    handleClear();
+    invalidateStructure();
+    setTargetSmiles("");
+    setShowPenSettings(false);
+    setMode(nextMode);
+  };
+
+  const handleTargetSmilesChange = (event) => {
+    setTargetSmiles(event.target.value);
+    ++structureRequestId.current;
+    ++hintRequestId.current;
+    setStructureVerdict(null);
+    setHintLevel(0);
+    setHintText(null);
+    setHintLoading(false);
+    setLastResult(null);
+  };
+
+  // The whole canvas is one drawing, so this crops to the bounding box of
+  // every stroke on the page instead of one ruled row's worth.
+  const handleReadStructure = async () => {
+    if (strokes.length === 0) return;
+
+    const requestId = ++structureRequestId.current;
+    const dataUrl = renderLineToPng(strokes);
+    const imageBase64 = dataUrl.split(",")[1];
+
+    setTranscribing(true);
+    setLastResult(null);
+    setStructureVerdict(null);
+
+    try {
+      const response = await fetch(`${API_BASE}/chemistry/transcribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_base64: imageBase64 }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(
+          body?.detail || `${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      if (requestId !== structureRequestId.current) return;
+
+      setStructureSmiles(data.smiles);
+      setStructureUnreadable(data.unreadable);
+      setStructureRead(true);
+    } catch (error) {
+      if (requestId !== structureRequestId.current) return;
+      setLastResult({ error: error.message });
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const handleStructureEdit = (value) => {
+    ++structureRequestId.current;
+    ++hintRequestId.current;
+    setStructureSmiles(value);
+    setStructureUnreadable(structureUnreadable && !value.trim());
+    setStructureVerdict(null);
+    setHintLevel(0);
+    setHintText(null);
+    setHintLoading(false);
+  };
+
+  const handleCheckStructure = async () => {
+    const submitted = structureSmiles.trim();
+    const target = targetSmiles.trim();
+    if (!submitted || !target) return;
+
+    const requestId = ++structureRequestId.current;
+    ++hintRequestId.current;
+    setHintLevel(0);
+    setHintText(null);
+    setLastResult(null);
+
+    try {
+      const response = await fetch(`${API_BASE}/chemistry/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target_smiles: target,
+          steps: [{ line_number: 1, smiles: submitted }],
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(
+          body?.detail || `${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      if (requestId !== structureRequestId.current) return;
+
+      if (data.problem_error) {
+        setStructureVerdict(null);
+        setLastResult({
+          warning:
+            data.problem_error === "unsupported"
+              ? "That target structure is outside the currently supported scope."
+              : "The target structure could not be read as valid SMILES.",
+        });
+        return;
+      }
+
+      setStructureVerdict(data.verdicts[0] ?? null);
+    } catch (error) {
+      if (requestId !== structureRequestId.current) return;
+      setStructureVerdict(null);
+      setLastResult({ error: `Check failed: ${error.message}` });
+    }
+  };
+
+  const handleChemistryHint = async () => {
+    if (getVerdictStatus(structureVerdict) !== "invalid" || hintLevel >= 3) {
+      return;
+    }
+
+    const nextLevel = hintLevel + 1;
+    const requestId = ++hintRequestId.current;
+
+    setHintLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/hint`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          line_number: 1,
+          error_type: structureVerdict?.error_type ?? null,
+          level: nextLevel,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      if (requestId !== hintRequestId.current) return;
+      setHintLevel(data.level);
+      setHintText(data.hint);
+    } catch (error) {
+      if (requestId !== hintRequestId.current) return;
+      setHintText(`Error: ${error.message}`);
+    } finally {
+      if (requestId === hintRequestId.current) {
+        setHintLoading(false);
+      }
+    }
+  };
+
   const handleGetHint = async () => {
     if (firstWrongLine === null || hintLevel >= 3) return;
     const nextLevel = hintLevel + 1;
@@ -883,6 +1109,10 @@ export default function App() {
     for (const s of strokes) drawStroke(ctx, s);
     if (currentStroke.current) drawStroke(ctx, currentStroke.current);
 
+    // A structure is one figure, so the per-row boxes and line numbers
+    // below would be actively misleading about how it is being read.
+    if (mode === "chemistry") return;
+
     // Segmentation debug view: box around each detected line, colored by
     // /check's verdict once one exists -- green for a correct step, red for
     // a flagged one, the original neutral blue for lines not yet checked
@@ -931,7 +1161,7 @@ export default function App() {
         ctx.stroke();
       }
     }
-  }, [strokes, drawStroke, verdictsByLine]);
+  }, [strokes, drawStroke, verdictsByLine, mode]);
 
   // Keep the notebook at least 24 rows tall so the page can scroll.
   useEffect(() => {
@@ -983,6 +1213,12 @@ export default function App() {
     ++transcriptionRequestId.current;
     ++checkRequestId.current;
     ++hintRequestId.current;
+    ++structureRequestId.current;
+
+    setStructureRead(false);
+    setStructureSmiles("");
+    setStructureUnreadable(false);
+    setStructureVerdict(null);
 
     if (rowIdleTimerRef.current) {
       clearTimeout(rowIdleTimerRef.current);
@@ -1123,31 +1359,101 @@ export default function App() {
           </div>
         </div>
 
-        <input
-          type="text"
-          value={problem}
-          onChange={handleProblemChange}
-          onBlur={handleProblemEditDone}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.currentTarget.blur();
-            }
-          }}
-          placeholder="Optional: type the problem instead"
+        <div
           style={{
-            flex: 1,
-            minWidth: 180,
-            maxWidth: 460,
-            padding: "10px 14px",
-            border: `1px solid ${COLORS.border}`,
+            display: "flex",
+            flexShrink: 0,
+            padding: 3,
+            gap: 2,
             borderRadius: 10,
             background: COLORS.background,
-            color: COLORS.text,
-            fontFamily: "sans-serif",
-            fontSize: 14,
-            outline: "none",
+            border: `1px solid ${COLORS.border}`,
           }}
-        />
+        >
+          {[
+            { value: "math", label: "Math" },
+            { value: "chemistry", label: "Chemistry" },
+          ].map((option) => {
+            const selected = mode === option.value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => handleModeChange(option.value)}
+                style={{
+                  padding: "7px 15px",
+                  background: selected ? COLORS.surface : "transparent",
+                  color: selected ? COLORS.primary : COLORS.muted,
+                  border: "none",
+                  borderRadius: 8,
+                  boxShadow: selected
+                    ? "0 1px 3px rgba(31, 41, 38, 0.14)"
+                    : "none",
+                  fontFamily: "sans-serif",
+                  fontSize: 13,
+                  fontWeight: selected ? 700 : 500,
+                  cursor: "pointer",
+                }}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {mode === "math" ? (
+          <input
+            type="text"
+            value={problem}
+            onChange={handleProblemChange}
+            onBlur={handleProblemEditDone}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
+            placeholder="Optional: type the problem instead"
+            style={{
+              flex: 1,
+              minWidth: 180,
+              maxWidth: 460,
+              padding: "10px 14px",
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              background: COLORS.background,
+              color: COLORS.text,
+              fontFamily: "sans-serif",
+              fontSize: 14,
+              outline: "none",
+            }}
+          />
+        ) : (
+          <input
+            type="text"
+            value={targetSmiles}
+            onChange={handleTargetSmilesChange}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
+            placeholder="Target structure as SMILES, e.g. CC(=O)OC"
+            style={{
+              flex: 1,
+              minWidth: 180,
+              maxWidth: 460,
+              padding: "10px 14px",
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: 10,
+              background: COLORS.background,
+              color: COLORS.text,
+              fontFamily: "monospace",
+              fontSize: 14,
+              outline: "none",
+            }}
+          />
+        )}
 
         <div
           style={{
@@ -1450,36 +1756,60 @@ export default function App() {
             ✋
           </button>
 
-          <button
-            onClick={handleFinishLine}
-            disabled={
-              strokes.length === 0 ||
-              activeLineNumber === null
-            }
-            style={{
-              padding: "10px 16px",
-              whiteSpace: "nowrap",
-              background: COLORS.primary,
-              color: "#fff",
-              border: "none",
-              borderRadius: 10,
-              fontWeight: 600,
-              opacity:
+          {mode === "math" ? (
+            <button
+              onClick={handleFinishLine}
+              disabled={
                 strokes.length === 0 ||
                 activeLineNumber === null
-                  ? 0.4
-                  : 1,
-              cursor:
-                strokes.length === 0 ||
-                activeLineNumber === null
-                  ? "not-allowed"
-                  : "pointer",
-            }}
-          >
-            {activeLineNumber === null
-              ? "Check Line"
-              : `Check Line ${activeLineNumber}`}
-          </button>
+              }
+              style={{
+                padding: "10px 16px",
+                whiteSpace: "nowrap",
+                background: COLORS.primary,
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                fontWeight: 600,
+                opacity:
+                  strokes.length === 0 ||
+                  activeLineNumber === null
+                    ? 0.4
+                    : 1,
+                cursor:
+                  strokes.length === 0 ||
+                  activeLineNumber === null
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {activeLineNumber === null
+                ? "Check Line"
+                : `Check Line ${activeLineNumber}`}
+            </button>
+          ) : (
+            <button
+              onClick={handleReadStructure}
+              disabled={strokes.length === 0 || transcribing}
+              style={{
+                padding: "10px 16px",
+                whiteSpace: "nowrap",
+                background: COLORS.primary,
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                fontWeight: 600,
+                opacity:
+                  strokes.length === 0 || transcribing ? 0.4 : 1,
+                cursor:
+                  strokes.length === 0 || transcribing
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {transcribing ? "Reading…" : "Read Structure"}
+            </button>
+          )}
 
           <button
             onClick={handleUndo}
@@ -1593,11 +1923,266 @@ export default function App() {
             marginBottom: 16,
           }}
         >
-          Review what verity.ai read. You can correct any misread
-          handwriting before checking continues.
+          {mode === "chemistry"
+            ? "Review the structure verity.ai read. You can correct the SMILES before checking it."
+            : "Review what verity.ai read. You can correct any misread handwriting before checking continues."}
         </div>
 
-        {lines.length === 0 ? (
+        {mode === "chemistry" ? (
+          !structureRead ? (
+            <div
+              style={{
+                minHeight: 260,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                padding: 24,
+                boxSizing: "border-box",
+                borderRadius: 12,
+                background: COLORS.background,
+                border: `1px dashed ${COLORS.border}`,
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  display: "grid",
+                  placeItems: "center",
+                  marginBottom: 14,
+                  borderRadius: "50%",
+                  background: COLORS.primaryLight,
+                  color: COLORS.primary,
+                  fontSize: 22,
+                  fontWeight: 700,
+                }}
+              >
+                ⬡
+              </div>
+
+              <div
+                style={{
+                  marginBottom: 7,
+                  color: COLORS.text,
+                  fontSize: 16,
+                  fontWeight: 700,
+                }}
+              >
+                Draw the structure
+              </div>
+
+              <div
+                style={{
+                  maxWidth: 240,
+                  color: COLORS.muted,
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                }}
+              >
+                Use the whole page for one molecule, then press Read
+                Structure. Set the target SMILES in the toolbar first.
+              </div>
+            </div>
+          ) : (
+            (() => {
+              const verdictStatus = getVerdictStatus(structureVerdict);
+
+              const status = structureUnreadable
+                ? {
+                    label: "Needs review",
+                    detail: "We could not confidently read this drawing.",
+                    color: "#a96b1f",
+                    background: "#fff7e8",
+                    symbol: "!",
+                  }
+                : structureVerdict === null
+                ? {
+                    label: "Waiting",
+                    detail: "This structure has not been checked yet.",
+                    color: COLORS.muted,
+                    background: "#f3f5f4",
+                    symbol: "…",
+                  }
+                : verdictStatus === "valid"
+                ? {
+                    label: "Correct structure",
+                    detail: "This matches the target structure.",
+                    color: "#267a55",
+                    background: "#edf8f2",
+                    symbol: "✓",
+                  }
+                : verdictStatus === "invalid"
+                ? {
+                    label: "Review this structure",
+                    detail: structureVerdict.error_type
+                      ? `Possible ${structureVerdict.error_type.replaceAll(
+                          "_",
+                          " "
+                        )}.`
+                      : "This is not the target structure.",
+                    color: COLORS.danger,
+                    background: "#fff0f0",
+                    symbol: "!",
+                  }
+                : verdictStatus === "parse_error"
+                ? {
+                    label: "Could not check",
+                    detail: "Try redrawing, or edit the SMILES directly.",
+                    color: "#a96b1f",
+                    background: "#fff7e8",
+                    symbol: "?",
+                  }
+                : {
+                    label: "Not supported yet",
+                    detail:
+                      "This structure is outside the current supported scope.",
+                    color: "#a96b1f",
+                    background: "#fff7e8",
+                    symbol: "?",
+                  };
+
+              return (
+                <div
+                  style={{
+                    padding: 12,
+                    borderRadius: 12,
+                    border: `1px solid ${status.color}33`,
+                    background: status.background,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        flexShrink: 0,
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        display: "grid",
+                        placeItems: "center",
+                        background: status.color,
+                        color: "#fff",
+                        fontSize: 13,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {status.symbol}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 8,
+                          marginBottom: 3,
+                        }}
+                      >
+                        <div
+                          style={{
+                            color: COLORS.text,
+                            fontWeight: 700,
+                            fontSize: 14,
+                          }}
+                        >
+                          Structure
+                        </div>
+
+                        <div
+                          style={{
+                            color: status.color,
+                            fontSize: 12,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {status.label}
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          color: COLORS.muted,
+                          fontSize: 12,
+                          lineHeight: 1.35,
+                          marginBottom: 8,
+                        }}
+                      >
+                        {status.detail}
+                      </div>
+
+                      <input
+                        type="text"
+                        value={structureSmiles}
+                        placeholder={
+                          structureUnreadable
+                            ? "Type the SMILES you drew"
+                            : ""
+                        }
+                        onChange={(event) =>
+                          handleStructureEdit(event.target.value)
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.currentTarget.blur();
+                            handleCheckStructure();
+                          }
+                        }}
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          padding: "9px 11px",
+                          border: `1px solid ${COLORS.border}`,
+                          borderRadius: 9,
+                          background: COLORS.surface,
+                          color: COLORS.text,
+                          fontFamily: "monospace",
+                          fontSize: 14,
+                          outline: "none",
+                        }}
+                      />
+
+                      <button
+                        onClick={handleCheckStructure}
+                        disabled={
+                          !structureSmiles.trim() || !targetSmiles.trim()
+                        }
+                        style={{
+                          width: "100%",
+                          marginTop: 8,
+                          padding: "9px 14px",
+                          background:
+                            !structureSmiles.trim() || !targetSmiles.trim()
+                              ? "#d8ddda"
+                              : COLORS.primary,
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 9,
+                          fontWeight: 700,
+                          fontSize: 13,
+                          cursor:
+                            !structureSmiles.trim() || !targetSmiles.trim()
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                      >
+                        {!targetSmiles.trim()
+                          ? "Set a target structure first"
+                          : "Check Structure"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          )
+        ) : lines.length === 0 ? (
           <div
             style={{
               minHeight: 260,
@@ -1837,7 +2422,9 @@ export default function App() {
         </div>
       )}
 
-        {firstWrongLine !== null && (
+        {(mode === "chemistry"
+          ? getVerdictStatus(structureVerdict) === "invalid"
+          : firstWrongLine !== null) && (
           <div
             style={{
               marginTop: 14,
@@ -1871,7 +2458,9 @@ export default function App() {
             )}
 
             <button
-              onClick={handleGetHint}
+              onClick={
+                mode === "chemistry" ? handleChemistryHint : handleGetHint
+              }
               disabled={hintLoading || hintLevel >= 3}
               style={{
                 width: "100%",
