@@ -79,8 +79,14 @@ class CheckResponse(BaseModel):
 ChemistryErrorType = Literal[
     "structure_mismatch",
     "wrong_functional_group",
+    "unbalanced_atoms",
+    "unbalanced_charge",
     "parse_error",
     "unsupported",
+]
+EquationText = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=512),
 ]
 
 
@@ -123,6 +129,29 @@ class ChemistryCheckResponse(BaseModel):
     verdicts: list[ChemistryLineVerdict]
     first_wrong_line: int | None = None
     problem_error: Literal["parse_error", "unsupported"] | None = None
+
+
+class ChemistryEquationStep(BaseModel):
+    line_number: LineNumber
+    equation: EquationText  # e.g. "2H2 + O2 -> 2H2O"
+
+
+class BalanceLineVerdict(BaseModel):
+    line_number: int  # line 0 is reserved for an invalid reference equation
+    valid: bool
+    error_type: ChemistryErrorType | None = None
+    detail: str | None = None  # machine detail, never the balanced answer
+
+    @computed_field
+    @property
+    def status(self) -> VerdictStatus:
+        if self.valid:
+            return "valid"
+        if self.error_type == "unsupported":
+            return "unsupported"
+        if self.error_type == "parse_error":
+            return "parse_error"
+        return "invalid"
 
 
 class TranscribeRequest(BaseModel):
