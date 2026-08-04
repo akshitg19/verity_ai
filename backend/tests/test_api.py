@@ -333,6 +333,247 @@ def test_transcribe_hides_service_error(_mock_transcribe) -> None:
     assert response.json() == {"detail": "Transcription is temporarily unavailable"}
 
 
+def test_functional_group_check_accepts_a_matching_molecule() -> None:
+    response = client.post(
+        "/chemistry/functional-group",
+        json={
+            "target_group": "ester",
+            "steps": [{"line_number": 1, "smiles": "CC(=O)OC"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "verdicts": [
+            {
+                "line_number": 1,
+                "valid": True,
+                "error_type": None,
+                "detail": None,
+                "status": "valid",
+            }
+        ],
+        "first_wrong_line": None,
+        "problem_error": None,
+    }
+
+
+def test_functional_group_check_reports_first_wrong_group() -> None:
+    response = client.post(
+        "/chemistry/functional-group",
+        json={
+            "target_group": "alcohol",
+            "steps": [
+                {"line_number": 1, "smiles": "CCOCC"},
+                {"line_number": 2, "smiles": "CCO"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["first_wrong_line"] == 1
+    assert body["verdicts"][0]["error_type"] == "wrong_functional_group"
+    assert [item["status"] for item in body["verdicts"]] == ["invalid", "valid"]
+
+
+def test_functional_group_non_student_errors_do_not_set_first_wrong_line() -> None:
+    response = client.post(
+        "/chemistry/functional-group",
+        json={
+            "target_group": "alcohol",
+            "steps": [
+                {"line_number": 1, "smiles": "C1CC"},
+                {"line_number": 2, "smiles": "CCO.Cl"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["first_wrong_line"] is None
+    assert [item["status"] for item in body["verdicts"]] == [
+        "parse_error",
+        "unsupported",
+    ]
+
+
+def test_functional_group_unknown_group_is_a_422_not_a_verdict() -> None:
+    response = client.post(
+        "/chemistry/functional-group",
+        json={
+            "target_group": "alkene",
+            "steps": [{"line_number": 1, "smiles": "CCO"}],
+        },
+    )
+
+    assert response.status_code == 422
+    assert "unknown functional group" in response.json()["detail"]
+
+
+def test_balance_check_accepts_a_balanced_equation() -> None:
+    response = client.post(
+        "/chemistry/balance",
+        json={
+            "reference_equation": "H2 + O2 -> H2O",
+            "steps": [{"line_number": 1, "equation": "2H2 + O2 -> 2H2O"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "verdicts": [
+            {
+                "line_number": 1,
+                "valid": True,
+                "error_type": None,
+                "detail": None,
+                "status": "valid",
+            }
+        ],
+        "first_wrong_line": None,
+        "problem_error": None,
+    }
+
+
+def test_balance_check_reports_unbalanced_atoms() -> None:
+    response = client.post(
+        "/chemistry/balance",
+        json={
+            "reference_equation": "H2 + O2 -> H2O",
+            "steps": [
+                {"line_number": 1, "equation": "H2 + O2 -> H2O"},
+                {"line_number": 2, "equation": "2H2 + O2 -> 2H2O"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["first_wrong_line"] == 1
+    assert body["verdicts"][0]["error_type"] == "unbalanced_atoms"
+    assert [item["status"] for item in body["verdicts"]] == ["invalid", "valid"]
+
+
+def test_balance_check_reports_unbalanced_charge_for_a_half_reaction() -> None:
+    response = client.post(
+        "/chemistry/balance",
+        json={
+            "reference_equation": "Fe^3+ + e- -> Fe^2+",
+            "steps": [{"line_number": 1, "equation": "Fe^3+ + 2e- -> Fe^2+"}],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["verdicts"][0]["error_type"] == "unbalanced_charge"
+    assert body["first_wrong_line"] == 1
+
+
+def test_balance_check_malformed_reference_returns_problem_error() -> None:
+    response = client.post(
+        "/chemistry/balance",
+        json={
+            "reference_equation": "not an equation",
+            "steps": [{"line_number": 1, "equation": "2H2 + O2 -> 2H2O"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "verdicts": [],
+        "first_wrong_line": None,
+        "problem_error": "parse_error",
+    }
+
+
+def test_balance_check_parse_error_is_not_a_student_mistake() -> None:
+    response = client.post(
+        "/chemistry/balance",
+        json={
+            "reference_equation": "H2 + O2 -> H2O",
+            "steps": [{"line_number": 1, "equation": "2H2 + O2 2H2O"}],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["first_wrong_line"] is None
+    assert body["verdicts"][0]["status"] == "parse_error"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"target_group": "ester", "steps": []},
+        {"target_group": "", "steps": [{"line_number": 1, "smiles": "CCO"}]},
+        {
+            "target_group": "ester",
+            "steps": [{"line_number": 0, "smiles": "CCO"}],
+        },
+        {
+            "target_group": "ester",
+            "steps": [
+                {"line_number": 2, "smiles": "CCO"},
+                {"line_number": 1, "smiles": "CCO"},
+            ],
+        },
+    ],
+)
+def test_functional_group_rejects_invalid_request_shape(payload) -> None:
+    response = client.post("/chemistry/functional-group", json=payload)
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"reference_equation": "H2 + O2 -> H2O", "steps": []},
+        {
+            "reference_equation": "H2 + O2 -> H2O",
+            "steps": [{"line_number": 0, "equation": "2H2 + O2 -> 2H2O"}],
+        },
+        {
+            "reference_equation": "H2 + O2 -> H2O",
+            "steps": [
+                {"line_number": 2, "equation": "2H2 + O2 -> 2H2O"},
+                {"line_number": 1, "equation": "2H2 + O2 -> 2H2O"},
+            ],
+        },
+        {
+            "reference_equation": "H" * 513,
+            "steps": [{"line_number": 1, "equation": "2H2 + O2 -> 2H2O"}],
+        },
+    ],
+)
+def test_balance_rejects_invalid_request_shape(payload) -> None:
+    response = client.post("/chemistry/balance", json=payload)
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "error_type",
+    [
+        "structure_mismatch",
+        "wrong_functional_group",
+        "unbalanced_atoms",
+        "unbalanced_charge",
+    ],
+)
+def test_hint_accepts_chemistry_error_categories(error_type) -> None:
+    """The /hint contract has to admit every category a judge can emit, or
+    a chemistry verdict has no reachable hint."""
+    response = client.post(
+        "/hint",
+        json={"line_number": 1, "error_type": error_type, "level": 2},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["hint"].strip()
+
+
 def test_hint_contract() -> None:
     response = client.post(
         "/hint",

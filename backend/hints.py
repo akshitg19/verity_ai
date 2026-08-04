@@ -13,10 +13,9 @@ _LEVEL_1_TEMPLATE = (
 )
 
 # Level 2: name the category of mistake without describing the fix.
-# Includes both the categories the algebra judge currently emits
-# ("algebraic", "parse_error") and the finer-grained ones planned for it
-# ("arithmetic", "sign", "division", "distribution") so hints.py doesn't
-# need a follow-up change when the judge is extended.
+# Covers every category the algebra and chemistry judges emit, plus the
+# finer-grained algebra ones planned for the judge, so hints.py doesn't
+# need a follow-up change when a judge is extended.
 _LEVEL_2_TEMPLATES = {
     "parse_error": (
         "This line isn't written as valid math -- check that every "
@@ -48,6 +47,26 @@ _LEVEL_2_TEMPLATES = {
         "letter on it is one the problem actually uses, and that the line "
         "is a full equation. If you wrote it correctly, it may have been "
         "misread; try writing it again more clearly."
+    ),
+    "structure_mismatch": (
+        "This isn't the structure the problem asks for. Go through your "
+        "drawing atom by atom and check which atoms are joined to which, "
+        "and by what kind of bond."
+    ),
+    "wrong_functional_group": (
+        "The group in your structure isn't the one being asked for. Look "
+        "closely at the atoms immediately around it and check what is "
+        "attached to what."
+    ),
+    "unbalanced_atoms": (
+        "The two sides of this equation don't contain the same number of "
+        "every atom. Count each element on the left, count it again on "
+        "the right, and find the one that doesn't match."
+    ),
+    "unbalanced_charge": (
+        "Every atom on this line is accounted for, but the total charge "
+        "isn't the same on both sides. Add up the charges on each side "
+        "and compare them."
     ),
 }
 _LEVEL_2_FALLBACK = (
@@ -95,6 +114,32 @@ _LEVEL_3_TEMPLATES = {
         "original problem and stay a complete equation. A stray letter or "
         "a missing side usually means the line was miswritten or misread "
         "rather than a math mistake."
+    ),
+    "structure_mismatch": (
+        "A molecule is defined by which atoms are bonded to which, and by "
+        "what kind of bond -- not by how the drawing is arranged on the "
+        "page. Two structures drawn quite differently can be the same "
+        "molecule, and two that look alike can be different ones."
+    ),
+    "wrong_functional_group": (
+        "Functional groups are told apart by the atoms immediately "
+        "surrounding them: whether a carbon carries a double-bonded "
+        "oxygen, whether an oxygen sits between two carbons or holds a "
+        "hydrogen, and whether a nitrogen sits next to a carbonyl. A "
+        "small change there makes it a different group entirely."
+    ),
+    "unbalanced_atoms": (
+        "A chemical equation has to obey conservation of mass: a reaction "
+        "rearranges atoms, it never creates or destroys them. Only the "
+        "coefficients written in front of each formula may be changed to "
+        "make the two sides match -- changing a subscript inside a "
+        "formula turns it into a different substance."
+    ),
+    "unbalanced_charge": (
+        "Charge is conserved exactly as mass is. In a half-reaction the "
+        "electrons are what make that work: once they are included on the "
+        "correct side, the total charge on the left has to equal the "
+        "total charge on the right."
     ),
 }
 _LEVEL_3_FALLBACK = (

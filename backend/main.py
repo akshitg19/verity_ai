@@ -5,12 +5,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from hints import generate_hint
-from judge import AlgebraJudge, ChemistryJudge
+from judge import AlgebraJudge, BalanceJudge, ChemistryJudge, FunctionalGroupJudge
 from schemas import (
+    BalanceCheckRequest,
+    BalanceCheckResponse,
     CheckRequest,
     CheckResponse,
     ChemistryCheckRequest,
     ChemistryCheckResponse,
+    FunctionalGroupCheckRequest,
     HintRequest,
     HintResponse,
     TranscribeRequest,
@@ -39,6 +42,8 @@ app.add_middleware(
 )
 judge = AlgebraJudge()
 chemistry_judge = ChemistryJudge()
+functional_group_judge = FunctionalGroupJudge()
+balance_judge = BalanceJudge()
 
 
 @app.get("/health")
@@ -76,6 +81,48 @@ def check_chemistry_steps(req: ChemistryCheckRequest):
         None,
     )
     return ChemistryCheckResponse(
+        verdicts=verdicts,
+        first_wrong_line=first_wrong,
+    )
+
+
+@app.post("/chemistry/functional-group", response_model=ChemistryCheckResponse)
+def check_functional_group_steps(req: FunctionalGroupCheckRequest):
+    try:
+        verdicts = functional_group_judge.check(req.target_group, req.steps)
+    except ValueError as exc:
+        # An unrecognised group name is a caller mistake, not a student one.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if verdicts and verdicts[0].line_number == 0:
+        return ChemistryCheckResponse(
+            verdicts=[],
+            first_wrong_line=None,
+            problem_error=verdicts[0].error_type,
+        )
+    first_wrong = next(
+        (verdict.line_number for verdict in verdicts if verdict.status == "invalid"),
+        None,
+    )
+    return ChemistryCheckResponse(
+        verdicts=verdicts,
+        first_wrong_line=first_wrong,
+    )
+
+
+@app.post("/chemistry/balance", response_model=BalanceCheckResponse)
+def check_balance_steps(req: BalanceCheckRequest):
+    verdicts = balance_judge.check(req.reference_equation, req.steps)
+    if verdicts and verdicts[0].line_number == 0:
+        return BalanceCheckResponse(
+            verdicts=[],
+            first_wrong_line=None,
+            problem_error=verdicts[0].error_type,
+        )
+    first_wrong = next(
+        (verdict.line_number for verdict in verdicts if verdict.status == "invalid"),
+        None,
+    )
+    return BalanceCheckResponse(
         verdicts=verdicts,
         first_wrong_line=first_wrong,
     )
