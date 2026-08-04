@@ -5,17 +5,23 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from hints import generate_hint
-from judge import AlgebraJudge, ChemistryJudge
+from judge import AlgebraJudge, BalanceJudge, ChemistryJudge, FunctionalGroupJudge
 from schemas import (
+    BalanceCheckRequest,
+    BalanceCheckResponse,
     CheckRequest,
     CheckResponse,
     ChemistryCheckRequest,
     ChemistryCheckResponse,
+    FunctionalGroupCheckRequest,
     HintRequest,
     HintResponse,
+    StructureTranscribeRequest,
+    StructureTranscribeResponse,
     TranscribeRequest,
     TranscribeResponse,
 )
+from structure_recognition import transcribe_structure
 from transcription import (
     TranscriptionInputError,
     TranscriptionServiceError,
@@ -24,7 +30,7 @@ from transcription import (
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="CheckMate API")
+app = FastAPI(title="verity.ai API")
 
 CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS",
@@ -39,6 +45,8 @@ app.add_middleware(
 )
 judge = AlgebraJudge()
 chemistry_judge = ChemistryJudge()
+functional_group_judge = FunctionalGroupJudge()
+balance_judge = BalanceJudge()
 
 
 @app.get("/health")
@@ -81,6 +89,48 @@ def check_chemistry_steps(req: ChemistryCheckRequest):
     )
 
 
+@app.post("/chemistry/functional-group", response_model=ChemistryCheckResponse)
+def check_functional_group_steps(req: FunctionalGroupCheckRequest):
+    try:
+        verdicts = functional_group_judge.check(req.target_group, req.steps)
+    except ValueError as exc:
+        # An unrecognised group name is a caller mistake, not a student one.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if verdicts and verdicts[0].line_number == 0:
+        return ChemistryCheckResponse(
+            verdicts=[],
+            first_wrong_line=None,
+            problem_error=verdicts[0].error_type,
+        )
+    first_wrong = next(
+        (verdict.line_number for verdict in verdicts if verdict.status == "invalid"),
+        None,
+    )
+    return ChemistryCheckResponse(
+        verdicts=verdicts,
+        first_wrong_line=first_wrong,
+    )
+
+
+@app.post("/chemistry/balance", response_model=BalanceCheckResponse)
+def check_balance_steps(req: BalanceCheckRequest):
+    verdicts = balance_judge.check(req.reference_equation, req.steps)
+    if verdicts and verdicts[0].line_number == 0:
+        return BalanceCheckResponse(
+            verdicts=[],
+            first_wrong_line=None,
+            problem_error=verdicts[0].error_type,
+        )
+    first_wrong = next(
+        (verdict.line_number for verdict in verdicts if verdict.status == "invalid"),
+        None,
+    )
+    return BalanceCheckResponse(
+        verdicts=verdicts,
+        first_wrong_line=first_wrong,
+    )
+
+
 @app.post("/transcribe", response_model=TranscribeResponse)
 def transcribe(req: TranscribeRequest):
     try:
@@ -94,6 +144,21 @@ def transcribe(req: TranscribeRequest):
             detail="Transcription is temporarily unavailable",
         ) from exc
     return TranscribeResponse(text=text, unreadable=unreadable)
+
+
+@app.post("/chemistry/transcribe", response_model=StructureTranscribeResponse)
+def transcribe_chemistry_structure(req: StructureTranscribeRequest):
+    try:
+        smiles, unreadable = transcribe_structure(req.image_base64)
+    except TranscriptionInputError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except TranscriptionServiceError as exc:
+        logger.exception("Gemini structure recognition failed")
+        raise HTTPException(
+            status_code=503,
+            detail="Structure recognition is temporarily unavailable",
+        ) from exc
+    return StructureTranscribeResponse(smiles=smiles, unreadable=unreadable)
 
 
 @app.post("/hint", response_model=HintResponse)

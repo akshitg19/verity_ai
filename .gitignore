@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.pyc
 venv/
@@ -12,3 +12,8 @@ dist/
 
 # Editor
 .vscode/
+
+# Personal and machine-generated, never committed
+CLAUDE.md
+.claude/
+backend/tests/transcription/results.txt

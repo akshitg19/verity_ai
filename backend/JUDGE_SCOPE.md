@@ -60,6 +60,55 @@ The endpoint returns:
   reactions, and unsupported bond types.
 
 The target is never returned to the caller, so a verdict cannot reveal the
-answer structure. Handwriting-to-structure recognition, chemical naming,
-Lewis structures, reaction balancing, and reaction mechanisms are outside
-this MVP.
+answer structure.
+
+## Functional group scope
+
+`POST /chemistry/functional-group` asks whether a submitted structure contains
+a named functional group, rather than whether it matches one exact molecule.
+The `target_group` is a name, not a SMILES; the supported names are `ester`,
+`ether`, `alcohol`, `ketone`, `aldehyde`, `carboxylic_acid`, `amine`, and
+`amide`. Parsing and the supported-structure scope are shared with
+`/chemistry/check`, so the same salts, metals, isotopes, and reaction SMILES
+are reported as `unsupported` here too.
+
+A supported structure that does not contain the group is `invalid` with
+`wrong_functional_group`. An unrecognised group name is a caller error and
+returns HTTP 422 rather than a verdict, since it is not a student mistake.
+
+The patterns deliberately distinguish confusable groups: an ester is not
+counted as an ether, an amide is not counted as an amine, and a carboxylic
+acid is counted as neither an alcohol nor a ketone.
+
+## Equation balancing scope
+
+`POST /chemistry/balance` checks whether each submitted equation balances. It
+parses formulas arithmetically and does no structural chemistry, so it accepts
+any element symbol from the periodic table rather than only the organic subset
+above.
+
+Supported notation: stoichiometric coefficients, nested parenthesised groups
+such as `(NH4)2SO4`, state symbols `(s)`, `(l)`, `(g)`, and `(aq)`, which are
+stripped, ionic charges written with a caret such as `Fe^3+` or `SO4^2-`, and
+electrons written `e-`. The separator may be `->`, `=`, `=>`, `→`, `⟶`, `⇌`,
+or `<=>`.
+
+Inside an equation, an ionic charge must use the caret form, because a bare
+`+` cannot be told apart from a term separator. `parse_formula` alone still
+reads bare forms such as `Ca2+`.
+
+A line is `valid` when both sides hold the same count of every element and the
+same net charge. Atom counts are compared first, so a line wrong in both ways
+is reported as `unbalanced_atoms` rather than `unbalanced_charge`. A
+half-reaction whose atoms all balance and whose electron count is wrong is
+`unbalanced_charge`. Text that is not a readable equation, including an
+unknown element symbol, is `parse_error`.
+
+The reference equation is used only to report a malformed problem. A step is
+judged on its own arithmetic, so an equation that balances but describes a
+different reaction than the reference is currently accepted.
+
+## Still outside this MVP
+
+Handwriting-to-structure recognition, chemical naming, Lewis structures,
+stoichiometry and molar mass, and reaction mechanisms.

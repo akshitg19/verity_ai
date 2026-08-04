@@ -78,8 +78,15 @@ class CheckResponse(BaseModel):
 # same product-level status semantics for the chemistry endpoint.
 ChemistryErrorType = Literal[
     "structure_mismatch",
+    "wrong_functional_group",
+    "unbalanced_atoms",
+    "unbalanced_charge",
     "parse_error",
     "unsupported",
+]
+EquationText = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=512),
 ]
 
 
@@ -124,6 +131,65 @@ class ChemistryCheckResponse(BaseModel):
     problem_error: Literal["parse_error", "unsupported"] | None = None
 
 
+class FunctionalGroupCheckRequest(BaseModel):
+    # A group name from judge.chemistry.FUNCTIONAL_GROUP_SMARTS, not a SMILES.
+    target_group: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=64),
+    ]
+    steps: Annotated[list[ChemistryStep], Field(min_length=1, max_length=50)]
+
+    @model_validator(mode="after")
+    def steps_are_unique_and_ordered(self):
+        numbers = [step.line_number for step in self.steps]
+        if numbers != sorted(set(numbers)):
+            raise ValueError("step line numbers must be unique and increasing")
+        return self
+
+
+class ChemistryEquationStep(BaseModel):
+    line_number: LineNumber
+    equation: EquationText  # e.g. "2H2 + O2 -> 2H2O"
+
+
+class BalanceLineVerdict(BaseModel):
+    line_number: int  # line 0 is reserved for an invalid reference equation
+    valid: bool
+    error_type: ChemistryErrorType | None = None
+    detail: str | None = None  # machine detail, never the balanced answer
+
+    @computed_field
+    @property
+    def status(self) -> VerdictStatus:
+        if self.valid:
+            return "valid"
+        if self.error_type == "unsupported":
+            return "unsupported"
+        if self.error_type == "parse_error":
+            return "parse_error"
+        return "invalid"
+
+
+class BalanceCheckRequest(BaseModel):
+    reference_equation: EquationText
+    steps: Annotated[
+        list[ChemistryEquationStep], Field(min_length=1, max_length=50)
+    ]
+
+    @model_validator(mode="after")
+    def steps_are_unique_and_ordered(self):
+        numbers = [step.line_number for step in self.steps]
+        if numbers != sorted(set(numbers)):
+            raise ValueError("step line numbers must be unique and increasing")
+        return self
+
+
+class BalanceCheckResponse(BaseModel):
+    verdicts: list[BalanceLineVerdict]
+    first_wrong_line: int | None = None
+    problem_error: Literal["parse_error", "unsupported"] | None = None
+
+
 class TranscribeRequest(BaseModel):
     image_base64: Annotated[str, Field(min_length=1, max_length=7_000_000)]
 
@@ -133,11 +199,23 @@ class TranscribeResponse(BaseModel):
     unreadable: bool = False  # model could not read the line at all
 
 
+class StructureTranscribeRequest(BaseModel):
+    image_base64: Annotated[str, Field(min_length=1, max_length=7_000_000)]
+
+
+class StructureTranscribeResponse(BaseModel):
+    smiles: str
+    unreadable: bool = False  # model could not read the drawing at all
+
+
 # Hint generation receives no problem or step content, so its input cannot
 # accidentally expose a solved value to a template or future model call.
+# The error type spans every subject's categories: a hint is keyed by the
+# category alone, and the hint layer neither knows nor needs to know which
+# judge produced it.
 class HintRequest(BaseModel):
     line_number: LineNumber
-    error_type: ErrorType | None
+    error_type: ErrorType | ChemistryErrorType | None
     level: Literal[1, 2, 3]
 
 
