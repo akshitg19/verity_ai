@@ -78,6 +78,7 @@ class CheckResponse(BaseModel):
 # same product-level status semantics for the chemistry endpoint.
 ChemistryErrorType = Literal[
     "structure_mismatch",
+    "wrong_functional_group",
     "parse_error",
     "unsupported",
 ]
