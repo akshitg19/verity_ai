@@ -120,6 +120,130 @@ product holds up in a real demo session covering more than one problem.
 
 ---
 
+## Possible pivot: model-first reading and judging (decide before building further)
+
+Raised Aug 4 after the first real hand-drawn chemistry test. Recorded as a
+direction under consideration, not a settled decision. Read the whole section
+before acting on any part of it, because the pieces trade against each other.
+
+### What triggered it
+
+A student drew the general ester, `R-C(=O)-O-R'`. Gemini transcribed it as
+`O=C(R)OR`, which is a **correct** reading of that drawing. The app then showed
+"Could not check", because:
+
+- `Chem.MolFromSmiles("O=C(R)OR")` returns `None`. RDKit has no atom called
+  `R`, so a correct reading became a parse error.
+- The target was `CC(=O)OC`, a concrete molecule. The student answered at the
+  level of a functional group. The app had no way to tell those two kinds of
+  question apart.
+
+So recognition was not the bottleneck. Representation was. The vision model
+understood the drawing better than the rest of the pipeline could express.
+
+### The proposal
+
+Invert the hierarchy. Let the model read *and* propose a verdict, and demote
+RDKit and SymPy from gatekeeper to verifier, used where they apply rather than
+as the thing that decides whether we can answer at all. Closer to how Photomath
+works, but with our two differences kept intact: we check work **live, step by
+step, as it is written**, and we give **hints and nudges instead of solutions**.
+
+The argument for it is coverage. RDKit's world is concrete, connected
+molecules. Real chemistry homework is full of R groups, generic structures,
+partial structures, and mechanisms, none of which that world can hold. Every
+one of those is currently an `unsupported` or a `parse_error`, which reads to a
+student as the app being broken.
+
+### The tension to decide consciously
+
+The proposal as stated included "even if it leaks the answer", and in the same
+breath gave the reason schools would allow this product: it nudges instead of
+solving. **Those two fight each other.** If we hand over answers we become
+Photomath with extra steps, and we lose the exact property that makes us
+usable in a classroom. The differentiator was never determinism for its own
+sake; it is that a student cannot use this to skip the work.
+
+Recommended framing, to be confirmed: let the pivot be about **how much we can
+judge**, not about **what we disclose**. A model can decide whether a step is
+right and still refuse to state the answer. That keeps the product rule intact
+while removing the coverage ceiling.
+
+The honest cost of that framing: today "never reveal the answer" is a
+*structural* guarantee, because the hint layer only ever receives a line number
+and a category and therefore has no answer available to leak. Under a model
+judge it becomes a *behavioural* guarantee enforced by a prompt and an output
+contract. That is a genuine downgrade in kind, not just in degree, and it
+should be accepted deliberately and written down rather than discovered later.
+
+### What we would lose, stated plainly
+
+Right now, an `unsupported` verdict is *provably* not an accusation that the
+student was wrong. With a model judge, a hallucinated "correct" on a genuinely
+wrong step becomes possible. That is the failure that destroys teacher trust
+fastest: being told "you're right" when you are not is worse than being told
+"I can't check this one."
+
+### Hybrid design worth evaluating first
+
+This does not have to be all or nothing, and the middle path may get most of
+the coverage for much less risk:
+
+1. When a deterministic checker can represent the problem, it decides, and the
+   model's opinion is discarded rather than shown. Concrete molecules, linear
+   algebra, and equation balancing all stay exactly as reliable as today.
+2. Only when the deterministic tools cannot represent the problem does the
+   model's verdict surface, and the UI labels it differently so a student and a
+   teacher can see which engine spoke.
+3. Keep every current deterministic test as a regression suite. If a model-first
+   path ever disagrees with RDKit or SymPy on a case they *can* decide, that is
+   a bug in the model path, and we will detect it automatically.
+
+Ask twice and compare (self-consistency) is a cheap reliability lever on the
+model path, and disagreement is a good trigger for "ask the student to confirm".
+
+### Cheaper fixes that may remove much of the motivation
+
+Worth trying before committing to the pivot, since each is small and none
+touches the guarantee:
+
+- **Render the structure back as a picture instead of a SMILES string.** RDKit
+  draws SVG today with no new dependency (verified). A student cannot verify
+  `O=C(R)OR`, but can verify a drawing instantly. This is what ChemDraw,
+  Ketcher, and JSME all do, and it is probably the single biggest usability win
+  available.
+- **Support generic structures.** Normalising `R`, `R'`, `R1` to the wildcard
+  `*` makes them parse: `O=C(*)O*` and `*C(=O)O*` both canonicalise to
+  `*OC(*)=O`, so two different drawings of the same generic ester still compare
+  equal deterministically. Note the functional-group SMARTS need generic-aware
+  variants, since patterns demanding `[#6]` will not match a wildcard.
+- **Stop throttling the chemistry model call.** It currently runs at 128 output
+  tokens, temperature 0, and thinking disabled, all inherited from math, where
+  a line is a few symbols. A 2D structure with implicit carbons, ring closures,
+  and stereochemistry is a much harder read, and we have switched off the
+  reasoning that would help most.
+- **Route to the judge that matches the question.** `FunctionalGroupJudge`
+  already exists and is unused, because the UI can only ask "match this exact
+  molecule". The ester drawing above would have been judged correctly today if
+  the problem type had selected the right judge.
+
+### Cost and latency, to measure not assume
+
+Enabling thinking and longer outputs raises both cost per call and latency, and
+a model judging every step multiplies call volume well past today's one call
+per finished line. Measure against the existing target of under 2s p95 before
+committing, and check the per-step cost at realistic session length.
+
+### Decision needed
+
+Pick one of: keep deterministic-first and take the cheaper fixes above;
+adopt the hybrid; or go model-first. Whichever is chosen, the answer-disclosure
+rule should be decided as a **separate** question from the judging-engine
+question, because conflating them is what makes the pivot look like it costs
+more than it does.
+
+---
+
 ## Topic scope
 
 ### Math (grades 6-12)
