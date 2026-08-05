@@ -4,7 +4,13 @@ import {
   getStrokeRow,
   strokeTouchesPoint,
 } from "./canvas/geometry";
-import { addStrokeToInkIndex, buildInkIndex } from "./canvas/inkModel";
+import {
+  addStrokeToInkIndex,
+  buildInkIndex,
+  expandAndClampBounds,
+  getCanvasBackingSize,
+  getStrokeBounds,
+} from "./canvas/inkModel";
 
 const NOTEBOOK_ROWS = 24;
 const NOTEBOOK_HEIGHT = NOTEBOOK_ROWS * LINE_HEIGHT;
@@ -136,6 +142,7 @@ export default function App() {
   const drawStaticFrameRef = useRef(() => {});
   const drawOverlayFrameRef = useRef(() => {});
   const overlayFrameRequestRef = useRef(null);
+  const canvasSizeRef = useRef({ width: 0, height: 0, pixelRatio: 1 });
   const [strokes, setStrokes] = useState([]); // finished strokes
   const [activeTool, setActiveTool] = useState("pen");
   const currentStroke = useRef(null); // stroke in progress
@@ -429,12 +436,13 @@ export default function App() {
 
   const handlePointerCancel = (e) => {
     if (e.pointerId !== activePointerId.current) return;
+    const canceledStroke = currentStroke.current;
     currentStroke.current = null;
     activeDrawnPointCountRef.current = 0;
     activePointerId.current = null;
     activeCanvasRectRef.current = null;
     rowToQueueAfterStrokeRef.current = null;
-    clearActiveCanvas();
+    clearActiveCanvas(canceledStroke);
   };
 
   const invalidateEditedRow = (row) => {
@@ -1129,10 +1137,29 @@ export default function App() {
     ctx.stroke();
   }, []);
 
-  const clearActiveCanvas = useCallback(() => {
+  const clearActiveCanvas = useCallback((stroke = currentStroke.current) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext("2d");
+    const { width, height } = canvasSizeRef.current;
+    const dirtyRect = expandAndClampBounds(
+      getStrokeBounds(stroke ?? { points: [] }),
+      (stroke?.width ?? 4) + 2,
+      width,
+      height
+    );
+
+    if (dirtyRect) {
+      ctx.clearRect(
+        dirtyRect.x,
+        dirtyRect.y,
+        dirtyRect.width,
+        dirtyRect.height
+      );
+      return;
+    }
+
+    ctx.clearRect(0, 0, width, height);
   }, []);
 
   // Draw only the points received since the previous pointer event. The
@@ -1181,7 +1208,8 @@ export default function App() {
     const canvas = staticCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const { width, height } = canvasSizeRef.current;
+    ctx.clearRect(0, 0, width, height);
 
     // Ruled lines.
     // Previously drawn in #000000 at lineWidth 3 -- darker and thicker than
@@ -1193,10 +1221,10 @@ export default function App() {
     // See backend/tests/transcription/failures.md for the failure cases.
     ctx.strokeStyle = "rgba(120, 150, 190, 0.4)";
     ctx.lineWidth = 1;
-    for (let y = LINE_HEIGHT; y < canvas.height; y += LINE_HEIGHT) {
+    for (let y = LINE_HEIGHT; y < height; y += LINE_HEIGHT) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
+      ctx.lineTo(width, y);
       ctx.stroke();
     }
 
@@ -1214,7 +1242,8 @@ export default function App() {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const { width, height } = canvasSizeRef.current;
+    ctx.clearRect(0, 0, width, height);
 
     // A structure is one figure, so per-row feedback would be misleading.
     if (mode === "chemistry") return;
@@ -1302,13 +1331,24 @@ export default function App() {
         NOTEBOOK_HEIGHT,
         window.innerHeight - TOOLBAR_HEIGHT
       );
+      const backingSize = getCanvasBackingSize(
+        width,
+        height,
+        window.devicePixelRatio
+      );
+      const { pixelRatio } = backingSize;
 
-      staticCanvas.width = width;
-      staticCanvas.height = height;
-      overlayCanvas.width = width;
-      overlayCanvas.height = height;
-      activeCanvas.width = width;
-      activeCanvas.height = height;
+      canvasSizeRef.current = { width, height, pixelRatio };
+
+      for (const canvas of [staticCanvas, overlayCanvas, activeCanvas]) {
+        canvas.width = backingSize.width;
+        canvas.height = backingSize.height;
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        canvas
+          .getContext("2d")
+          .setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      }
       drawStaticFrameRef.current();
       drawOverlayFrameRef.current();
     };
