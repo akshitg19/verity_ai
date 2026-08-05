@@ -114,10 +114,13 @@ function renderLineToPng(lineStrokes) {
 }
 
 export default function App() {
+  const staticCanvasRef = useRef(null);
   const canvasRef = useRef(null);
+  const drawStaticFrameRef = useRef(() => {});
   const [strokes, setStrokes] = useState([]); // finished strokes
   const [activeTool, setActiveTool] = useState("pen");
   const currentStroke = useRef(null); // stroke in progress
+  const activeDrawnPointCountRef = useRef(0);
   const activePointerId = useRef(null);
   const transcriptionRequestId = useRef(0);
   const transcriptionRowRef = useRef(null);
@@ -176,7 +179,10 @@ export default function App() {
 
   const handlePointerDown = (e) => {
     if (activeTool === "scroll") return;
-    if (e.pointerType === "touch") return; // palm rejection
+    if (e.pointerType === "touch") {
+      e.preventDefault();
+      return; // palm rejection
+    }
     if (activePointerId.current !== null) return;
 
     if (rowIdleTimerRef.current) {
@@ -220,6 +226,9 @@ export default function App() {
         color: penColor,
         width: penWidth,
       };
+      activeDrawnPointCountRef.current = 0;
+      clearActiveCanvas();
+      drawActiveStrokeSegment();
       return;
     }
 
@@ -273,10 +282,16 @@ export default function App() {
       color: penColor,
       width: penWidth, 
     };
+    activeDrawnPointCountRef.current = 0;
+    clearActiveCanvas();
+    drawActiveStrokeSegment();
   };
 
   const handlePointerMove = (e) => {
-    if (e.pointerType === "touch") return;
+    if (e.pointerType === "touch") {
+      e.preventDefault();
+      return;
+    }
 
     if (e.pointerType === "pen") {
       e.preventDefault();
@@ -290,7 +305,7 @@ export default function App() {
     for (const ev of events) {
       currentStroke.current.points.push(getPoint(ev));
     }
-    drawFrame();
+    drawActiveStrokeSegment();
   };
 
   const handlePointerUp = (e) => {
@@ -301,7 +316,15 @@ export default function App() {
       e.pointerId !== activePointerId.current
     ) return;
     const finished = currentStroke.current;
+
+    // Paint the finished stroke on the static layer before clearing the live
+    // layer, avoiding a blank frame while React commits it to state.
+    const staticContext = staticCanvasRef.current?.getContext("2d");
+    if (staticContext) drawStroke(staticContext, finished);
+    clearActiveCanvas();
+
     currentStroke.current = null;
+    activeDrawnPointCountRef.current = 0;
     activePointerId.current = null;
 
     if (mode === "chemistry") {
@@ -342,8 +365,9 @@ export default function App() {
   const handlePointerCancel = (e) => {
     if (e.pointerId !== activePointerId.current) return;
     currentStroke.current = null;
+    activeDrawnPointCountRef.current = 0;
     activePointerId.current = null;
-    drawFrame();
+    clearActiveCanvas();
   };
 
   const invalidateEditedRow = (row) => {
@@ -1013,8 +1037,56 @@ export default function App() {
     ctx.stroke();
   }, []);
 
-  const drawFrame = useCallback(() => {
+  const clearActiveCanvas = useCallback(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+  }, []);
+
+  // Draw only the points received since the previous pointer event. The
+  // completed page lives on a separate canvas and is never touched here.
+  const drawActiveStrokeSegment = useCallback(() => {
+    const canvas = canvasRef.current;
+    const stroke = currentStroke.current;
+    if (!canvas || !stroke || stroke.points.length === 0) return;
+
+    const ctx = canvas.getContext("2d");
+    const points = stroke.points;
+    const alreadyDrawn = activeDrawnPointCountRef.current;
+    const strokeColor = stroke.color ?? "#1f2926";
+    const strokeWidth = stroke.width ?? 4;
+
+    ctx.strokeStyle = strokeColor;
+    ctx.fillStyle = strokeColor;
+    ctx.lineWidth = strokeWidth;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    if (points.length === 1 && alreadyDrawn === 0) {
+      ctx.beginPath();
+      ctx.arc(points[0].x, points[0].y, strokeWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
+      activeDrawnPointCountRef.current = 1;
+      return;
+    }
+
+    const firstNewPoint = Math.max(1, alreadyDrawn);
+    if (firstNewPoint >= points.length) return;
+
+    ctx.beginPath();
+    ctx.moveTo(
+      points[firstNewPoint - 1].x,
+      points[firstNewPoint - 1].y
+    );
+    for (let index = firstNewPoint; index < points.length; index += 1) {
+      ctx.lineTo(points[index].x, points[index].y);
+    }
+    ctx.stroke();
+    activeDrawnPointCountRef.current = points.length;
+  }, []);
+
+  const drawStaticFrame = useCallback(() => {
+    const canvas = staticCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1044,7 +1116,6 @@ export default function App() {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     for (const s of strokes) drawStroke(ctx, s);
-    if (currentStroke.current) drawStroke(ctx, currentStroke.current);
 
     // A structure is one figure, so the per-row boxes and line numbers
     // below would be actively misleading about how it is being read.
@@ -1100,30 +1171,43 @@ export default function App() {
     }
   }, [strokes, drawStroke, verdictsByLine, mode]);
 
-  // Keep the notebook at least 24 rows tall so the page can scroll.
+  // State changes redraw the completed page without reallocating either
+  // canvas. Reassigning canvas.width/height clears its backing store and was
+  // the main pen-down/pen-up pause on iPad.
   useEffect(() => {
-    const canvas = canvasRef.current;
+    drawStaticFrameRef.current = drawStaticFrame;
+    drawStaticFrame();
+  }, [drawStaticFrame]);
+
+  // Size allocation only belongs to initial layout and real window resizes.
+  useEffect(() => {
+    const staticCanvas = staticCanvasRef.current;
+    const activeCanvas = canvasRef.current;
 
     const resize = () => {
-      canvas.width = Math.max(
+      const width = Math.max(
         640,
         document.documentElement.clientWidth -
           FEEDBACK_PANEL_WIDTH -
           PAGE_GAP * 3
       );
-      canvas.height = Math.max(
+      const height = Math.max(
         NOTEBOOK_HEIGHT,
         window.innerHeight - TOOLBAR_HEIGHT
       );
 
-      drawFrame();
+      staticCanvas.width = width;
+      staticCanvas.height = height;
+      activeCanvas.width = width;
+      activeCanvas.height = height;
+      drawStaticFrameRef.current();
     };
 
     resize();
     window.addEventListener("resize", resize);
 
     return () => window.removeEventListener("resize", resize);
-  }, [drawFrame]);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1169,6 +1253,7 @@ export default function App() {
     strokesRef.current = [];
 
     currentStroke.current = null;
+    activeDrawnPointCountRef.current = 0;
     activePointerId.current = null;
     transcriptionRowRef.current = null;
     activeRowRef.current = null;
@@ -1184,6 +1269,7 @@ export default function App() {
     setHintLoading(false);
     setTranscribing(false);
     setLastResult(null);
+    clearActiveCanvas();
   };
 
   const activeLineNumber =
@@ -1210,23 +1296,47 @@ export default function App() {
         inset: 0,
         overflowY: "auto",
         overflowX: "hidden", 
-        background: "#faf8f2" 
+        background: "#faf8f2",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
       }}
     >
-      <canvas
-        ref={canvasRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-        style={{ 
-          touchAction: activeTool === "scroll" ? "pan-y" : "none", 
-          display: "block",
+      <div
+        style={{
+          position: "relative",
+          width: "fit-content",
           marginTop: TOOLBAR_HEIGHT,
-          background: "#faf8f2",
-          borderRight: `1px solid ${COLORS.border}`,
         }}
-      />
+      >
+        <canvas
+          ref={staticCanvasRef}
+          aria-hidden="true"
+          style={{
+            display: "block",
+            background: "#faf8f2",
+            borderRight: `1px solid ${COLORS.border}`,
+          }}
+        />
+        <canvas
+          ref={canvasRef}
+          aria-label="Handwriting canvas"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          style={{
+            position: "absolute",
+            inset: 0,
+            touchAction: activeTool === "scroll" ? "pan-y" : "none",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            WebkitTouchCallout: "none",
+            display: "block",
+            background: "transparent",
+          }}
+        />
+      </div>
       <div
         style={{
           position: "fixed",
