@@ -1,0 +1,9 @@
+/* The notebook disables Safari's text-selection loupe while drawing. Keep
+   selection available in editable transcription and problem fields. */
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
