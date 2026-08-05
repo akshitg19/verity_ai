@@ -794,7 +794,6 @@ export default function App() {
     }
 
     queueRunningRef.current = true;
-    setRowTranscribing(true);
 
     try {
       while (rowQueueRef.current.length > 0) {
