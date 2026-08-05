@@ -1,12 +1,16 @@
 import { useRef, useState, useEffect, useCallback } from "react";
+import {
+  DEFAULT_LINE_HEIGHT as LINE_HEIGHT,
+  getStrokeRow,
+  segmentIntoLines,
+  strokeTouchesPoint,
+} from "./canvas/geometry";
 
-const LINE_HEIGHT = 64;
 const NOTEBOOK_ROWS = 24;
 const NOTEBOOK_HEIGHT = NOTEBOOK_ROWS * LINE_HEIGHT;
 const TOOLBAR_HEIGHT = 72;
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const LINE_PAD = 16;
-const ERASER_RADIUS = 18;
 const FEEDBACK_PANEL_WIDTH = 360;
 const PAGE_GAP = 16;
 const COLORS = {
@@ -36,78 +40,11 @@ const PEN_COLORS = [
   { label: "Red", value: "#a94a4a" },
 ];
 
-function distanceToSegment(point, start, end) {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-
-  if (dx === 0 && dy === 0) {
-    return Math.hypot(point.x - start.x, point.y - start.y);
-  }
-
-  const t = Math.max(
-    0,
-    Math.min(
-      1,
-      ((point.x - start.x) * dx + (point.y - start.y) * dy) /
-        (dx * dx + dy * dy)
-    )
-  );
-
-  const closestX = start.x + t * dx;
-  const closestY = start.y + t * dy;
-
-  return Math.hypot(point.x - closestX, point.y - closestY);
-}
-
-function strokeTouchesPoint(stroke, point) {
-  const points = stroke.points;
-
-  if (points.length === 1) {
-    return (
-      Math.hypot(point.x - points[0].x, point.y - points[0].y) <=
-      ERASER_RADIUS
-    );
-  }
-
-  for (let index = 1; index < points.length; index += 1) {
-    if (
-      distanceToSegment(point, points[index - 1], points[index]) <=
-      ERASER_RADIUS
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function getVerdictStatus(verdict) {
   if (!verdict) return null;
   // `status` is the API source of truth. Keep the fallback while older
   // backends are still in circulation during local development.
   return verdict.status ?? (verdict.valid ? "valid" : "invalid");
-}
-
-// Group strokes into lines by which ruled row each stroke's
-// vertical center falls into. Returns a map: rowIndex -> strokes[].
-function getStrokeRow(stroke) {
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const point of stroke.points) {
-    if (point.y < minY) minY = point.y;
-    if (point.y > maxY) maxY = point.y;
-  }
-  return Math.floor((minY + maxY) / 2 / LINE_HEIGHT);
-}
-
-function segmentIntoLines(strokes) {
-  const lines = new Map();
-  for (const stroke of strokes) {
-    const row = getStrokeRow(stroke);
-    if (!lines.has(row)) lines.set(row, []);
-    lines.get(row).push(stroke);
-  }
-  return lines;
 }
 
 // Renders one detected line's strokes onto a fresh, tightly-cropped canvas --
