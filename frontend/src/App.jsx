@@ -166,7 +166,9 @@ export default function App() {
   const linesRef = useRef([]);
   const activeRowRef = useRef(null);
   const penSettingsRef = useRef(null);
-  const [transcribing, setTranscribing] = useState(false);
+  const [rowTranscribing, setRowTranscribing] = useState(false);
+  const [structureTranscribing, setStructureTranscribing] = useState(false);
+  const transcribing = rowTranscribing || structureTranscribing;
   const [lastResult, setLastResult] = useState(null); // { error } | { warning }
 
   const [problem, setProblem] = useState("");
@@ -792,7 +794,7 @@ export default function App() {
     }
 
     queueRunningRef.current = true;
-    setTranscribing(true);
+    setRowTranscribing(true);
 
     try {
       while (rowQueueRef.current.length > 0) {
@@ -804,7 +806,7 @@ export default function App() {
     } finally {
       queueRunningRef.current = false;
       transcriptionRowRef.current = null;
-      setTranscribing(false);
+      setRowTranscribing(false);
     }
   };
 
@@ -837,6 +839,7 @@ export default function App() {
     rowQueueRef.current.push({ row: targetRow, version });
 
     // Start the queue without blocking handwriting input.
+    startTransition(() => setRowTranscribing(true));
     void runRowQueue();
   };
 
@@ -847,11 +850,10 @@ export default function App() {
   // Manual correction in the side panel: update text, clear the unreadable
   // flag once the student has typed something, and re-judge.
   const handleLineEdit = (row, newText) => {
-    if (transcriptionRowRef.current === row) {
-      ++transcriptionRequestId.current;
-      transcriptionRowRef.current = null;
-      setTranscribing(false);
-    }
+    cancelTranscriptionForRow(row);
+    rowQueueRef.current = rowQueueRef.current.filter(
+      (entry) => entry.row !== row
+    );
     ++checkRequestId.current;
     ++hintRequestId.current;
     setVerdictsByLine((currentVerdicts) =>
@@ -934,14 +936,15 @@ export default function App() {
     if (currentStrokes.length === 0) return;
 
     const requestId = ++structureRequestId.current;
-    const dataUrl = await renderLineToPng(currentStrokes);
-    const imageBase64 = dataUrl.split(",")[1];
-
-    setTranscribing(true);
+    setStructureTranscribing(true);
     setLastResult(null);
     setStructureVerdict(null);
 
     try {
+      const dataUrl = await renderLineToPng(currentStrokes);
+      if (requestId !== structureRequestId.current) return;
+      const imageBase64 = dataUrl.split(",")[1];
+
       const response = await fetch(`${API_BASE}/chemistry/transcribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -965,7 +968,7 @@ export default function App() {
       if (requestId !== structureRequestId.current) return;
       setLastResult({ error: error.message });
     } finally {
-      setTranscribing(false);
+      setStructureTranscribing(false);
     }
   };
 
@@ -1396,7 +1399,6 @@ export default function App() {
 
     rowQueueRef.current = [];
     dirtyRowsRef.current.clear();
-    queueRunningRef.current = false;
     strokesRef.current = [];
     inkIndexRef.current = buildInkIndex([]);
     rowVersionsRef.current.clear();
@@ -1418,7 +1420,8 @@ export default function App() {
     setHintLevel(0);
     setHintText(null);
     setHintLoading(false);
-    setTranscribing(false);
+    setRowTranscribing(false);
+    setStructureTranscribing(false);
     setLastResult(null);
     clearActiveCanvas();
     drawStaticFrameRef.current();
