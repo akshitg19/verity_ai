@@ -30,6 +30,40 @@ export function mergeBounds(current, next) {
   };
 }
 
+export function expandAndClampBounds(bounds, padding, width, height) {
+  if (!bounds) return null;
+
+  const minX = Math.max(0, bounds.minX - padding);
+  const minY = Math.max(0, bounds.minY - padding);
+  const maxX = Math.min(width, bounds.maxX + padding);
+  const maxY = Math.min(height, bounds.maxY + padding);
+
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(0, maxX - minX),
+    height: Math.max(0, maxY - minY),
+  };
+}
+
+export function getCanvasBackingSize(
+  width,
+  height,
+  devicePixelRatio,
+  maxPixelRatio = 2
+) {
+  const pixelRatio = Math.min(
+    Math.max(devicePixelRatio || 1, 1),
+    maxPixelRatio
+  );
+
+  return {
+    pixelRatio,
+    width: Math.ceil(width * pixelRatio),
+    height: Math.ceil(height * pixelRatio),
+  };
+}
+
 export function addStrokeToInkIndex(index, stroke) {
   const row = getStrokeRow(stroke);
   const rowStrokes = index.rows.get(row);

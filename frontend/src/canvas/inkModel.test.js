@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   addStrokeToInkIndex,
   buildInkIndex,
+  expandAndClampBounds,
+  getCanvasBackingSize,
   getStrokeBounds,
   mergeBounds,
 } from "./inkModel";
@@ -21,6 +23,30 @@ describe("ink index", () => {
         { minX: 1, maxX: 8, minY: 10, maxY: 14 }
       )
     ).toEqual({ minX: 1, maxX: 8, minY: 9, maxY: 14 });
+  });
+
+  it("expands dirty bounds without clearing outside the canvas", () => {
+    expect(
+      expandAndClampBounds(
+        { minX: 2, maxX: 20, minY: 4, maxY: 30 },
+        8,
+        100,
+        100
+      )
+    ).toEqual({ x: 0, y: 0, width: 28, height: 38 });
+  });
+
+  it("allocates a Retina backing store while capping memory growth", () => {
+    expect(getCanvasBackingSize(640, 800, 2)).toEqual({
+      pixelRatio: 2,
+      width: 1280,
+      height: 1600,
+    });
+    expect(getCanvasBackingSize(640, 800, 3)).toEqual({
+      pixelRatio: 2,
+      width: 1280,
+      height: 1600,
+    });
   });
 
   it("updates only the affected row when a stroke is appended", () => {
