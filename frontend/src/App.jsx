@@ -1,10 +1,10 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import { startTransition, useRef, useState, useEffect, useCallback } from "react";
 import {
   DEFAULT_LINE_HEIGHT as LINE_HEIGHT,
   getStrokeRow,
-  segmentIntoLines,
   strokeTouchesPoint,
 } from "./canvas/geometry";
+import { addStrokeToInkIndex, buildInkIndex } from "./canvas/inkModel";
 
 const NOTEBOOK_ROWS = 24;
 const NOTEBOOK_HEIGHT = NOTEBOOK_ROWS * LINE_HEIGHT;
@@ -52,7 +52,23 @@ function getVerdictStatus(verdict) {
 // excludes the on-screen segmentation debug overlay (boxes/labels), which is
 // for the writer's eyes only and previously leaked into exported PNGs when
 // people screenshotted the canvas instead of using a real export path.
-function renderLineToPng(lineStrokes) {
+function canvasToPngDataUrl(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("The handwriting image could not be encoded."));
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("The handwriting image could not be read."));
+      reader.readAsDataURL(blob);
+    }, "image/png");
+  });
+}
+
+async function renderLineToPng(lineStrokes) {
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const s of lineStrokes) {
     for (const pt of s.points) {
@@ -63,8 +79,8 @@ function renderLineToPng(lineStrokes) {
     }
   }
 
-  const width = maxX - minX + LINE_PAD * 2;
-  const height = maxY - minY + LINE_PAD * 2;
+  const width = Math.max(1, Math.ceil(maxX - minX + LINE_PAD * 2));
+  const height = Math.max(1, Math.ceil(maxY - minY + LINE_PAD * 2));
   const off = document.createElement("canvas");
   off.width = width;
   off.height = height;
@@ -110,26 +126,33 @@ function renderLineToPng(lineStrokes) {
     ctx.stroke();
   }
 
-  return off.toDataURL("image/png");
+  return canvasToPngDataUrl(off);
 }
 
 export default function App() {
   const staticCanvasRef = useRef(null);
+  const overlayCanvasRef = useRef(null);
   const canvasRef = useRef(null);
   const drawStaticFrameRef = useRef(() => {});
+  const drawOverlayFrameRef = useRef(() => {});
+  const overlayFrameRequestRef = useRef(null);
   const [strokes, setStrokes] = useState([]); // finished strokes
   const [activeTool, setActiveTool] = useState("pen");
   const currentStroke = useRef(null); // stroke in progress
   const activeDrawnPointCountRef = useRef(0);
   const activePointerId = useRef(null);
+  const activeCanvasRectRef = useRef(null);
+  const rowToQueueAfterStrokeRef = useRef(null);
   const transcriptionRequestId = useRef(0);
+  const transcriptionAbortRef = useRef(null);
   const transcriptionRowRef = useRef(null);
-  const processingRowsRef = useRef(new Set());
   const rowQueueRef = useRef([]);
   const queueRunningRef = useRef(false);
   const rowIdleTimerRef = useRef(null);
   const dirtyRowsRef = useRef(new Set());
   const strokesRef = useRef([]);
+  const inkIndexRef = useRef(buildInkIndex([]));
+  const rowVersionsRef = useRef(new Map());
   const checkRequestId = useRef(0);
   const hintRequestId = useRef(0);
   const problemRef = useRef("");
@@ -144,7 +167,7 @@ export default function App() {
   // { row, text, unreadable } -- text is editable in the side panel, so a
   // misread transcription is a one-second typed fix instead of a dead end.
   const [lines, setLines] = useState([]);
-  const [activeRow, setActiveRow] = useState(null);
+  const [activeLineNumber, setActiveLineNumber] = useState(null);
   const [verdictsByLine, setVerdictsByLine] = useState(new Map()); // row -> LineVerdict
   const [firstWrongLine, setFirstWrongLine] = useState(null);
 
@@ -167,14 +190,37 @@ export default function App() {
   const [structureVerdict, setStructureVerdict] = useState(null);
   const structureRequestId = useRef(0);
 
-  const getPoint = (e) => {
-    const rect = canvasRef.current.getBoundingClientRect();
+  const getPoint = (e, rect = activeCanvasRectRef.current) => {
+    const canvasRect = rect ?? canvasRef.current.getBoundingClientRect();
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: e.clientX - canvasRect.left,
+      y: e.clientY - canvasRect.top,
       t: e.timeStamp,
       p: e.pressure,
     };
+  };
+
+  const cancelTranscriptionForRow = (row) => {
+    if (transcriptionRowRef.current !== row) return;
+
+    ++transcriptionRequestId.current;
+    transcriptionAbortRef.current?.abort();
+    transcriptionAbortRef.current = null;
+    transcriptionRowRef.current = null;
+  };
+
+  const bumpRowVersion = (row) => {
+    const nextVersion = (rowVersionsRef.current.get(row) ?? 0) + 1;
+    rowVersionsRef.current.set(row, nextVersion);
+    return nextVersion;
+  };
+
+  const getLineNumberForRow = (row) => {
+    const sortedRows = [...inkIndexRef.current.rows.keys()].sort(
+      (a, b) => a - b
+    );
+    const index = sortedRows.indexOf(row);
+    return index === -1 ? null : index + 1;
   };
 
   const handlePointerDown = (e) => {
@@ -190,22 +236,28 @@ export default function App() {
       rowIdleTimerRef.current = null;
     }
 
-    const firstPoint = getPoint(e);
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    activeCanvasRectRef.current = canvasRect;
+    const firstPoint = getPoint(e, canvasRect);
 
     if (activeTool === "eraser") {
-      const strokeIndex = strokes.findLastIndex((stroke) =>
+      const currentStrokes = strokesRef.current;
+      const strokeIndex = currentStrokes.findLastIndex((stroke) =>
         strokeTouchesPoint(stroke, firstPoint)
       );
 
       if (strokeIndex === -1) return;
 
-      const removedStroke = strokes[strokeIndex];
-      const updatedStrokes = strokes.filter(
+      const removedStroke = currentStrokes[strokeIndex];
+      const updatedStrokes = currentStrokes.filter(
         (_, index) => index !== strokeIndex
       );
 
       strokesRef.current = updatedStrokes;
-      setStrokes(updatedStrokes);
+      inkIndexRef.current = buildInkIndex(updatedStrokes);
+      startTransition(() => setStrokes(updatedStrokes));
+      drawStaticFrameRef.current();
+      drawOverlayFrameRef.current();
       if (mode === "chemistry") {
         invalidateStructure();
       } else {
@@ -218,7 +270,10 @@ export default function App() {
       // One drawing, no rows: skip the row tracking, queueing, and
       // per-row verdict invalidation the math flow needs.
       activePointerId.current = e.pointerId;
-      invalidateStructure();
+      // Invalidate request identities immediately, but leave React/UI work
+      // until the stroke is committed so pen-down remains a pure ink path.
+      ++structureRequestId.current;
+      ++hintRequestId.current;
       canvasRef.current.setPointerCapture(e.pointerId);
       currentStroke.current = {
         points: [firstPoint],
@@ -227,7 +282,6 @@ export default function App() {
         width: penWidth,
       };
       activeDrawnPointCountRef.current = 0;
-      clearActiveCanvas();
       drawActiveStrokeSegment();
       return;
     }
@@ -240,40 +294,22 @@ export default function App() {
       newRow > previousRow;
 
     if (movedToLowerRow) {
-      queueRow(previousRow);
+      // Queue the completed row only after this stroke is safely committed.
+      // Starting PNG encoding here would put recognition in the pen-down path.
+      rowToQueueAfterStrokeRef.current = previousRow;
     }
 
     activePointerId.current = e.pointerId;
 
-    if (transcriptionRowRef.current === newRow) {
-      ++transcriptionRequestId.current;
-      transcriptionRowRef.current = null;
-      processingRowsRef.current.delete(newRow);
-
-      rowQueueRef.current = rowQueueRef.current.filter(
-        (row) => row !== newRow
-      );
-    }
+    cancelTranscriptionForRow(newRow);
+    rowQueueRef.current = rowQueueRef.current.filter(
+      (entry) => entry.row !== newRow
+    );
 
     // The written work changed, so existing verdicts and hints may be stale.
     // This does not cancel transcription running for a different row.
     ++checkRequestId.current;
     ++hintRequestId.current;
-
-    // Preserve verdicts above the row being edited.
-    // This row and every later row may now be affected.
-    setVerdictsByLine((currentVerdicts) =>
-      new Map(
-        [...currentVerdicts].filter(
-          ([verdictRow]) => verdictRow < newRow
-        )
-      )
-    );
-    setFirstWrongLine(null);
-    setHintLevel(0);
-    setHintText(null);
-    setHintLoading(false);
-    setLastResult(null);
 
     canvasRef.current.setPointerCapture(e.pointerId);
     currentStroke.current = { 
@@ -283,7 +319,6 @@ export default function App() {
       width: penWidth, 
     };
     activeDrawnPointCountRef.current = 0;
-    clearActiveCanvas();
     drawActiveStrokeSegment();
   };
 
@@ -315,6 +350,18 @@ export default function App() {
       !currentStroke.current ||
       e.pointerId !== activePointerId.current
     ) return;
+    const finalPoint = getPoint(e);
+    const points = currentStroke.current.points;
+    const lastPoint = points[points.length - 1];
+    if (
+      !lastPoint ||
+      finalPoint.x !== lastPoint.x ||
+      finalPoint.y !== lastPoint.y
+    ) {
+      points.push(finalPoint);
+      drawActiveStrokeSegment();
+    }
+
     const finished = currentStroke.current;
 
     // Paint the finished stroke on the static layer before clearing the live
@@ -326,31 +373,49 @@ export default function App() {
     currentStroke.current = null;
     activeDrawnPointCountRef.current = 0;
     activePointerId.current = null;
+    activeCanvasRectRef.current = null;
+
+    const updatedStrokes = [...strokesRef.current, finished];
+    strokesRef.current = updatedStrokes;
+    const row = addStrokeToInkIndex(inkIndexRef.current, finished);
+    bumpRowVersion(row);
 
     if (mode === "chemistry") {
       // No auto-transcribe on pen idle: the student says when the drawing
       // is finished, because a molecule has no equivalent of a line ending.
-      setStrokes((previousStrokes) => {
-        const updatedStrokes = [...previousStrokes, finished];
-        strokesRef.current = updatedStrokes;
-        return updatedStrokes;
+      startTransition(() => {
+        invalidateStructure();
+        setStrokes(updatedStrokes);
       });
       return;
     }
-
-    const row = getStrokeRow(finished);
 
     // This row's handwriting no longer matches its saved transcription.
     dirtyRowsRef.current.add(row);
 
     activeRowRef.current = row;
-    setActiveRow(row);
-
-    setStrokes((previousStrokes) => {
-      const updatedStrokes = [...previousStrokes, finished];
-      strokesRef.current = updatedStrokes;
-      return updatedStrokes;
+    startTransition(() => {
+      setActiveLineNumber(getLineNumberForRow(row));
+      setStrokes(updatedStrokes);
+      setVerdictsByLine((currentVerdicts) =>
+        new Map(
+          [...currentVerdicts].filter(
+            ([verdictRow]) => verdictRow < row
+          )
+        )
+      );
+      setFirstWrongLine(null);
+      setHintLevel(0);
+      setHintText(null);
+      setHintLoading(false);
+      setLastResult(null);
     });
+
+    const completedRow = rowToQueueAfterStrokeRef.current;
+    rowToQueueAfterStrokeRef.current = null;
+    if (completedRow !== null && completedRow !== row) {
+      queueRow(completedRow);
+    }
 
     if (rowIdleTimerRef.current) {
       clearTimeout(rowIdleTimerRef.current);
@@ -367,12 +432,15 @@ export default function App() {
     currentStroke.current = null;
     activeDrawnPointCountRef.current = 0;
     activePointerId.current = null;
+    activeCanvasRectRef.current = null;
+    rowToQueueAfterStrokeRef.current = null;
     clearActiveCanvas();
   };
 
   const invalidateEditedRow = (row) => {
     // Only this row needs handwriting transcription again.
     dirtyRowsRef.current.add(row);
+    bumpRowVersion(row);
 
     ++checkRequestId.current;
     ++hintRequestId.current;
@@ -380,16 +448,11 @@ export default function App() {
     // Remove this row from the waiting queue so its newest version
     // can be queued again after the user finishes editing.
     rowQueueRef.current = rowQueueRef.current.filter(
-      (queuedRow) => queuedRow !== row
+      (entry) => entry.row !== row
     );
 
-    processingRowsRef.current.delete(row);
-
     // Cancel transcription only if this exact row is currently processing.
-    if (transcriptionRowRef.current === row) {
-      ++transcriptionRequestId.current;
-      transcriptionRowRef.current = null;
-    }
+    cancelTranscriptionForRow(row);
 
     // Remove only this row's old transcription.
     const updatedLines = linesRef.current.filter(
@@ -399,10 +462,19 @@ export default function App() {
     linesRef.current = updatedLines;
     setLines(updatedLines);
 
-    // Make the edited row active so the idle timer or Check Line button
-    // can submit it again.
-    activeRowRef.current = row;
-    setActiveRow(row);
+    // Keep the edited row active when it still has ink. If undo/erase removed
+    // its final stroke, fall back to the last remaining row instead of
+    // leaving the Check Line control pointed at an empty row.
+    const remainingRows = [...inkIndexRef.current.rows.keys()].sort(
+      (a, b) => a - b
+    );
+    const nextActiveRow = inkIndexRef.current.rows.has(row)
+      ? row
+      : remainingRows[remainingRows.length - 1] ?? null;
+    activeRowRef.current = nextActiveRow;
+    setActiveLineNumber(
+      nextActiveRow === null ? null : getLineNumberForRow(nextActiveRow)
+    );
 
     // Keep verdicts above the edited row.
     // Verdicts for this row and everything below it are now stale.
@@ -422,16 +494,17 @@ export default function App() {
   };
 
   const handleUndo = () => {
-    if (strokes.length === 0 || transcribing) return;
+    const currentStrokes = strokesRef.current;
+    if (currentStrokes.length === 0) return;
 
-    const removedStroke = strokes[strokes.length - 1];
+    const removedStroke = currentStrokes[currentStrokes.length - 1];
     const affectedRow = getStrokeRow(removedStroke);
-
-    setStrokes((previousStrokes) => {
-      const updatedStrokes = previousStrokes.slice(0, -1);
-      strokesRef.current = updatedStrokes;
-      return updatedStrokes;
-    });
+    const updatedStrokes = currentStrokes.slice(0, -1);
+    strokesRef.current = updatedStrokes;
+    inkIndexRef.current = buildInkIndex(updatedStrokes);
+    startTransition(() => setStrokes(updatedStrokes));
+    drawStaticFrameRef.current();
+    drawOverlayFrameRef.current();
     if (mode === "chemistry") {
       invalidateStructure();
     } else {
@@ -596,31 +669,43 @@ export default function App() {
     recheck(linesRef.current, problemRef.current);
   };
 
-  const processRow = async (targetRow) => {
-    const segLines = segmentIntoLines(strokesRef.current);
+  const processRow = async (targetRow, targetVersion) => {
+    // Yield once before any export work. Even an automatically queued row
+    // must never extend the pointer event that happened to schedule it.
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    if (
-      targetRow === null ||
-      !segLines.has(targetRow)
-    ) {
-      return;
-    }
-
-    const requestId = ++transcriptionRequestId.current;
-    transcriptionRowRef.current = targetRow;
-
-    const lineStrokes = segLines.get(targetRow);
-    const dataUrl = renderLineToPng(lineStrokes);
-    const imageBase64 = dataUrl.split(",")[1];
-
-    setLastResult(null);
-
+    let requestId = null;
     try {
+      if (rowVersionsRef.current.get(targetRow) !== targetVersion) return;
+
+      const currentRowStrokes = inkIndexRef.current.rows.get(targetRow);
+      if (!currentRowStrokes?.length) return;
+
+      requestId = ++transcriptionRequestId.current;
+      transcriptionRowRef.current = targetRow;
+
+      // The snapshot stays immutable even if a later stroke replaces the
+      // row's index entry while the asynchronous PNG encoder is running.
+      const lineStrokes = [...currentRowStrokes];
+      const dataUrl = await renderLineToPng(lineStrokes);
+      if (
+        requestId !== transcriptionRequestId.current ||
+        rowVersionsRef.current.get(targetRow) !== targetVersion
+      ) {
+        return;
+      }
+      const imageBase64 = dataUrl.split(",")[1];
+
+      setLastResult(null);
+
+      const abortController = new AbortController();
+      transcriptionAbortRef.current = abortController;
       const response = await fetch(`${API_BASE}/transcribe`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        signal: abortController.signal,
         body: JSON.stringify({
           image_base64: imageBase64,
         }),
@@ -638,7 +723,10 @@ export default function App() {
       const data = await response.json();
 
       // The request was canceled because this row was edited or cleared.
-      if (requestId !== transcriptionRequestId.current) {
+      if (
+        requestId !== transcriptionRequestId.current ||
+        rowVersionsRef.current.get(targetRow) !== targetVersion
+      ) {
         return;
       }
 
@@ -661,7 +749,7 @@ export default function App() {
 
       if (activeRowRef.current === targetRow) {
         activeRowRef.current = null;
-        setActiveRow(null);
+        setActiveLineNumber(null);
       }
 
       await recheck(
@@ -670,9 +758,14 @@ export default function App() {
         targetRow
       );
     } catch (error) {
-      if (requestId !== transcriptionRequestId.current) {
+      if (
+        requestId !== null &&
+        requestId !== transcriptionRequestId.current
+      ) {
         return;
       }
+
+      if (error.name === "AbortError") return;
 
       setLastResult({
         error: error.message,
@@ -681,6 +774,7 @@ export default function App() {
       if (transcriptionRowRef.current === targetRow) {
         transcriptionRowRef.current = null;
       }
+      transcriptionAbortRef.current = null;
     }
   };
 
@@ -694,11 +788,10 @@ export default function App() {
 
     try {
       while (rowQueueRef.current.length > 0) {
-        const targetRow = rowQueueRef.current.shift();
+        const { row: targetRow, version: targetVersion } =
+          rowQueueRef.current.shift();
 
-        await processRow(targetRow);
-
-        processingRowsRef.current.delete(targetRow);
+        await processRow(targetRow, targetVersion);
       }
     } finally {
       queueRunningRef.current = false;
@@ -723,19 +816,17 @@ export default function App() {
       return;
     }
 
-    const segLines = segmentIntoLines(strokesRef.current);
-
-    if (!segLines.has(targetRow)) {
+    if (!inkIndexRef.current.rows.has(targetRow)) {
       return;
     }
 
-    // Do not queue the same row more than once.
-    if (processingRowsRef.current.has(targetRow)) {
-      return;
-    }
+    const version = rowVersionsRef.current.get(targetRow) ?? 0;
 
-    processingRowsRef.current.add(targetRow);
-    rowQueueRef.current.push(targetRow);
+    // Keep at most one queued snapshot per row, always the newest version.
+    rowQueueRef.current = rowQueueRef.current.filter(
+      (entry) => entry.row !== targetRow
+    );
+    rowQueueRef.current.push({ row: targetRow, version });
 
     // Start the queue without blocking handwriting input.
     void runRowQueue();
@@ -831,10 +922,11 @@ export default function App() {
   // The whole canvas is one drawing, so this crops to the bounding box of
   // every stroke on the page instead of one ruled row's worth.
   const handleReadStructure = async () => {
-    if (strokes.length === 0) return;
+    const currentStrokes = strokesRef.current;
+    if (currentStrokes.length === 0) return;
 
     const requestId = ++structureRequestId.current;
-    const dataUrl = renderLineToPng(strokes);
+    const dataUrl = await renderLineToPng(currentStrokes);
     const imageBase64 = dataUrl.split(",")[1];
 
     setTranscribing(true);
@@ -1115,33 +1207,27 @@ export default function App() {
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    for (const s of strokes) drawStroke(ctx, s);
+    for (const stroke of strokesRef.current) drawStroke(ctx, stroke);
+  }, [drawStroke]);
 
-    // A structure is one figure, so the per-row boxes and line numbers
-    // below would be actively misleading about how it is being read.
+  const drawOverlayFrame = useCallback(() => {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // A structure is one figure, so per-row feedback would be misleading.
     if (mode === "chemistry") return;
 
-    // Segmentation debug view: box around each detected line, colored by
-    // /check's verdict once one exists -- green for a correct step, red for
-    // a flagged one, the original neutral blue for lines not yet checked
-    // (no problem set, or this line hasn't been sent to /check yet).
-    const lines = segmentIntoLines(strokes);
+    const { rows, bounds } = inkIndexRef.current;
     const lineNumberByRow = new Map(
-      [...lines.keys()]
+      [...rows.keys()]
         .sort((a, b) => a - b)
         .map((row, index) => [row, index + 1])
     );
     ctx.font = "11px sans-serif";
-    for (const [row, lineStrokes] of lines) {
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      for (const s of lineStrokes) {
-        for (const pt of s.points) {
-          if (pt.x < minX) minX = pt.x;
-          if (pt.x > maxX) maxX = pt.x;
-          if (pt.y < minY) minY = pt.y;
-          if (pt.y > maxY) maxY = pt.y;
-        }
-      }
+    for (const [row, rowBounds] of bounds) {
+      const { minX, maxX, minY, maxY } = rowBounds;
       const verdict = verdictsByLine.get(row);
       const verdictStatus = getVerdictStatus(verdict);
       const color =
@@ -1169,7 +1255,16 @@ export default function App() {
         ctx.stroke();
       }
     }
-  }, [strokes, drawStroke, verdictsByLine, mode]);
+  }, [verdictsByLine, mode]);
+
+  const scheduleOverlayFrame = useCallback(() => {
+    if (overlayFrameRequestRef.current !== null) return;
+
+    overlayFrameRequestRef.current = requestAnimationFrame(() => {
+      overlayFrameRequestRef.current = null;
+      drawOverlayFrameRef.current();
+    });
+  }, []);
 
   // State changes redraw the completed page without reallocating either
   // canvas. Reassigning canvas.width/height clears its backing store and was
@@ -1179,9 +1274,21 @@ export default function App() {
     drawStaticFrame();
   }, [drawStaticFrame]);
 
+  useEffect(() => {
+    drawOverlayFrameRef.current = drawOverlayFrame;
+    scheduleOverlayFrame();
+  }, [drawOverlayFrame, scheduleOverlayFrame]);
+
+  useEffect(() => () => {
+    if (overlayFrameRequestRef.current !== null) {
+      cancelAnimationFrame(overlayFrameRequestRef.current);
+    }
+  }, []);
+
   // Size allocation only belongs to initial layout and real window resizes.
   useEffect(() => {
     const staticCanvas = staticCanvasRef.current;
+    const overlayCanvas = overlayCanvasRef.current;
     const activeCanvas = canvasRef.current;
 
     const resize = () => {
@@ -1198,9 +1305,12 @@ export default function App() {
 
       staticCanvas.width = width;
       staticCanvas.height = height;
+      overlayCanvas.width = width;
+      overlayCanvas.height = height;
       activeCanvas.width = width;
       activeCanvas.height = height;
       drawStaticFrameRef.current();
+      drawOverlayFrameRef.current();
     };
 
     resize();
@@ -1226,15 +1336,13 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    strokesRef.current = strokes;
-  }, [strokes]);
-
   const handleClear = () => {
     ++transcriptionRequestId.current;
     ++checkRequestId.current;
     ++hintRequestId.current;
     ++structureRequestId.current;
+    transcriptionAbortRef.current?.abort();
+    transcriptionAbortRef.current = null;
 
     setStructureRead(false);
     setStructureSmiles("");
@@ -1247,21 +1355,24 @@ export default function App() {
     }
 
     rowQueueRef.current = [];
-    processingRowsRef.current.clear();
     dirtyRowsRef.current.clear();
     queueRunningRef.current = false;
     strokesRef.current = [];
+    inkIndexRef.current = buildInkIndex([]);
+    rowVersionsRef.current.clear();
 
     currentStroke.current = null;
     activeDrawnPointCountRef.current = 0;
     activePointerId.current = null;
+    activeCanvasRectRef.current = null;
+    rowToQueueAfterStrokeRef.current = null;
     transcriptionRowRef.current = null;
     activeRowRef.current = null;
     linesRef.current = [];
 
     setStrokes([]);
     setLines([]);
-    setActiveRow(null);
+    setActiveLineNumber(null);
     setVerdictsByLine(new Map());
     setFirstWrongLine(null);
     setHintLevel(0);
@@ -1270,13 +1381,9 @@ export default function App() {
     setTranscribing(false);
     setLastResult(null);
     clearActiveCanvas();
+    drawStaticFrameRef.current();
+    drawOverlayFrameRef.current();
   };
-
-  const activeLineNumber =
-    activeRow === null
-      ? null
-      : [...segmentIntoLines(strokes).keys()].sort((a, b) => a - b)
-          .indexOf(activeRow) + 1 || null;
 
   const handwrittenProblemRow =
     !problem.trim()
@@ -1316,6 +1423,17 @@ export default function App() {
             display: "block",
             background: "#faf8f2",
             borderRight: `1px solid ${COLORS.border}`,
+          }}
+        />
+        <canvas
+          ref={overlayCanvasRef}
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "block",
+            pointerEvents: "none",
+            background: "transparent",
           }}
         />
         <canvas
@@ -1860,7 +1978,7 @@ export default function App() {
 
           <button
             onClick={handleUndo}
-            disabled={strokes.length === 0 || transcribing}
+            disabled={strokes.length === 0}
             style={{
               padding: "10px 16px",
               whiteSpace: "nowrap",
@@ -1869,9 +1987,9 @@ export default function App() {
               border: `1px solid ${COLORS.border}`,
               borderRadius: 10,
               opacity:
-                strokes.length === 0 || transcribing ? 0.4 : 1,
+                strokes.length === 0 ? 0.4 : 1,
               cursor:
-                strokes.length === 0 || transcribing
+                strokes.length === 0
                   ? "not-allowed"
                   : "pointer",
             }}
