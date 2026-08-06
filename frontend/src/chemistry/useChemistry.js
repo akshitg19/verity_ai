@@ -64,6 +64,15 @@ export default function useChemistry() {
 
   // -- invalidation ---------------------------------------------------------
 
+  // Ref-only invalidation, no setState. Called on pen-down, where PR #11
+  // established that the ink path must stay pure: bumping a request id is
+  // free, while a React update on every stroke start is not. The matching
+  // state invalidation happens in clearAnswer when the stroke commits.
+  const invalidateRequests = useCallback(() => {
+    requestId.current += 1;
+    hintRequestId.current += 1;
+  }, []);
+
   const clearHints = useCallback(() => {
     hintRequestId.current += 1;
     setHintLevel(0);
@@ -360,6 +369,7 @@ export default function useChemistry() {
     setStatus,
     resetProblem,
     clearAnswer,
+    invalidateRequests,
     captureNote,
     setCaptureNote,
     capture,
