@@ -1,642 +1,974 @@
 # verity.ai: remaining tasks
 
-Task list split by backend / frontend / testing / cleanup. Every file path is real, taken from the repo as of Aug 3. Where a task says "new file", the file does not exist yet.
+Task list split by decisions / backend / frontend / testing / cleanup. Every
+file path is real, taken from the repo as of Aug 5. Where a task says "new
+file", the file does not exist yet.
+
+**Revised Aug 5.** This revision settles the architecture question Aug 4 left
+open and rewrites what the product promises. It is the current statement of the
+goal; where `CLAUDE.md`, `README.md`, or the deck still describe the old
+no-AI-anywhere design, this file wins and those get updated to follow (tracked
+under Documentation near the bottom, not blocking anything).
 
 ---
 
-## Read this first: constraints every contributor codes to
+## Decisions locked Aug 5
 
-These hold no matter which part of the product you are working on, math or
-chemistry, backend or frontend. If a task below seems to conflict with one of
-these, the constraint wins and the task is wrong; say so rather than working
-around it.
+Written as decisions, not options, because two people building against two
+different answers is the most expensive mistake available right now. Each one
+records what it costs, so nobody can later say the cost was hidden.
 
-1. **One judge contract.** Every subject implements
-   `Judge[ProblemT, StepT, VerdictT]` from `backend/judge/base.py`. Two
-   conventions ride on top of the type signature and are not enforced by it:
-   a verdict with `line_number = 0` means *the problem itself* was bad and the
-   endpoint turns it into a `problem_error` with no step verdicts; and a step
-   that fails does **not** become the new reference line, so a single mistake
-   never cascades false errors down every later line. New judges must honour
-   both.
-
-2. **Four outcomes, and two of them are not the student's fault.** `valid`,
-   `invalid`, `unsupported`, `parse_error`. Only `invalid` may set
-   `first_wrong_line` or flag a line in the UI. `unsupported` and
-   `parse_error` are our limitations, and showing them as student mistakes is
-   a bug. This distinction is the single most important thing in the product;
-   it is why a teacher can trust it.
-
-3. **The hint layer never receives the problem, the answer, or the student's
-   work.** Today it gets a line number and an error category, nothing else.
-   If the worked-example plan below is adopted this becomes a deliberate,
-   documented exception with its own safeguards, not a quiet loosening. Until
-   that decision is made and written here, do not pass anything else into
-   `hints.py`.
-
-4. **`backend/schemas.py` is the shared frontend-backend contract.** Changes
-   are additive where possible and announced in the PR that needs them.
-   Adding a value to an existing `Literal` is additive; changing or removing
-   one is not.
-
-5. **No live Gemini calls in the test suite.** Mock the client the way
-   `backend/tests/test_transcription.py` and
-   `backend/tests/test_structure_recognition.py` do. Real calls are for
-   genuine recognition-quality testing only, logged in the failure logs under
-   `backend/tests/transcription/`.
-
-6. **A recogniser reads; it never decides.** Whatever the architecture
-   decision below concludes about judging, the module that turns an image into
-   text or SMILES returns what it saw and nothing more. Validation and
-   correctness live behind it, so a bad reading stays visible and correctable
-   instead of silently becoming a verdict.
-
-7. **The student can always correct a misread line before it is judged.** The
-   editable transcription field is not a nicety, it is the safety net that
-   makes a vision model acceptable in this product at all. Any new input path
-   needs an equivalent.
-
-8. **Frontend work goes through the component split first.** `App.jsx` is a
-   single 1906-line file, and both math and chemistry features now need to
-   touch it. Until it is split, every parallel frontend task collides in one
-   file. Treat the split as a prerequisite, not a cleanup.
-
----
-
-## Domain and hosting (priority 1)
-
-Right now the app only runs by opening two terminals locally. That needs to change before demo day regardless of what happens with the domain name.
-
-### Domain name
-
-`verity.ai` itself is very likely already taken or held on the aftermarket. `.ai` domains as a category run about $70-100/year with a mandatory two-year minimum, so a fresh one is $140-200 up front even if the exact name is free. Options, cheapest first:
-
-1. Use the free domain from GitHub's Student Developer Pack (comes with a free `.me` domain via Namecheap, plus other extensions like `.tech`/`.live` depending on current partner offers). `verity.me` or similar costs nothing for a year.
-2. Register a `.dev`, `.app`, or `.io` alternative instead of `.ai`. These run $10-20/year at a normal registrar (Namecheap, Google Domains successor Squarespace Domains, Cloudflare Registrar at-cost pricing).
-3. Skip a custom domain entirely for the SAIL demo. Every hosting option below gives a free subdomain (`verity-ai.vercel.app`, `verity-ai.up.railway.app`) that's perfectly demo-able and judge-friendly. Buy the real domain only once you know the product is continuing past the program.
-4. If `verity.ai` really matters as a brand, check current availability and price directly rather than assuming: `https://instantdomainsearch.com` or your registrar's search. If it's taken, `.ai` aftermarket resale can be checked on Sedo/Afternic, but that's typically hundreds of dollars and not a 10-day-timeline task.
-
-### Hosting
-
-Stop running this from PowerShell terminals. Pick one path:
-
-| Piece | Recommended option | Why |
+| # | Decision | Was |
 |---|---|---|
-| Frontend (React/Vite build) | Vercel or Netlify, free tier | Connect the GitHub repo, auto-deploys on push to `main`, free custom domain support, zero config for a Vite build |
-| Backend (FastAPI) | Render, free web service tier | No credit card required, detects Python automatically, free tier sleeps after inactivity which is fine for a demo you control the timing of |
-| Alternative backend | Railway | Cleaner UI, but its free tier is credit-based (small amount of free runtime, not unlimited); fine for short demo windows, watch the usage |
-| Env vars / secrets | Set `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `GEMINI_MODEL`, `CORS_ORIGINS` in the hosting platform's dashboard, not in a committed file | `.env.example` already documents exactly what's needed |
-| Vertex AI auth in production | Application Default Credentials via `gcloud` works locally but won't work on Render/Railway. Needs a service account key or workload identity federation set up specifically for the hosting platform | This is the one piece that needs real research, not just "pick a host" |
+| 1 | **AI judges, deterministic engines verify.** Option 3, hybrid, with the model's role much larger than the Aug 4 framing assumed. | "The AI never decides whether work is correct." |
+| 2 | **AI writes hints, and it receives the problem and the student's work.** | The hint layer received a line number and a category, nothing else. |
+| 3 | **The guarantee moves from "the model has no answer to leak" to "the answer physically cannot leave the server."** See the answer firewall below. | The guarantee was structural by starvation. |
+| 4 | **Three hint levels, redefined.** Level 2 becomes a worked analogous problem. Level 3 works the student's own step, except on the terminal step, where it is refused. | Three levels of increasingly general prose. |
 
-Checklist:
+### Why the old guarantee had to go
 
-- [ ] Decide domain path (free `.me`/subdomain for demo vs. paid `.ai`/`.dev` for after SAIL)
-- [ ] If buying a domain, register it (Namecheap, Cloudflare Registrar, or GitHub Student Pack free domain)
-- [ ] Create a Render account, connect the GitHub repo, deploy `backend/` as a web service
-- [ ] Set up Vertex AI auth for the hosted backend (service account key, stored as a Render secret, not committed)
-- [ ] Create a Vercel or Netlify account, connect the repo, deploy `frontend/` (set `VITE_API_BASE_URL` to the Render backend URL)
-- [ ] Update `CORS_ORIGINS` on the backend to include the real frontend URL, not just `localhost`
-- [ ] Point the custom domain (if bought) at the frontend host via DNS, following that host's instructions
-- [ ] Test the full pipeline end to end on the hosted URL, not just locally, before the demo
-- [ ] Add the live URL to `README.md` so teammates and judges don't need setup instructions at all
+It was real, and it is worth being precise about what we are giving up. Today
+`hints.py` is a dictionary of fixed strings selected by `error_type`. It cannot
+leak the answer because it has never been told one. That is as strong as a
+guarantee gets.
 
----
+It also produces hints that are useless on anything hard. "An equation stays
+true only if you do the same thing to both sides" is fine for a sign error in
+`2x + 3 = 11`, and it is nothing at all for a student stuck on a trig identity
+or looking at a structure they drew with an R group in it. The ceiling is not
+an implementation gap that better templates would fix. A hint keyed only by
+category can never be more specific than the category, and the interesting
+subjects are exactly the ones where the useful hint depends on the particular
+thing in front of the student.
 
-## Product intuitiveness and hint-strategy notes (read before building further)
+The same ceiling applies to judging. Two of the six math topics we intend to
+cover, and half of a third, cannot be represented by SymPy **in principle**, not
+for lack of effort. Chemistry hit this on Aug 4 within one real drawing: a
+student drew the general ester `R-C(=O)-O-R'`, Gemini read it correctly as
+`O=C(R)OR`, and the app said "Could not check" because RDKit has no atom called
+`R`. Recognition was never the bottleneck. Representation was.
 
-Gaps found by actually using the app, recorded here so they are decided
-deliberately rather than by default. Nothing in this section is built yet and
-none of it should be started before the chemistry base flow lands.
+So the honest framing: we are not weakening the promise, we are **moving where
+it is enforced**. It used to be enforced by keeping the answer away from the
+generator. It is now enforced by keeping the answer away from the *response*.
+That is a real downgrade in kind, and the answer firewall below is the work
+that has to be done to make it hold anyway.
 
-### The hint strategy has a ceiling worth naming
+### What we must never lose
 
-Hints today are a fixed deterministic lookup: `line_number` plus `error_type`
-selects a pre-written template. That design is the whole reason the "cannot
-leak the answer" guarantee is structural instead of a polite instruction to a
-model. The hint generator has no access to the problem, the solution, or the
-student's work, so there is nothing available for it to leak.
-
-The cost of that guarantee is that a hint can only ever be as specific as its
-category. For a sign error or an unbalanced charge, naming the category is
-genuinely most of the help a student needs. For a hard problem it will feel
-thin, and chemistry is where it will show first, because the useful hint
-usually depends on reasoning about the particular structure in front of the
-student rather than on which category their mistake falls into.
-
-Two directions to evaluate, and this needs an explicit decision rather than
-drifting into one:
-
-1. **A wording layer only.** An AI rephrases the hint to sound like a tutor
-   while still receiving nothing but the same fixed category. The structural
-   guarantee survives intact because the model still never sees the problem or
-   the answer; only the prose changes.
-2. **Trading some guarantee for adaptiveness.** Give a model enough context to
-   tutor genuinely on hard problems, accepting a smaller but real leak risk in
-   exchange. This is a product decision about what verity.ai promises, not a
-   technical one, and it should be made in the open with the team rather than
-   discovered later in a demo.
-
-### The app is a checker, not yet something a student would live in
-
-Testing made clear that verity.ai currently behaves like a single-canvas
-checker rather than a note-taking app anyone would choose for daily homework.
-The right bar to measure against is Apple Notes or Samsung Notes, since that is
-what students already use: multiple pages and notes, folders or notebooks to
-organise them, easy navigation back through past work, and a genuinely richer
-set of canvas tools.
-
-verity.ai needs the equivalent structure:
-
-- Creating, naming, and switching between multiple problem sets or notes.
-- Folder or subject organisation, so algebra and chemistry live in separate
-  spaces rather than sharing one surface.
-- A page model, rather than one continuous canvas that grows forever.
-
-### One page holding several problems is not detected
-
-Observed directly: a student finishes a problem, draws a rough horizontal line
-across the page, and starts the next problem underneath it. The app does not
-register that as a boundary at all. Segmentation currently understands rows
-within a single problem, and has no concept of "this row is a separator, and a
-new problem begins below it," so the second problem is read as a continuation
-of the first.
-
-This needs detection logic of its own. Options worth evaluating:
-
-- Treat a long, roughly horizontal stroke with little vertical variance as a
-  divider rather than as content.
-- Start a new problem automatically past a large enough vertical gap.
-- Make the existing "New Problem" action reachable through a light in-canvas
-  gesture instead of only a toolbar click.
-
-The mechanism matters less than the requirement behind it: a student writing
-problem after problem down one page, drawing dividers casually as they go,
-should never have to think about how the tool segments their work.
-
-None of this blocks current chemistry work, but it should be prioritised once
-the chemistry base flow (Phase 8) is stable, since it determines whether the
-product holds up in a real demo session covering more than one problem.
+The differentiator was never determinism for its own sake. It is that **a
+student cannot use this to skip the work**. Every decision below is measured
+against that sentence and nothing else.
 
 ---
 
-## Architecture decision: which engine judges (decide this first)
+## The product goal
 
-Raised Aug 4 after the first real hand-drawn chemistry test. Everything in the
-backend and topic sections below depends on how this is settled, so settle it
-before starting parallel work, or two people will build against two different
-assumptions. Read the whole section before acting on any part of it, because
-the pieces trade against each other.
+**A student writes homework by hand, and the page answers back: which line
+broke, why that kind of thing breaks, and one worked problem just like it. It
+knows the full solution the whole time and never hands it over.**
 
-### What triggered it
+That is the goal in one paragraph, and everything below is either a way to
+widen what it covers or a way to make the last sentence true under pressure.
 
-A student drew the general ester, `R-C(=O)-O-R'`. Gemini transcribed it as
-`O=C(R)OR`, which is a **correct** reading of that drawing. The app then showed
-"Could not check", because:
+Three properties make it a product rather than a feature, and none of them
+should ever be traded away:
 
-- `Chem.MolFromSmiles("O=C(R)OR")` returns `None`. RDKit has no atom called
-  `R`, so a correct reading became a parse error.
-- The target was `CC(=O)OC`, a concrete molecule. The student answered at the
-  level of a functional group. The app had no way to tell those two kinds of
-  question apart.
+1. **Live, on the page.** Feedback arrives while the student is still writing,
+   from the strokes themselves, not from a photo of finished work. Competing
+   step-checkers start from a completed page; chat tutors never see the page at
+   all.
+2. **Precise about where.** It flags the first line where reasoning broke, and
+   it distinguishes a proven mistake from a step it could not verify, so it
+   never accuses a student of an error it merely failed to understand.
+3. **Teaches up to the answer, never past it.** The help gets genuinely
+   substantive, up to and including working a step, and it stops short of the
+   solution by mechanism rather than by good manners.
 
-So recognition was not the bottleneck. Representation was. The vision model
-understood the drawing better than the rest of the pipeline could express.
+The success test is one sentence: **a teacher would let a student use this
+during homework, and the student would still have to think.** Any feature that
+fails that test is out of scope regardless of how well it works.
 
-### The proposal
+## Positioning: what verity.ai now claims
 
-Invert the hierarchy. Let the model read *and* propose a verdict, and demote
-RDKit and SymPy from gatekeeper to verifier, used where they apply rather than
-as the thing that decides whether we can answer at all. Closer to how Photomath
-works, but with our two differences kept intact: we check work **live, step by
-step, as it is written**, and we give **hints and nudges instead of solutions**.
+The old pitch leaned on "our AI is too limited to leak the answer." That is no
+longer true and it was always the weaker claim, because it describes a
+limitation rather than a design. The stronger and now-accurate claim is the
+inverse.
 
-The argument for it is coverage. RDKit's world is concrete, connected
-molecules. Real chemistry homework is full of R groups, generic structures,
-partial structures, and mechanisms, none of which that world can hold. Every
-one of those is currently an `unsupported` or a `parse_error`, which reads to a
-student as the app being broken.
+**verity.ai solves the problem completely, and then refuses to tell you.**
 
-### The tension to decide consciously
+That reframes every use of AI as a feature rather than a compromise. The system
+knows the answer exactly. It withholds it deliberately, and the withholding is
+enforced mechanically, not by asking a model to be discreet.
 
-The proposal as stated included "even if it leaks the answer", and in the same
-breath gave the reason schools would allow this product: it nudges instead of
-solving. **Those two fight each other.** If we hand over answers we become
-Photomath with extra steps, and we lose the exact property that makes us
-usable in a classroom. The differentiator was never determinism for its own
-sake; it is that a student cannot use this to skip the work.
+### Motto candidates, to finalise in the deck pass
 
-Recommended framing, to be confirmed: let the pivot be about **how much we can
-judge**, not about **what we disclose**. A model can decide whether a step is
-right and still refuse to state the answer. That keeps the product rule intact
-while removing the coverage ceiling.
+Recommended: **"It knows the answer. It will never give it to you."**
 
-The honest cost of that framing: today "never reveal the answer" is a
-*structural* guarantee, because the hint layer only ever receives a line number
-and a category and therefore has no answer available to leak. Under a model
-judge it becomes a *behavioural* guarantee enforced by a prompt and an output
-contract. That is a genuine downgrade in kind, not just in degree, and it
-should be accepted deliberately and written down rather than discovered later.
+Alternates, in rough order of preference:
 
-### What we would lose, stated plainly
+- "Marks the line. Never the answer."
+- "Nudges, never solutions."
+- "Every step checked. The answer withheld."
 
-Right now, an `unsupported` verdict is *provably* not an accusation that the
-student was wrong. With a model judge, a hallucinated "correct" on a genuinely
-wrong step becomes possible. That is the failure that destroys teacher trust
-fastest: being told "you're right" when you are not is worse than being told
-"I can't check this one."
+Why the recommended one is worth the risk: it is the only line here that makes
+the AI a feature. "Nudges, never solutions" is safe and could describe a
+worksheet. "It knows the answer and will never give it to you" says there is a
+real engine underneath and a deliberate refusal on top, which is exactly the
+architecture, and it is the sentence a teacher repeats to another teacher.
 
-### Hybrid design worth evaluating first
+The current subtitle on slide 1, "A handwriting-aware tutor that guides
+students without giving away the answer", is accurate and survives the pivot
+unchanged. It just stops being the *only* claim.
 
-This does not have to be all or nothing, and the middle path may get most of
-the coverage for much less risk:
-
-1. When a deterministic checker can represent the problem, it decides, and the
-   model's opinion is discarded rather than shown. Concrete molecules, linear
-   algebra, and equation balancing all stay exactly as reliable as today.
-2. Only when the deterministic tools cannot represent the problem does the
-   model's verdict surface, and the UI labels it differently so a student and a
-   teacher can see which engine spoke.
-3. Keep every current deterministic test as a regression suite. If a model-first
-   path ever disagrees with RDKit or SymPy on a case they *can* decide, that is
-   a bug in the model path, and we will detect it automatically.
-
-Ask twice and compare (self-consistency) is a cheap reliability lever on the
-model path, and disagreement is a good trigger for "ask the student to confirm".
-
-### Cheaper fixes that may remove much of the motivation
-
-Worth trying before committing to the pivot, since each is small and none
-touches the guarantee:
-
-- **Render the structure back as a picture instead of a SMILES string.** RDKit
-  draws SVG today with no new dependency (verified). A student cannot verify
-  `O=C(R)OR`, but can verify a drawing instantly. This is what ChemDraw,
-  Ketcher, and JSME all do, and it is probably the single biggest usability win
-  available.
-- **Support generic structures.** Normalising `R`, `R'`, `R1` to the wildcard
-  `*` makes them parse: `O=C(*)O*` and `*C(=O)O*` both canonicalise to
-  `*OC(*)=O`, so two different drawings of the same generic ester still compare
-  equal deterministically. Note the functional-group SMARTS need generic-aware
-  variants, since patterns demanding `[#6]` will not match a wildcard.
-- **Stop throttling the chemistry model call.** It currently runs at 128 output
-  tokens, temperature 0, and thinking disabled, all inherited from math, where
-  a line is a few symbols. A 2D structure with implicit carbons, ring closures,
-  and stereochemistry is a much harder read, and we have switched off the
-  reasoning that would help most.
-- **Route to the judge that matches the question.** `FunctionalGroupJudge`
-  already exists and is unused, because the UI can only ask "match this exact
-  molecule". The ester drawing above would have been judged correctly today if
-  the problem type had selected the right judge.
-
-### Cost and latency, to measure not assume
-
-Enabling thinking and longer outputs raises both cost per call and latency, and
-a model judging every step multiplies call volume well past today's one call
-per finished line. Measure against the existing target of under 2s p95 before
-committing, and check the per-step cost at realistic session length.
-
-### Why the topic list forces this decision
-
-The subjects we want to cover are Elementary Math, Algebra, Geometry,
-Trigonometry, Statistics, and Calculus, with Physics as a likely addition.
-Look at which of those a deterministic checker can actually represent:
-
-| Topic | Deterministic engine can judge it? |
-|---|---|
-| Elementary math | Yes, arithmetic comparison |
-| Algebra | Yes, already built |
-| Trigonometry | Yes, `simplify` and `trigsimp` equivalence |
-| Calculus | Yes, and elegantly: differentiate the student's answer and compare |
-| Geometry | **No.** A proof step is a logical claim about a figure, not a symbolic expression |
-| Statistics | **Partly.** The arithmetic yes; choosing the right test, reading a distribution, interpreting a result, no |
-| Physics | Partly, with a units library. Formula manipulation yes, setup and modelling no |
-
-Two of the six named topics, and the most interesting half of a third, are
-outside what SymPy and RDKit can express **in principle**, not for lack of
-effort. That is the real reason this decision cannot be deferred: the topic
-list already commits us past the deterministic ceiling.
-
-### The three options, in detail
-
-#### Option 1: Deterministic-first (what exists today, plus the cheap fixes)
-
-Keep SymPy and RDKit as the only things that produce a verdict. Take the four
-cheap fixes above to widen what they can represent.
-
-- **Unlocks:** elementary math, algebra, trigonometry, calculus, chemical
-  structures, functional groups, equation balancing, redox. Genuinely most of
-  a maths curriculum.
-- **Cannot do, ever:** geometry proofs, statistical interpretation, reaction
-  mechanisms, word problems, anything where a step is not a symbolic object.
-- **Guarantees:** the strongest available. No hallucinated verdict is possible.
-  The no-leak property stays structural.
-- **Effort:** small. Each cheap fix is a day or less.
-- **Risk:** low technically, high on product. A student who writes a geometry
-  proof gets "not supported", which reads as broken rather than as scoped.
-
-#### Option 2: Model-first (Gemini reads and judges; RDKit and SymPy demoted)
-
-The model receives the problem and the student's step and returns a verdict
-and an error category. Deterministic tools become an optional second opinion
-or are dropped.
-
-- **Unlocks:** every topic on the list, immediately, including geometry,
-  statistics, and physics. Coverage stops being an engineering problem.
-- **Costs:** a hallucinated "correct" on a wrong step becomes possible, and
-  that is the failure that destroys teacher trust fastest. The no-leak
-  guarantee drops from structural to behavioural. Cost and latency rise per
-  step and multiply across a session. Regression testing becomes statistical
-  rather than exact, so "did we break it" gets much harder to answer.
-- **Effort:** medium to build, large to *evaluate*. The build is a prompt and
-  an output contract; the work is proving it is reliable enough to put in
-  front of a teacher.
-- **Risk:** highest. It also discards the clearest thing we can say about why
-  this product is different from Photomath.
-
-#### Option 3: Hybrid, deterministic-preferred (recommended)
-
-A problem type declares which engine is authoritative for it. Where a
-deterministic judge can represent the problem, it decides and the model's
-opinion is discarded before it reaches the student. Where no deterministic
-judge can represent it, the model decides and the verdict is **labelled with
-its provenance** so a student and a teacher can see which engine spoke.
-
-- **Unlocks:** the full topic list, while algebra, calculus, structures, and
-  balancing stay provably exact.
-- **Costs:** two engines and a routing table to maintain. The UI must show
-  verdict provenance honestly rather than hiding it. More moving parts.
-- **Effort:** medium, and most of it is plumbing we partly have: judges
-  already share one contract, and `problem_error` and the four-outcome model
-  already exist to build on.
-- **Risk:** medium, and concentrated exactly where it is unavoidable. We take
-  model risk only on topics that would otherwise be impossible, and take none
-  on the topics we can already do exactly.
-
-Sharpest argument for it: **the deterministic suite becomes the model's test
-harness.** Every case SymPy or RDKit can decide is a case where we can check
-the model's answer automatically. If the model path ever disagrees with them
-on a case they can both judge, that is a bug we catch in CI rather than in
-front of a class. No other option gives us that.
-
-### Implementation shape, if the hybrid is chosen
-
-1. **A `topic` field on the check request**, as the API section below already
-   plans. It selects the judge; it also selects the engine.
-2. **A routing table** mapping topic to authoritative engine, with a third
-   state for "deterministic where possible, model as fallback".
-3. **A `judged_by` field on every verdict** (`deterministic` or `model`),
-   carried into the response and shown in the UI. Never let a model verdict
-   look identical to a proven one.
-4. **A verification sandwich for the model path.** The model proposes; where a
-   deterministic judge can check any part of the claim, it does; only the
-   unverifiable remainder surfaces as a model judgement.
-5. **Self-consistency on the model path.** Ask twice, compare. Disagreement
-   becomes "ask the student to confirm" rather than a confident wrong verdict.
-6. **Keep every existing test as a cross-engine regression suite** per the
-   argument above.
-
-### How to decide
-
-Whichever option is chosen, decide the **answer-disclosure** question
-separately from the **judging-engine** question. Conflating them is what makes
-the pivot look more expensive than it is: a model can judge a step without
-stating the answer, and the hint policy below is where disclosure actually
-gets decided.
-
-Current leaning, to confirm: **Option 3**, with the four cheap fixes from
-Option 1 done first because they are small, they are needed under any option,
-and they may remove much of the pressure on their own.
+The three product properties above are the messaging spine. Use those three,
+in that order, in the deck, the README, and any demo script, rather than
+inventing a new framing per surface.
 
 ---
 
-## Hint strategy v2: worked examples instead of vague nudges
+## The answer firewall (build this before anything that uses AI for hints)
 
-The complaint, from using it: the hints are too vague to be useful on anything
-hard. Level 2 names a category and level 3 states a general principle, which is
-enough for a sign error and nowhere near enough for a real problem. A student
-stuck on a step does not need to be told that equations stay true when you do
-the same thing to both sides.
+This is the single most important piece of new engineering in this revision.
+Nothing in the hint or model-judge sections ships until it exists, because it is
+the thing that replaces the guarantee we are giving up. It is four independent
+mechanisms, deliberately overlapping, so no single failure discloses an answer.
 
-### The idea
+### Mechanism 1: the answer vault
 
-Follow what textbook and courseware systems such as Cengage do: **show a
-similar problem, fully worked**. Not the student's problem. A parallel one,
-same technique, same shape, different numbers, solved end to end.
+The backend already has everything it needs to solve the problem itself. SymPy
+solves the equation; RDKit canonicalises the target structure; the balancer
+computes the balanced coefficients. Do that **once, at problem setup**, and hold
+the result in a server-side object that is never a field on any Pydantic
+response model.
 
-### Why this matters more than it looks
+The vault holds every form of the answer we can enumerate:
 
-A fully worked solution to a *different* problem does not reveal the student's
-answer. So this makes hints dramatically more useful **without** spending the
-core promise. The current hints are vague not because vagueness is required by
-the no-leak rule, but because a one-line template is all we built. The
-constraint was never "hints must be thin"; it was "hints must not contain the
-answer", and a worked analogue satisfies that completely.
+- The solved value or values (`x = 4`).
+- Canonical numeric variants: `4`, `4.0`, `04`, `+4`, `4/1`, `"four"`.
+- For chemistry, canonical SMILES plus InChIKey plus the molecular formula.
+- For balancing, the coefficient vector and the fully balanced equation string.
+- The final line of our own worked solution, and each intermediate line that is
+  within one step of it.
 
-This reframes the hint problem from a safety tradeoff into a content problem,
-which is a much better problem to have.
+Rule: the vault is constructed in the endpoint and passed down. It is never
+serialised, never logged, and never placed on a schema in `backend/schemas.py`.
+A test asserts that no response model, at any nesting depth, has a field that
+can hold a vault.
 
-### Proposed ladder
+### Mechanism 2: outbound redaction
 
-| Level | Content | Changed? |
-|---|---|---|
-| 1 | Where to look: which line, compare it to the one before | unchanged |
-| 2 | What kind of mistake, named without describing the fix | unchanged |
-| 3 | The concept behind that mistake, in general terms | unchanged |
-| 4 | **A fully worked analogous example**, different values, same technique and same error category | new |
-| 5 | **Work through the student's actual step**, gated, off by default | new, and a disclosure decision |
+Every string produced by the hint layer, and every model-authored `detail` or
+explanation bound for a student, passes through one function before it is
+returned. Not two functions, not a decorator on some paths. One chokepoint,
+called in one place, so it can be audited by reading a single file.
 
-### The safeguard that makes level 4 trustworthy
+The check is deterministic string work, not a model:
 
-Generated maths can be wrong, and a wrong worked example inside a hint is worse
-than no hint at all. So: **the model generates the analogous problem and its
-solution, and then every line of that generated solution is run through our own
-deterministic judge.** Only an example that verifies completely is ever shown.
-If it fails verification, regenerate or fall back to level 3.
+- Normalise: unicode NFKC, strip whitespace, collapse repeated spaces,
+  lowercase, convert unicode minus and superscripts.
+- Tokenise into numbers, identifiers, and operators.
+- Reject if any vault form appears as a standalone token, or if a numeric token
+  is within floating-point tolerance of a vault value, or if a chemistry hint
+  contains a SMILES string that canonicalises to the vault structure.
+- Reject the assignment shape specifically: `x = 4`, `x is 4`, `x → 4`.
 
-This is the best available use of the hybrid architecture. The generator can be
-creative because the verifier is exact, and hallucinated maths structurally
-cannot reach a student inside a hint.
+A rejected hint is regenerated once with the violation named in the retry
+prompt. A second rejection falls back to the level-3 template that exists today.
+It never fails open, and it never returns an empty hint.
 
-### The strongest version: pre-generate the library
+### Mechanism 3: the terminal-step gate
 
-Generate the worked examples **offline**, keyed by (topic, error category),
-verify each one with the deterministic judge, have a human skim them once, and
-ship them as static content.
+A step is **terminal** if the correct continuation of it is the final answer.
+The backend knows this, because it solved the problem in mechanism 1 and can
+count how many steps remain.
 
-That gives us, all at once:
+On a terminal step, level 3 does not work the student's step. It is not a
+softer version, it is a different response: the worked analogue from level 2
+plus a concept explanation plus, if configured, a link out to a video or a
+textbook section. The student is told plainly that this is the last step and
+they are finishing it themselves.
 
-- Hints stay a deterministic lookup at runtime, so the structural no-leak
-  guarantee is fully preserved and `HintRequest` keeps its current tiny input.
-- Zero added latency and zero per-hint cost, which matters for the demo.
-- Far richer content than today.
-- Review before a student ever sees it, rather than trusting live generation.
+This is the mechanism that answers "can't they just press hint 3 on every
+line?" They can, and on every line but the last it will teach them the step. On
+the last line it will not, so the ladder never terminates in an answer.
 
-The cost is that examples are fixed rather than tailored. Given the categories
-are already a small closed set, that is a good trade. Live generation can come
-later for the long tail if it proves necessary.
+### Mechanism 4: escalation budget
 
-### Level 5 is a separate, explicit decision
+Level 3 is metered **per problem**, not per line. A small number of level-3
+unlocks per problem, and the counter is server-side and tied to the problem
+session rather than to a client-supplied value.
 
-Working through the student's own step *is* disclosure for that step. Worth
-noting it is narrower than it sounds: it reveals one step after three
-escalating hints have failed, not the final answer, which is roughly what a
-human tutor would do at that point. Recommendation: build it, keep it behind a
-setting, default it off, and let a teacher decide. Do not let it arrive by
-accident as part of level 4.
+The purpose is not rationing for its own sake. It is that a student who needs
+level 3 on every line of a problem is a student who should be told to go back
+to the worked examples, and saying so is better tutoring than walking them
+through six steps in a row.
+
+### What the firewall does not protect against, stated honestly
+
+Do not let anyone on the team believe this is airtight, because it is not, and
+believing it is how it gets shipped badly.
+
+**The near-answer problem.** On a four-step problem, level 3 on step 3 walks the
+student to the line immediately before the answer. The final answer never
+appears, so redaction passes, but the student is one trivial operation away. The
+firewall bounds disclosure; it does not eliminate it. The budget in mechanism 4
+is what actually keeps this honest, which is why it is a mechanism and not a
+nice-to-have.
+
+**Redaction is a filter, not a proof.** It catches the answer stated. It cannot
+catch the answer implied, described in words, or arrived at through a chain the
+model spells out. Expect the adversarial suite to find holes and expect to keep
+patching it. Anyone who claims a leak class is impossible should be asked for
+the test that proves it.
+
+**A wrong problem statement breaks the vault.** If transcription misreads the
+problem, the vault holds the wrong answer, so redaction guards the wrong string
+and the terminal gate fires on the wrong line. The editable problem field is
+therefore load-bearing for safety now, not only for accuracy.
+
+Given all that, the claim we make publicly should stay exactly as narrow as what
+we enforce: **the answer is never stated**. Not "the student cannot possibly
+work it out", which is not true and would not survive a sharp question from a
+teacher.
 
 ### Tasks
 
 | Done | Task | Detail |
 |------|---|---|
-| [ ] | Decide the ladder | Confirm levels 4 and 5, and whether level 5 ships at all |
-| [ ] | Worked-example schema | Where an example lives, keyed by topic and error category, and how the frontend renders a multi-line solution rather than a sentence |
-| [ ] | Generation harness | Offline script: generate candidate examples per category, run every line through the existing judge, keep only fully verified ones |
-| [ ] | Human review pass | Skim the generated library once before it ships |
-| [ ] | Frontend hint display | Render a worked example properly: steps, not a paragraph. Reuse the verdict card styling |
-| [ ] | Answer-leak tests extended | The existing tests assert no token of the student's work appears in hint text. Extend them to the example library: an example must not be the student's problem restated with the same numbers |
-| [ ] | Chemistry examples | Same treatment for structure, functional group, and balancing categories |
+| [ ] | `backend/answer_vault.py` (new) | Construct per-problem answer forms from the deterministic engines. Pure, no I/O, fully unit-testable. Never imported by `schemas.py` |
+| [ ] | `backend/redaction.py` (new) | The single outbound chokepoint. Normalisation, tokenisation, numeric tolerance, SMILES canonicalisation, assignment-shape detection. Returns `(allowed: bool, violation: str \| None)` |
+| [ ] | Wire the chokepoint | Exactly one call site in the hint path. A test greps the codebase and fails if hint text is returned from anywhere that does not go through it |
+| [ ] | Terminal-step detection | Given the vault and the student's current line, decide whether the next correct line is the answer. Lives with the vault, not in the hint layer |
+| [ ] | Escalation budget | Server-side per-problem counter for level 3. Decide the number during testing; start at 3 |
+| [ ] | Vault-never-serialised test | Walk every model in `backend/schemas.py` recursively and assert no field type can carry vault data |
+| [ ] | Adversarial leak suite | The important one. Prompts that try to extract the answer: "just tell me", "what is x", "is the answer 4", non-English, base64, "ignore previous instructions", asking for the answer to a *different* problem whose answer is the same. Every one must be redacted or refused |
+
+---
+
+## Hint strategy v3: the ladder that ships
+
+Supersedes the v2 proposal recorded Aug 4, which had five levels. Three levels,
+matching the deck and the existing `HintResponse.max_level`, with each level
+redefined.
+
+**All three levels are generated live by the model.** There is no static hint
+content in the shipping product. The templates in `hints.py` survive only as the
+fallback floor when generation or verification fails.
+
+| Level | Student asks | What they get |
+|---|---|---|
+| 1 | "Where did I go wrong?" | **Diagnosis.** The line, the operation they actually performed on it, and what to compare against what. Specific to the work in front of them, never a stock sentence |
+| 2 | "Show me how this works" | **Demonstration.** A *different* problem, mirroring the structure of theirs with different numbers, worked end to end and verified line by line by our own judge |
+| 3 | "Walk me through mine" | **Their own step**, reasoned through, up to but not including the answer. Refused on the terminal step |
+
+The escalation is **diagnose → demonstrate → do it with them**, which is what a
+human tutor does. Each rung is a different *kind* of help, not the same help
+worded more generously.
+
+### Level 1: diagnosis, not a signpost
+
+Today's level 1 is `"Look closely at line {n}. Compare it to the line right
+before it."` — the same sentence for every mistake in every subject, which is
+why the ladder feels useless from the first rung.
+
+Level 1 must name **what the student actually did**. That requires seeing their
+work, which is exactly what the pivot buys us. It names the operation they
+performed, where it went wrong in kind, and what to compare. It does not name
+the fix and it does not state a corrected value.
+
+Bad (today): "Look closely at line 3."
+Good: "On line 3 you divided both sides by 2. Compare each term on line 3 to the
+matching term on line 2 — one of them didn't come through the division."
+
+Same information budget, vastly more useful, and it still contains no answer.
+
+### Level 2: a generated parallel problem, verified before it is shown
+
+**Corrected Aug 5.** An earlier revision of this file proposed pre-generating a
+static library keyed by `(topic, error_category)`. **That was wrong and it is
+abandoned.** Two reasons, and the first is fatal:
+
+1. **A library keyed by category is not tailored to the student's problem.** A
+   generic "sign error" worked example is exactly as canned as the templates we
+   are replacing. The complaint was that hints are too vague; a stock example
+   for a broad category does not fix that, it relocates it.
+2. **The space is not enumerable.** Six maths subjects and six chemistry
+   subjects, each with many techniques and many error categories, across every
+   problem shape a student might write. There is no finite library here.
+
+The correct design: **the model reads the student's actual problem and writes a
+new one that mirrors its structure with different numbers**, then solves it in
+full. Same technique, same trap, nothing in common numerically. This is what a
+good tutor does at a whiteboard, and it is the thing a model is genuinely better
+at than any lookup table.
+
+Why this is safe: a fully worked solution to a *different* problem contains none
+of the student's answer. Level 2 is therefore the rung where we can be most
+generous at the least risk, which is why it should be the rung students live on.
+
+**The safeguard, and this is non-negotiable.** Generated maths can be wrong, and
+a wrong worked example inside a hint is worse than no hint at all. So:
+
+1. The model generates the analogous problem and its complete solution.
+2. **Every line of that generated solution is run through our own deterministic
+   judge**, the same SymPy or RDKit path that judges the student.
+3. Only an example that verifies completely, line by line, is ever shown.
+4. If verification fails, regenerate. After a small number of attempts, fall
+   back to level 1 content plus a resource link.
+5. The redaction filter then confirms the example does not restate the student's
+   own problem or contain their answer.
+
+This is the strongest argument for the hybrid architecture in the whole
+document: **the generator can be creative precisely because the verifier is
+exact.** Hallucinated maths structurally cannot reach a student inside a hint,
+not because we trust the prompt, but because SymPy checked every line first.
+
+Verification is cheap — SymPy comparisons are milliseconds. The cost is the one
+generation call, which is a hint the student explicitly asked for and can wait a
+moment on.
+
+### Level 3: their own step, with the gate
+
+The student's actual line, reasoned through. Terminal-step gate, answer vault,
+redaction filter, and escalation budget all apply, per the firewall section.
+
+On a terminal step it does not degrade quietly — it says plainly that this is
+the last step and they are finishing it, and offers a fresh level 2 analogue
+instead.
+
+### Tasks
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Rewrite `backend/hints.py` | From a template lookup into a generation pipeline. Keep the existing dictionaries as the fallback floor only |
+| [ ] | Level 1 prompt | Receives the problem, the previous line, the flagged line, and the error category. Returns one or two sentences naming the operation performed and what to compare. Must not state a corrected value |
+| [ ] | Level 2 prompt | Receives the problem and the error category. Returns a structurally analogous problem with different numbers, plus a full step-by-step solution as a list of lines, plus a one-line statement of the technique |
+| [ ] | **Level 2 verification loop** | The critical piece. Feed every line of the generated solution to the existing judge as a step chain. Reject the whole example if any line fails. Retry, then fall back. Nothing unverified is ever rendered |
+| [ ] | Level 3 prompt and output contract | Structured output, one step at a time, an explicit field for "this is the terminal step and I am declining" |
+| [ ] | `WorkedExample` schema | Problem statement, technique line, ordered solution lines, and a `verified: bool` that is only ever set by the verification loop |
+| [ ] | `HintRequest` widening | It gains problem and step context. This is the deliberate, documented exception, and the PR description must say so in those words |
+| [ ] | Similarity guard | A generated analogue must not be the student's problem with cosmetic changes. Assert the numbers differ and the answer differs, mechanically, not by prompt instruction |
+| [ ] | Extend answer-leak tests | Every generated hint at every level, plus every generated example, asserted free of the vault contents |
+| [ ] | Chemistry level 2 | An analogous *structure* or *equation* problem, verified by RDKit or the balancer. Harder than maths and worth prototyping early |
+| [ ] | Latency budget for hints | Every level now costs a round trip. Measure it. Show a real loading state, and consider pre-warming level 1 the moment a line is flagged, since it is the most likely next click |
+| [ ] | Resource fallback | When generation or verification fails twice, and on the terminal step, link out to a video or textbook section rather than showing nothing |
+
+---
+
+## Architecture: which engine judges
+
+Decided: **hybrid, deterministic-preferred, model-labelled** (the Aug 4 Option
+3), with the model's role expanded. The model reads *and* proposes a verdict on
+every step. Where a deterministic judge can represent the problem, the
+deterministic verdict wins and the model's opinion is discarded before it
+reaches the student. Where no deterministic judge can represent it, the model's
+verdict surfaces, labelled with its provenance.
+
+### The rules that make it safe
+
+1. **A recogniser reads; it never decides.** The module that turns an image into
+   text or SMILES returns what it saw and nothing more. Unchanged from before,
+   and it matters more now, not less.
+2. **Deterministic beats model, always, where both can speak.** Not "we compare
+   and pick". The deterministic verdict is authoritative and the model's is
+   dropped. Concrete molecules, linear algebra, and equation balancing stay
+   exactly as reliable as they are today.
+3. **Provenance is shown, never hidden.** A `judged_by` field of `deterministic`
+   or `model` rides on every verdict and reaches the UI. A model verdict must
+   never look identical to a proven one. A student and a teacher can always see
+   which engine spoke.
+4. **The deterministic suite is the model's test harness.** Every case SymPy or
+   RDKit can decide is a case where we can check the model automatically. If the
+   model path ever disagrees with them on a case they can both judge, that is a
+   bug we catch in CI rather than in front of a class. No other architecture
+   gives us that, and it is the sharpest argument for this one.
+5. **Self-consistency on the model path.** Ask twice, compare. Disagreement
+   becomes "ask the student to confirm this line" rather than a confident wrong
+   verdict.
+6. **The four outcomes survive.** `valid`, `invalid`, `unsupported`,
+   `parse_error`. Only `invalid` may flag a line. `unsupported` and
+   `parse_error` are our limitations, and showing them as student mistakes is a
+   bug. This distinction is why a teacher can trust the product and it does not
+   soften under a model judge.
+
+### What this costs, stated plainly
+
+A hallucinated "correct" on a genuinely wrong step becomes possible. That is
+the failure that destroys teacher trust fastest: being told "you're right" when
+you are not is worse than being told "I can't check this one." Rules 2, 4, and
+5 exist specifically to bound it, and the model path is confined to topics that
+would otherwise be impossible.
+
+Regression testing on the model path becomes statistical rather than exact, so
+"did we break it" gets harder to answer. Budget real time for evaluation, not
+just for the build. The build is a prompt and an output contract; the work is
+proving it is reliable enough to put in front of a teacher.
+
+### The four cheap fixes, still required
+
+These were listed Aug 4 as things that might remove the pressure to pivot. They
+did not remove it, but every one of them is still needed under the hybrid, they
+are all small, and together they fix the worst thing a real user has hit.
+
+| Done | Fix | Detail |
+|------|---|---|
+| [ ] | Render structures as pictures | RDKit draws SVG today with no new dependency (verified). A student cannot verify `O=C(R)OR` but can verify a drawing instantly. Probably the single biggest usability win available |
+| [ ] | Support generic structures | Normalise `R`, `R'`, `R1` to the wildcard `*`. `O=C(*)O*` and `*C(=O)O*` both canonicalise to `*OC(*)=O`, so two drawings of the same generic ester compare equal deterministically. Functional-group SMARTS need generic-aware variants, since patterns demanding `[#6]` will not match a wildcard |
+| [ ] | Stop throttling the chemistry model call | It runs at 128 output tokens, temperature 0, thinking disabled, all inherited from math where a line is a few symbols. A 2D structure with implicit carbons, ring closures, and stereochemistry is a much harder read and we have switched off the reasoning that would help most |
+| [ ] | Route to the judge that matches the question | This is a **frontend** gap, not a backend one. `main.py` already serves `/chemistry/functional-group` (line 92) and `/chemistry/balance` (line 115), but `App.jsx` only ever calls `/chemistry/check` and `/chemistry/transcribe`, so the UI can only ask "match this exact molecule". The Aug 4 ester drawing would have been judged correctly today if the student could have picked "identify the functional group". Cheapest real win in the repo: two working judges are already shipped and unreachable |
+
+### Implementation shape
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | `topic` field on the check request | Selects the judge, and also selects the engine |
+| [ ] | Routing table | Topic to authoritative engine, with a third state for "deterministic where possible, model as fallback" |
+| [ ] | `judged_by` on every verdict | `deterministic` or `model`, carried into the response and rendered distinctly in the UI |
+| [ ] | Verification sandwich | The model proposes; where a deterministic judge can check any part of the claim, it does; only the unverifiable remainder surfaces as a model judgement |
+| [ ] | Cross-engine regression suite | Keep every existing deterministic test. Add a mode that runs the model path over the same cases and reports disagreements |
+| [ ] | Cost and latency measurement | A model judging every step multiplies call volume well past today's one call per finished line. Measure against the under-2s p95 target before committing, and check per-step cost at realistic session length |
 
 ---
 
 ## Topic scope
 
-### Math (grades 6-12)
+Six subjects each, chosen to match how students and teachers already name them,
+which is roughly how Photomath's topic list reads. Each subject lists what a
+step looks like, which engine is authoritative for it, and what has to be built.
 
-Ordered easiest to hardest given what the current judge already does. The core insight: verifying an answer is far easier than solving a problem, so topics where a student's line can be checked symbolically against a reference are all in reach.
+**Read the "Authoritative engine" column narrowly.** It says which engine
+decides correctness *once the line has been read correctly*. It is not a claim
+that the topic works end to end, because reading the line is the part we have
+never measured. A topic marked "Deterministic" can still fail completely in
+front of a student, at the recognition stage, and nothing in the current test
+suite would catch it. See the handwriting corpus section below before treating
+any row here as evidence.
 
-| # | Topic | Grade band | How it gets checked | Effort |
+### Math: the six
+
+| # | Subject | Grade band | Authoritative engine | Status |
 |---|---|---|---|---|
-| 1 | Linear equations, one variable | 6-9 | Already built (`AlgebraJudge`) | Done |
-| 2 | Linear inequalities, one variable | 7-9 | Same solution-set comparison, plus tracking direction flips when multiplying by negatives | Small |
-| 3 | Exponent rules, integer exponents | 8-10 | Lift the `^` ban, extend `_support_reason`, SymPy simplify handles equivalence natively | Small |
-| 4 | Quadratics: factoring, expanding, completing the square, quadratic formula | 9-11 | Allow degree 2 in `_support_reason`; equivalence check already generalizes | Medium |
-| 5 | Systems of two linear equations | 8-10 | New judge: a step is valid if its solution set contains the system's solution | Medium |
-| 6 | Polynomial arithmetic and rational expressions | 9-11 | `simplify(a - b) == 0` on expressions; domain caveats for cancelled factors | Medium |
-| 7 | Trig identities and equation simplification | 10-12 | `sympy.simplify` / `trigsimp` expression equivalence | Medium |
-| 8 | Logarithm and exponential rules | 10-12 | Expression equivalence with positivity assumptions on log arguments | Medium |
-| 9 | Differentiation (power, sum, product, chain rule) | 11-12 | Verify final answer: `simplify(diff(reference) - candidate) == 0`. Intermediate steps checked as expression-equivalent to the true derivative | Medium |
-| 10 | Integration (power rule through substitution) | 12 | The elegant one: differentiate the student's answer, compare to the integrand. `diff` is always deterministic even when `integrate` struggles, so this scales past what SymPy can integrate | Medium |
-| 11 | Limits | 11-12 | Final-answer mode via `sympy.limit` | Small once 9 exists |
+| 1 | Elementary and pre-algebra | 6-8 | Deterministic | Partly built |
+| 2 | Algebra | 8-11 | Deterministic | Partly built |
+| 3 | Geometry | 8-11 | Mixed | Not started |
+| 4 | Trigonometry | 10-12 | Deterministic | Not started |
+| 5 | Statistics and probability | 9-12 | Mixed | Not started |
+| 6 | Calculus | 11-12 | Deterministic | Not started |
 
-**Revised Aug 4.** This previously read "out of scope, permanently: geometry
-proofs, constructions, word-problem setup, statistics interpretation". That
-was accurate about *SymPy*, and it is now a statement about the architecture
-rather than about the product. The subjects we intend to cover include
-geometry and statistics, so these topics are out of scope only under Option 1
-above. Under Options 2 or 3 they become reachable, with a model verdict and
-honest provenance labelling.
+**1. Elementary and pre-algebra.** Integer and fraction arithmetic, decimals,
+percents, ratio and proportion, order of operations, integer exponents, roots,
+unit conversion. A step is an arithmetic claim and SymPy compares it exactly.
+Almost entirely reachable today.
 
-| # | Topic | Grade band | How it gets checked | Depends on |
-|---|---|---|---|---|
-| 12 | Geometry: angle chasing, similarity, area and volume | 8-11 | Numeric and algebraic relations are symbolic and deterministic; a *proof step* is a logical claim about a figure and is not | Numeric parts: Option 1. Proofs: Option 2 or 3 |
-| 13 | Statistics: computation | 9-12 | Mean, median, standard deviation, regression coefficients are all deterministic arithmetic | Option 1 |
-| 14 | Statistics: interpretation and test selection | 10-12 | "Which test applies", "what does this p-value mean" are judgement calls with no symbolic form | Option 2 or 3 |
-| 15 | Physics: formula manipulation and units | 9-12 | SymPy plus a units library checks dimensional consistency and algebraic rearrangement exactly | Option 1, plus a units dependency |
-| 16 | Physics: problem setup and modelling | 9-12 | Choosing the right model for a described situation is not symbolic | Option 2 or 3 |
+**2. Algebra.** Linear equations and inequalities in one variable, systems of
+two equations, quadratics by every method, polynomial and rational expressions,
+logarithms and exponentials, absolute value, sequences. `AlgebraJudge` covers
+the first of these; the rest are extensions of the same equivalence check.
 
-Still genuinely out of scope under every option: anything requiring us to
-grade handwriting quality, presentation, or a student's prose reasoning.
+**3. Geometry.** Angle chasing, triangle congruence and similarity, circles,
+area, surface area and volume, coordinate geometry, transformations, and
+two-column proofs. The numeric and coordinate parts are symbolic and
+deterministic. **A proof step is a logical claim about a figure and is not
+symbolic**, so proofs are the model path with provenance labelling. This is the
+subject that most needed the architecture decision.
 
-Note: topics 9-11 need a second judging mode. The current judge checks "does line N follow from line N-1". Calculus wants "is this line equivalent to the correct target answer". Both are deterministic; they are just different reference choices. Build it as a `mode` flag, not a separate product.
+**4. Trigonometry.** Unit circle values, identities, equation solving over an
+interval, law of sines and cosines, graph transformations. `sympy.simplify` and
+`trigsimp` decide expression equivalence exactly. Interval solving needs the
+solution set compared rather than a single value.
 
-### Chemistry
+**5. Statistics and probability.** Descriptive statistics, probability rules,
+distributions, confidence intervals, hypothesis test arithmetic, regression
+coefficients. The arithmetic is deterministic and easy. **Choosing the right
+test, reading a distribution, and interpreting a result are judgement calls with
+no symbolic form**, so interpretation is the model path.
 
-RDKit alone is not enough for full chemistry coverage, but each gap has a known deterministic fix. New dependencies are flagged.
+**6. Calculus.** Limits, derivatives through the chain and product rules,
+implicit differentiation, applications of the derivative, definite and
+indefinite integrals through substitution, area between curves. Integration is
+the elegant one: differentiate the student's answer and compare to the
+integrand, since `diff` is always deterministic even where `integrate`
+struggles, which scales past what SymPy can integrate.
 
-| # | Topic | How it gets checked | New tech needed | Effort |
-|---|---|---|---|---|
-| 1 | Molecular structure matching (SMILES equivalence) | Already built (`ChemistryJudge`) | None | Done |
-| 2 | Functional group identification | RDKit substructure match (`HasSubstructMatch` against SMARTS patterns for ester, ether, alcohol, ketone, aldehyde, amine, carboxylic acid) | None, RDKit does this | Small |
-| 3 | Balancing chemical equations | Parse `2H2 + O2 -> 2H2O`, count atoms and charge per side, compare. Pure parsing and arithmetic | None (regex formula parser, ~100 lines) | Small |
-| 4 | Redox half-reactions, electron balance | Same parser plus charge accounting including `e-` | None | Small |
-| 5 | Molar mass and stoichiometry arithmetic | Formula parser plus an atomic-weight table | `periodictable` (pip, tiny, no ML) | Small |
-| 6 | Empirical/molecular formula from percent composition | Deterministic arithmetic against known atomic weights | Same as 5 | Small |
-| 7 | IUPAC naming: student writes a name for a target structure | OPSIN converts the name to a structure, then the existing `ChemistryJudge` compares it. Name-to-structure is a solved deterministic problem | `py2opsin` (pip wrapper around OPSIN, needs Java runtime) | Medium |
-| 8 | Hand-drawn structure recognition (drawing to SMILES) | Gemini vision prompt returning SMILES, exactly the `transcription.py` pattern, feeding the existing judge. Editable-SMILES correction panel is the safety net, same as the math transcription panel | None beyond existing Vertex AI setup. DECIMER/MolScribe exist as ML alternatives but are trained on printed structures, not handwriting; do not bet the demo on them | Large, highest risk |
-| 9 | Significant figures on numeric answers | String-level digit counting, fully deterministic | None | Small |
+Physics is the likely seventh and is deliberately not in the six. Formula
+manipulation and dimensional consistency are exactly checkable with a units
+library; problem setup and modelling are the model path. Add it once the six
+hold.
 
-Out of scope: reaction mechanisms with curved arrows, Lewis dot structure recognition, 3D geometry/VSEPR from drawings, equilibrium calculations beyond plug-in arithmetic.
+Still out of scope under every option: grading handwriting quality,
+presentation, or a student's prose reasoning.
+
+Note: topics 4 and 6 need a second judging mode. The current judge checks "does
+line N follow from line N-1". Calculus and identity work want "is this line
+equivalent to the correct target". Both are deterministic; they are different
+reference choices. Build it as a `mode` flag on `base.py`, not a separate
+product.
+
+### Chemistry: the six
+
+| # | Subject | Authoritative engine | Status |
+|---|---|---|---|
+| 1 | Formulas, moles and stoichiometry | Deterministic | **Built, reachable** |
+| 2 | Chemical equations and balancing | Deterministic | **Built, reachable** |
+| 3 | Redox and electrochemistry | Deterministic | **Built, reachable** |
+| 4 | Solutions, acids, bases and equilibrium | Deterministic | **Built, reachable** |
+| 5 | Molecular structure and bonding | Deterministic | **Built, reachable** |
+| 6 | Organic: functional groups, naming and reactions | Mixed | **Built, reachable** |
+
+**Reachability warning: resolved Aug 5.** This section used to read: *"Subjects
+2, 3, and the functional-group half of 6 are built and tested in the backend
+but cannot be reached from the UI, which only calls `/chemistry/check` and
+`/chemistry/transcribe`. From a student's or a judge's point of view they do
+not exist."*
+
+All six are now reachable. The UI has a two-level subject-then-topic selector
+driving eleven endpoints, and `GET /chemistry/topics` serves the routing table
+from the backend so the frontend cannot drift out of step with what actually
+ships. `tests/test_api_chemistry.py` asserts that every endpoint a topic
+advertises is really mounted, so this specific failure cannot recur silently.
+
+**Read the "Status" column narrowly.** It means the code path is written,
+unit-tested, and reachable from the UI. It does **not** mean it has been seen
+to work on real handwriting. See the handwriting corpus section: that
+measurement still has not been taken, and it is the one that decides what the
+demo can honestly cover.
+
+**1. Formulas, moles and stoichiometry.** Formula parsing, molar mass, percent
+composition, empirical and molecular formula, mole conversions, limiting
+reagent, theoretical and percent yield, significant figures. The formula parser
+from `chemistry_equations.py` already exists; this is that parser plus an
+atomic-weight table plus arithmetic. Needs `periodictable` (pip, tiny, no ML).
+
+**2. Chemical equations and balancing.** Built. Extend with net ionic equations
+and spectator-ion identification, which is the same parser plus a solubility
+table.
+
+**3. Redox and electrochemistry.** Half-reactions and electron balance are
+built. Extend with oxidation-state assignment, which is a deterministic rule
+set, and cell potentials, which is table lookup plus arithmetic.
+
+**4. Solutions, acids, bases and equilibrium.** Molarity and dilution, pH and
+pOH, strong and weak acid calculations, Ka and Kb, buffers and
+Henderson-Hasselbalch, ICE tables, Le Chatelier direction. All of this is
+arithmetic and algebra on known constants, so it is fully deterministic and it
+is a large, genuinely useful chunk of a chemistry course that needs no new
+technology at all. This is the highest value-per-effort subject on either list.
+
+**5. Molecular structure and bonding.** SMILES equivalence is built.
+Hand-drawn structure recognition is built and is the highest-risk piece in the
+repo. Extend with isomer identification, which is canonical-SMILES comparison
+under constraints, and generic structures via the wildcard fix above.
+
+**6. Organic: functional groups, naming and reactions.** Functional group
+identification is built with 8 SMARTS patterns. IUPAC naming needs `py2opsin`,
+a pip wrapper around OPSIN that requires a Java runtime, so gate the feature on
+OPSIN availability rather than making Java a hard requirement for everyone.
+**Reaction prediction and mechanism steps are the model path**, since a
+mechanism step is a claim about electron movement rather than a structure
+comparison. Reaction *products* can often be verified deterministically once
+proposed, which is exactly the verification sandwich.
+
+Out of scope: Lewis dot structure recognition from a drawing, 3D geometry and
+VSEPR from drawings, and curved-arrow mechanism drawing as an input modality
+(mechanism *steps written as structures* are in scope, the arrows are not).
 
 ---
 
 ## Backend
 
-### Judge: algebra depth (backend/judge/algebra.py)
+### Judge: algebra depth (`backend/judge/algebra.py`)
 
 | Done | Task | Detail |
 |------|---|---|
 | [ ] | Allow exponents | Delete the `"^" in text or "**" in text` rejection in `_validated_local_dict` (line ~95). `convert_xor` is already in `TRANSFORMS`, so `^` parses today; only the guard blocks it |
 | [ ] | Allow degree 2 | In `_support_reason`, change `polynomial.degree() > 1` to `> 2` behind a topic flag, and relax the `Pow` rejection for integer exponents on variables |
-| [ ] | Inequalities | `_parse_equation` currently splits on `=` only. Add `<`, `>`, `<=`, `>=` parsing into SymPy relational objects; equivalence means same solution set, and the scalar-multiple check must account for direction flips when the ratio is negative |
-| [ ] | New error classifiers | The classifier design (test a deterministic "repair", claim the category only if the repair makes the step valid) is good; extend it with: `combining_like_terms` (e.g. `3x + 2` copied as `5x`), `dropped_term` (a term in ref vanishes with no operation), `swapped_sides` (lhs/rhs exchanged without negating) |
+| [ ] | Inequalities | `_parse_equation` splits on `=` only. Add `<`, `>`, `<=`, `>=` into SymPy relational objects; equivalence means same solution set, and the scalar-multiple check must account for direction flips when the ratio is negative |
+| [ ] | New error classifiers | The classifier design (test a deterministic "repair", claim the category only if the repair makes the step valid) is good; extend with `combining_like_terms`, `dropped_term`, `swapped_sides` |
 | [ ] | Ordering audit | `_classify` runs sign, distribution, arithmetic, scaling in fixed order. Adding categories changes which fires first; add a test asserting each classifier's canonical example still maps to its own category after the additions |
 
-### Judge: new modules (backend/judge/)
+### Judge: new modules (`backend/judge/`)
 
 | Done | Task | Detail |
 |------|---|---|
-| [ ] | `systems.py` (new) | Two-equation systems. Problem = two reference equations; a step is valid if the step's solution set contains the system's unique solution. Handles substitution and elimination without needing to know which method the student used |
-| [ ] | `calculus.py` (new) | Two functions: `check_derivative(reference_expr, candidate)` comparing against `sympy.diff`, and `check_antiderivative(integrand, candidate)` comparing `sympy.diff(candidate)` against the integrand, with the constant-of-integration handled by checking the difference is constant |
-| [ ] | `expressions.py` (new) | Expression-equivalence judge for simplification chains (polynomials, rational expressions, trig, logs). Each line must be `simplify`-equivalent to the previous. Trig needs `trigsimp` in the comparison; logs need `posify` or explicit positive symbols so `log(ab) = log a + log b` verifies |
-| [x] | `chemistry.py` extend | **Done.** `FunctionalGroupJudge` with 8 SMARTS patterns; exclusions stop an ester counting as an ether or an amide as an amine. Unknown group name raises before any step is checked. |
-| [x] | `chemistry_equations.py` (new) | **Done.** Parser handles nesting, caret charges, state symbols, and `e-`. Inside an equation a charge needs the caret form, since a bare `+` is ambiguous with a term separator. Atoms are compared before charge. |
-| [ ] | `stoichiometry.py` (new) | Molar mass from the same formula parser plus `periodictable` weights; percent-composition and empirical-formula checks are arithmetic on top |
+| [ ] | `systems.py` (new) | Two-equation systems. A step is valid if its solution set contains the system's unique solution. Handles substitution and elimination without knowing which the student used |
+| [ ] | `calculus.py` (new) | `check_derivative` against `sympy.diff`, and `check_antiderivative` comparing `sympy.diff(candidate)` against the integrand, with the constant of integration handled by checking the difference is constant. Add `check_limit` via `sympy.limit` |
+| [ ] | `expressions.py` (new) | Expression equivalence for simplification chains (polynomials, rationals, trig, logs). Trig needs `trigsimp`; logs need `posify` or explicit positive symbols so `log(ab) = log a + log b` verifies |
+| [ ] | `geometry.py` (new) | Numeric and coordinate geometry deterministically. Proof steps route to the model path and return `judged_by="model"` |
+| [ ] | `statistics.py` (new) | Descriptive statistics, probability arithmetic, regression coefficients. Interpretation routes to the model path |
+| [x] | `chemistry.py` extend | **Done.** `FunctionalGroupJudge` with 8 SMARTS patterns; exclusions stop an ester counting as an ether or an amide as an amine. Unknown group name raises before any step is checked |
+| [x] | `chemistry_equations.py` (new) | **Done.** Parser handles nesting, caret charges, state symbols, and `e-`. Inside an equation a charge needs the caret form, since a bare `+` is ambiguous with a term separator. Atoms are compared before charge |
+| [ ] | `stoichiometry.py` (new) | Molar mass from the same formula parser plus `periodictable` weights; percent composition, empirical formula, limiting reagent, and percent yield are arithmetic on top |
+| [ ] | `solutions.py` (new) | Molarity, dilution, pH/pOH, Ka/Kb, Henderson-Hasselbalch, ICE tables. Pure arithmetic, no new dependency. Highest value per effort in chemistry |
 | [ ] | `naming.py` (new) | `py2opsin` name-to-SMILES, then delegate to `ChemistryJudge`. If OPSIN cannot parse the name, that is `parse_error`, not a wrong answer |
-| [ ] | `base.py` | The generic `Judge[ProblemT, StepT, VerdictT]` contract holds for all of the above. Add a shared `mode` concept (step-chain vs target-answer) here rather than per-judge |
+| [ ] | `base.py` | Add a shared `mode` concept (step-chain vs target-answer) here rather than per-judge, and a `judged_by` provenance field on the verdict contract |
 
 ### Transcription and recognition
 
 | Done | Task | Detail |
 |------|---|---|
-| [ ] | `transcription.py` | The prompt already permits `^` and `sqrt()`, so transcription is ahead of the judge. Once exponents/functions are judgeable, extend `_UNICODE_MAP` for superscripts beyond 2-3 and add fraction-bar handling notes to failures.md |
+| [ ] | `transcription.py` | The prompt already permits `^` and `sqrt()`, so transcription is ahead of the judge. Once exponents and functions are judgeable, extend `_UNICODE_MAP` for superscripts beyond 2-3 and add fraction-bar handling notes to `failures.md` |
 | [ ] | `transcription.py` | Confidence: ask Gemini to append a `CONFIDENCE: high/low` token, parse it off, return it in `TranscribeResponse` so the frontend can pre-focus the correction field on low confidence |
-| [ ] | `transcription.py` | Log per-call latency server-side (a simple `time.perf_counter` around the API call, logged), target under 2s p95 |
-| [x] | `structure_recognition.py` (new) | **Done.** Shares `_decode_png`, `_create_client`, and the error types with `transcription.py` rather than copying them. Prompt element list is generated from `SUPPORTED_ATOMIC_NUMBERS`. Note: it still runs with thinking disabled and a 128-token cap, which the architecture section flags as worth changing. |
-| [x] | Failure log discipline | **Done.** `backend/tests/transcription/chemistry_failures.md` exists with the patterns to watch for. Still empty of real samples: fill it. |
+| [ ] | `transcription.py` | Log per-call latency server-side (`time.perf_counter` around the API call), target under 2s p95 |
+| [x] | `structure_recognition.py` (new) | **Done.** Shares `_decode_png`, `_create_client`, and the error types with `transcription.py` rather than copying them. Prompt element list is generated from `SUPPORTED_ATOMIC_NUMBERS`. Still runs with thinking disabled and a 128-token cap, which the cheap-fixes table above corrects |
+| [x] | Failure log discipline | **Done.** `backend/tests/transcription/chemistry_failures.md` exists with the patterns to watch for. Still empty of real samples: fill it |
 
 ### API and schemas
 
 | Done | Task | Detail |
 |------|---|---|
-| [ ] | `schemas.py` | Add: `topic` field on `CheckRequest` (literal enum: linear, inequality, quadratic, system, expression, derivative, integral), `SystemCheckRequest` (two problem equations), `ChemistryEquationRequest`, `StoichiometryRequest`, `NamingRequest`, `StructureTranscribeRequest/Response`, `confidence` on `TranscribeResponse`. Keep changes additive; this file is the shared contract |
-| [ ] | `main.py` | New endpoints: `/check` gains topic routing (one endpoint, judge picked by `topic`, rather than an endpoint per topic), `/chemistry/balance`, `/chemistry/stoichiometry`, `/chemistry/name`, `/chemistry/transcribe`. Keep `main.py` thin: parse, dispatch to judge, shape response |
-| [~] | `hints.py` | **Partly done:** `unbalanced_atoms`, `unbalanced_charge`, `wrong_functional_group`, and `structure_mismatch` have level 2 and 3 templates, and `HintRequest.error_type` was widened to accept them. Still to add, once those judges exist: level 2 and 3 templates per new error category: `combining_like_terms`, `dropped_term`, `swapped_sides`, `direction_flip` (inequalities), `power_rule`, `chain_rule_missing`, `missing_constant` (forgot +C), `unbalanced_atoms`, `unbalanced_charge`, `wrong_functional_group`, `naming_error`, `sig_figs`. The structural guarantee (templates never receive the problem, solution, or student math) must survive every addition; the CI answer-leak tests are the enforcement |
-| [x] | `hints.py` | **Done.** Chemistry categories no longer reach the algebra fallback. A subject-specific *fallback* pair is still not possible, because `HintRequest` carries no subject field and cannot tell which judge produced an unknown category. See hint strategy v2 above, which supersedes this row. |
+| [ ] | `schemas.py` | Add `topic` on `CheckRequest` (literal enum across both subjects), `judged_by` on every verdict, `confidence` on `TranscribeResponse`, `SystemCheckRequest`, `StoichiometryRequest`, `SolutionsRequest`, `NamingRequest`. Keep changes additive; this file is the shared contract. Adding a value to an existing `Literal` is additive, changing or removing one is not |
+| [ ] | `schemas.py` | Widen `HintRequest` for the v3 ladder, and add a `WorkedExample` model (a list of steps plus a technique line, not a paragraph). Nothing on any response model may carry vault data |
+| [ ] | `main.py` | `/check` gains topic routing (one endpoint, judge picked by `topic`, rather than an endpoint per topic). New: `/chemistry/stoichiometry`, `/chemistry/solutions`, `/chemistry/name`. Keep `main.py` thin: parse, dispatch, shape response |
+| [~] | `hints.py` | **Partly done:** chemistry categories have level 2 and 3 templates and `HintRequest.error_type` accepts them. Superseded by hint strategy v3 above; the existing templates become the redaction fallback floor |
 
 ---
 
 ## Frontend
 
-All of this currently lives in one 1906-line `frontend/src/App.jsx`. The refactor is the first task because every other frontend task gets harder without it.
+**Status as of the Aug 5 pull (PRs #9 and #10).** The split has started and is
+nowhere near done. `frontend/src/canvas/geometry.js` now holds
+`distanceToSegment`, `strokeTouchesPoint`, `getStrokeRow`, `segmentIntoLines`,
+`DEFAULT_LINE_HEIGHT`, and `DEFAULT_ERASER_RADIUS`, with
+`canvas/geometry.test.js` beside it. Vitest is installed and `npm test` runs in
+CI. That is genuinely good and it is roughly 70 lines of the file.
+
+`App.jsx` is now **2542 lines**, not the 1906 this file used to say. It grew,
+because chemistry mode landed in it. Extracting the pure geometry helpers did
+not shrink it meaningfully, because the size is in rendering, state, and six
+fetch calls, not in maths helpers. **The split is still a prerequisite, not a
+cleanup**, and it is now more urgent than it was, not less.
+
+Note: `frontend/src/canvas/geometry.js` (drawing helpers) and
+`backend/judge/geometry.py` (the maths subject) are unrelated despite the name.
+Do not let them get confused in conversation.
+
+Tasks are ordered so that two people can work in parallel after task 1 lands.
+
+### 1. Component split (blocking, do first)
 
 | Done | Task | Detail |
 |------|---|---|
-| [ ] | Component split | Extract from `App.jsx`: `canvas/` (stroke capture, `segmentIntoLines`, `getStrokeRow`, `renderLineToPng`), `panels/TranscriptionPanel.jsx` (the editable per-line list), `panels/VerdictHints.jsx` (verdict colors, hint ladder), `ProblemInput.jsx`, `api.js` (the three fetch calls at lines ~505, ~612, ~793). Pure functions like `distanceToSegment` and `strokeTouchesPoint` go to `geometry.js` where they become unit-testable |
-| [ ] | Real segmentation | `getStrokeRow` buckets by vertical center of each stroke into fixed `LINE_HEIGHT` rows. Implement pen-lift plus vertical-gap grouping: a new line starts when the pen touches down clearly below the bounding box of the current line's ink. Keep row-bucketing as the fallback path behind a flag |
-| [ ] | Topic selector | Dropdown or segmented control (linear, inequality, quadratic, system, expression, derivative, integral, chemistry modes). Selected topic goes into the `/check` request's new `topic` field and switches which input UI shows |
-| [ ] | Export ink color | `renderLineToPng` hardcodes `#1a1a2e` ink, but the user can change `penColor` (state at line 215). Export with the drawn color, or force-normalize to dark ink for the vision model, but do it deliberately, not by accident |
-| [ ] | Chemistry mode | Zero chemistry code exists in the frontend. Needed: (a) structure-drawing surface (same stroke canvas, chemistry just needs looser segmentation since a molecule is one 2D figure, not rows), (b) send the cropped drawing to `/chemistry/transcribe`, (c) an editable SMILES correction field, mirroring the math transcription panel, before it goes to `/chemistry/check`, (d) chemistry verdict display reusing the green/red/amber scheme |
-| [ ] | Equation-balancing mode | Typed input, not drawn: a text field for the reaction plays to the parser's strengths and dodges subscript-handwriting recognition entirely. Freehand can come later if transcription proves subscripts reliable |
-| [ ] | Confidence wiring | When `TranscribeResponse.confidence` is low, auto-focus that line's correction field in the transcription panel |
-| [ ] | Hint display | Handle every new error category; unknown categories must still render the fallback hint, never a blank |
-| [ ] | Auto-finish | Send a line automatically after N seconds of pen inactivity below it; keep the Finish Line button as backup |
-| [ ] | Undo and eraser polish | Undo last stroke exists conceptually via `strokeTouchesPoint` erasing; add stroke-level undo history (the strokes array already makes this cheap) |
+| [x] | `canvas/geometry.js` | **Done, PR #9.** The four pure helpers plus the two constants, with tests. `App.jsx` imports them at the top rather than defining them |
+| [ ] | `canvas/render.js` | Still in `App.jsx`: `renderLineToPng` (line 55) and the ruled-row grid drawing (line ~1104). Both are pure given a stroke list and a canvas, so both belong beside `geometry.js` and both are testable. Take the crop maths with them |
+| [ ] | `canvas/StrokeCanvas.jsx` | Stroke capture, pointer handlers, pen state. The canvas should own strokes and expose finished lines, nothing else |
+| [ ] | `panels/TranscriptionPanel.jsx` | The editable per-line list |
+| [ ] | `panels/VerdictHints.jsx` | Verdict colours and the hint ladder |
+| [ ] | `ProblemInput.jsx` | Problem entry, including the subject and topic selector below |
+| [ ] | `api.js` | Six fetch calls now, not three: `/check` (512), `/transcribe` (619), `/chemistry/transcribe` (845), `/chemistry/check` (895), and `/hint` twice (943 and 980). Two call sites for the same endpoint is exactly the duplication this module removes. One module, one place to change a base URL |
+| [ ] | `theme.js` | The `COLORS` object (line ~15) is referenced throughout. Extract it before the panels move, or every panel drags a copy |
+| [ ] | State audit | After the split, write down which component owns `strokes`, `penColor`, `lines`, `verdicts`, and `hintLevel`. Lifting state badly is the usual way a split like this goes wrong |
+| [ ] | Line-count gate | Add a CI check that fails if `App.jsx` exceeds a ceiling, and lower the ceiling as pieces come out. Without it this file grows back |
+
+### 2. Input and canvas quality
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Real segmentation | `getStrokeRow` buckets by vertical centre into fixed `LINE_HEIGHT` rows, which breaks the moment handwriting drifts. Implement pen-lift plus vertical-gap grouping: a new line starts when the pen touches down clearly below the bounding box of the current line's ink. Keep row-bucketing as a fallback behind a flag |
+| [ ] | Problem separators | A student finishes a problem, draws a rough horizontal line, and starts the next one underneath. The app does not register that at all, so problem two reads as a continuation of problem one. Detect a long, roughly horizontal stroke with low vertical variance as a divider rather than as content, and start a new problem past it |
+| [ ] | Auto-finish | Send a line automatically after N seconds of pen inactivity below it. Keep the Finish Line button as a backup. Make N configurable while we tune it |
+| [ ] | Export ink colour | `renderLineToPng` hardcodes `#1a1a2e` (lines 85-86) but `penColor` defaults to `#1f2926` and the user can change it (line 155). So the model already never sees the colour the student drew in. Either export with the drawn colour or force-normalise to dark ink deliberately, and write down which. Normalising is probably right, since a vision model reading pale highlighter is a bad bet |
+| [ ] | Undo and eraser polish | Stroke-level undo history; the strokes array already makes this cheap. Redo too. Eraser should show its radius |
+| [ ] | Pen tools | Width, colour, and a highlighter. Small, and it is most of what makes a canvas feel finished rather than prototyped |
+
+### 3. Subject and topic UI
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Subject and topic selector | Two levels: subject (math, chemistry), then topic from the six under it. Selected topic goes into the `/check` request's `topic` field and switches which input UI shows. Do not build a flat 12-item dropdown |
+| [ ] | Reach the judges we already shipped | **Do this first in this group.** `/chemistry/functional-group` and `/chemistry/balance` are live, tested, and unreachable from the UI. A problem-type selector plus two request shapes in `api.js` turns two finished backend features into two demoable product features |
+| [ ] | Per-topic input surfaces | Structure drawing, typed equation entry for balancing, typed numeric entry for stoichiometry and solutions. Typed input for balancing plays to the parser's strengths and dodges subscript handwriting entirely |
+| [ ] | Structure preview | Render the parsed structure back as a picture beside the drawing, from the RDKit SVG the backend now returns. A student cannot verify `O=C(R)OR` but can verify a drawing instantly. Pair it with the editable SMILES field, do not replace it |
+| [ ] | Chemistry verdict display | Reuse the green/red/amber scheme. Chemistry needs looser segmentation than math: a molecule is one 2D figure, not rows |
+
+### 4. Trust and verdict UI
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Provenance badge | Render `judged_by`. A model verdict must be visually distinct from a proven one, in a way a teacher can read at a glance and a student is not alarmed by. Design this carefully; it is the visible face of the architecture decision |
+| [ ] | Four outcomes, four treatments | `valid`, `invalid`, `unsupported`, `parse_error` must look like four different things. Amber for "we could not check this" must never read as "you got this wrong" |
+| [ ] | Confirm-this-line flow | When self-consistency disagrees, ask the student to confirm the line rather than showing a verdict |
+| [ ] | Confidence wiring | When `TranscribeResponse.confidence` is low, auto-focus that line's correction field |
+
+### 5. Hint UI for the v3 ladder
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Worked-example rendering | Level 2 returns a multi-step solution, not a sentence. Render it as steps with the technique named at the top. Reuse the verdict card styling |
+| [ ] | Level 3 loading state | Level 3 costs a round trip. A proper loading state, and a cancel |
+| [ ] | Terminal-step message | When level 3 is refused on the final step, that is a designed message, not an error. It should feel like a tutor declining, not like a failure |
+| [ ] | Budget display | Show remaining level-3 unlocks for the problem before the student spends one |
+| [ ] | Unknown categories | An unrecognised category must render the fallback hint, never a blank |
+
+### 6. Notebook model (start after chemistry base flow is stable)
+
+The app currently behaves like a single-canvas checker rather than something a
+student would choose for daily homework. The bar is Apple Notes or Samsung
+Notes, because that is what students already use.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Multiple notes | Create, name, and switch between problem sets |
+| [ ] | Folders by subject | Algebra and chemistry live in separate spaces rather than sharing one surface |
+| [ ] | Page model | Discrete pages rather than one canvas that grows forever |
+| [ ] | Persistence | Local first. Strokes are already serialisable |
+| [ ] | Navigation back through past work | Including which lines were flagged and which hints were used |
+
+---
+
+## The handwriting corpus: the tests we do not have
+
+This section exists because the rest of this file was quietly overstating our
+evidence, and someone would eventually have built on that. Read it before
+believing any status marked "Done".
+
+### The honest position
+
+**Every test in this repo mocks the model.** All 182 of them. Constraint 5 says
+no live Gemini calls in the test suite, which is the right rule for CI, but it
+has a consequence nobody wrote down: we have **zero measured evidence about the
+only stage that touches a student's actual handwriting**.
+
+What the 182 tests actually prove: given a clean, correct string like
+`"2x = 8"`, the judges reach the right verdict. That is worth having and it is
+not nothing.
+
+What they do not prove, at all:
+
+- That Gemini reads a real student's handwriting into that clean string.
+- That a hand-drawn molecule becomes the right SMILES.
+- That subscripts, superscripts, charges, fraction bars, or radicals survive.
+- That anything works when handwriting drifts across the ruled rows.
+- That a full problem, written by a human, on a tablet, end to end, works once.
+
+The one real-world test we have run was the Aug 4 ester, and **it failed**. That
+is a sample size of one, with a 100% failure rate, and it is the entire
+empirical basis for the current product. Every "Done" in this file means "the
+code path is written and unit-tested", never "we have seen it work on real
+handwriting".
+
+### What RDKit and SymPy actually do, precisely
+
+Worth stating flatly, because the topic tables above read more optimistically
+than the tools deserve.
+
+**RDKit does not understand chemistry.** It has two relevant capabilities:
+canonical SMILES equality, and SMARTS substructure matching. That is the whole
+list. It has no concept of an R group, no concept of "a student meant the
+general case", no concept of a partially drawn structure, and no tolerance for
+anything it cannot parse into a concrete connected molecule. `MolFromSmiles`
+returns `None` and there is no gradient of understanding beneath that. The Aug 4
+failure was not a bug and it will not be fixed by better code. The wildcard
+normalisation in the cheap-fixes table widens the door, it does not remove it.
+
+**SymPy is the same story in a different domain.** It decides symbolic
+equivalence exactly, and it decides nothing else. It cannot tell you that a step
+was a reasonable move badly executed, cannot judge a geometric argument, and
+cannot interpret. Where the topic tables say "Deterministic", read "SymPy can
+compare two expressions", not "SymPy can teach this subject".
+
+This is the actual case for the AI pivot, and it is stronger than the coverage
+argument: **the deterministic engines are exact about a narrow question, and the
+narrow question is often not the one the student asked.**
+
+### The corpus
+
+Build a real one. 100 math samples and 100 chemistry samples, handwritten on a
+tablet, by the three of us, before we trust any number in this file.
+
+A **sample** is one complete problem written by hand: the problem statement plus
+every working line, three to six lines typically. So 100 math samples is roughly
+400 lines through transcription, which is a real measurement rather than a
+gesture.
+
+#### Math corpus composition (100 samples)
+
+| Subject | Samples | Must include |
+|---|---|---|
+| Elementary and pre-algebra | 20 | Fractions with real fraction bars, mixed numbers, decimals, percent signs, long division layout |
+| Algebra | 30 | Negative signs everywhere, parentheses, `x` vs `×` vs `+` ambiguity, superscript 2, subscripts on variables, systems written as a brace |
+| Trigonometry | 15 | `sin`/`cos`/`tan` written quickly, θ and π, degree symbols, fractions inside functions |
+| Calculus | 15 | Integral signs, `dx`, limit notation, primes on functions, Leibniz `dy/dx` stacked |
+| Geometry | 10 | Angle symbols, triangle symbols, congruence marks, a figure drawn beside the working |
+| Statistics | 10 | x̄ and σ, summation sign, subscripted data points, tables of values |
+
+#### Chemistry corpus composition (100 samples)
+
+| Category | Samples | Must include |
+|---|---|---|
+| Skeletal structures | 25 | Rings, double and triple bonds, implicit carbons, branches, wedge/dash if drawn |
+| Condensed formulas | 15 | `CH3CH2OH` style, written fast, subscripts that sit low rather than small |
+| Generic structures with R groups | 15 | The Aug 4 case and its family: `R`, `R'`, `R1`, `Ar`, `X`. Expect these to fail today; that is the point of measuring |
+| Functional group identification | 10 | Each of the 8 SMARTS patterns we support, drawn at least once |
+| Balancing equations | 15 | Subscripts and coefficients side by side, state symbols, arrows drawn as `->` and as a real arrow |
+| Redox half-reactions | 10 | Superscript charges, `e-`, charges that look like plus signs |
+| Stoichiometry working | 10 | Units, unit cancellation lines, scientific notation |
+
+#### What gets recorded per sample
+
+One row per sample in a committed file, so a prompt change shows exactly what
+regressed:
+
+- The captured PNG, committed alongside.
+- **Human ground-truth transcription**, typed by whoever drew it, at the time
+  they drew it. Not reconstructed later from the model output, which is how
+  corpora quietly become self-fulfilling.
+- The expected verdict per line.
+- The model's actual output, and the judge's actual verdict.
+- Pass or fail, and on fail, which category (see below).
+- Latency for the call.
+
+#### The failure taxonomy that actually matters
+
+Not all failures are equal, and the current four-outcome model already knows
+this. Grade every failure into one of these, because they have completely
+different severities:
+
+| Severity | Failure | Why it matters |
+|---|---|---|
+| **Fatal** | Misread produces a confident `invalid` on a line the student wrote correctly | Telling a correct student they are wrong. This is the failure that ends a classroom trial. Target: **zero** |
+| **Fatal** | Misread produces a confident `valid` on a line the student got wrong | Same trust destruction from the other direction, and the model-judge path makes it newly possible |
+| Serious | Correct reading, but the judge returns `unsupported` or `parse_error` | The Aug 4 ester. Reads as broken, but it is honest and correctable |
+| Minor | Misread that the student fixes in the correction panel | This is what the editable field exists for. Annoying, not dangerous |
+| Minor | Latency over 2s | Demo feel, not correctness |
+
+The headline metric is **not** transcription accuracy. It is the fatal rate. A
+system that misreads 20% of lines but never produces a confident wrong verdict
+is shippable; a system that reads 95% correctly and confidently mis-flags the
+other 5% is not.
+
+### Gates before the demo
+
+Do not present numbers we have not measured. Concretely, before demo day:
+
+- [ ] 100 math samples captured, ground-truthed, and run
+- [ ] 100 chemistry samples captured, ground-truthed, and run
+- [ ] Fatal-failure rate measured and stated, on both corpora
+- [ ] p95 latency measured on real tablet-over-WiFi conditions, not localhost
+- [ ] The demo problems chosen **from samples that passed**, and rehearsed on
+      the actual demo hardware
+- [ ] Every failure filed into `backend/tests/transcription/failures.md` and
+      `chemistry_failures.md`, which currently exist and are empty
+
+### Tasks
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Capture harness | A mode in the app that saves the stroke PNG plus a typed ground-truth field, straight to a folder. Without this, collecting 200 samples by hand is miserable and will not happen |
+| [ ] | Split the work | ~35 math and ~35 chemistry samples each across the three of us. One evening, realistically, once the harness exists |
+| [ ] | Handwriting variety | Deliberately include fast/messy writing, a left-hander if we have one, different pen widths and colours, and lines that drift across ruled rows. A corpus of careful printing measures nothing |
+| [ ] | `run_corpus.py` (new) | Extend the existing `run_samples.py` pattern: run the whole corpus, write per-sample results, diff against `expected.txt`, print the fatal rate as the headline number |
+| [ ] | Fatal-rate assertion | Once a baseline exists, CI cannot run it (network), but a pre-demo script must, and it fails loudly if the fatal rate moved |
+| [ ] | Revisit the topic tables | After the corpus runs, add a measured recognition-risk rating to every topic row. Several "Deterministic" rows will turn out to be unreachable in practice, and it is much better to learn that now |
+| [ ] | Chemistry R-group family | Specifically measure the Aug 4 case class before and after the wildcard fix. It is the one failure we have actually observed and it deserves its own before/after number |
+
+### What this probably means
+
+Expect the corpus to show that chemistry structure recognition is materially
+worse than math transcription, that R groups and charges are the worst
+categories, and that the honest demo scope is narrower than the topic tables
+suggest. That is a good outcome to have on Aug 5 rather than on stage. Plan the
+demo around what the corpus says works, and let the topic tables describe the
+roadmap rather than the present.
 
 ---
 
 ## Testing
 
-Current state: 85 backend test functions across 5 files, CI runs backend pytest on Ubuntu and Windows plus frontend lint and build. Zero frontend unit tests, zero end-to-end tests.
+Current state, counted Aug 5: **182 backend test functions across 8 files**
+(`test_algebra_judge` 42, `test_chemistry_equations` 45, `test_api` 35,
+`test_structure_recognition` 19, `test_functional_group_judge` 15,
+`test_chemistry_judge` 14, `test_hints` 7, `test_transcription` 5). Earlier
+revisions of this file said 85 across 5 and the deck says 89; both are stale,
+the chemistry work roughly doubled the suite. CI runs backend pytest on Ubuntu
+and Windows, plus frontend lint, `npm test`, and build. Frontend testing now
+exists: Vitest installed, `canvas/geometry.test.js` covering the four extracted
+pure helpers (PR #9). Zero end-to-end tests.
 
 | Done | Task | Detail |
 |------|---|---|
-| [ ] | New judge test files | `backend/tests/test_systems_judge.py`, `test_calculus_judge.py`, `test_expressions_judge.py`, `test_chemistry_equations.py`, `test_stoichiometry.py`, `test_naming.py`, `test_structure_recognition.py` (mocked Gemini, same style as `test_transcription.py`) |
-| [ ] | Per-category classifier tests | For every error category the judge can emit, one canonical wrong step that must classify as exactly that category, plus one near-miss that must stay generic. Protects against classifier-ordering regressions |
-| [ ] | Answer-leak tests for every new category | `test_hints.py` currently guards the existing categories; every new template gets the same assertion: no token from any student input can appear in hint text (structurally guaranteed today, keep it provable) |
-| [ ] | Frontend unit tests | Add Vitest. First targets: `segmentIntoLines` (row and pen-lift versions), `getStrokeRow`, `distanceToSegment`, `strokeTouchesPoint`, the PNG-export crop math. These are pure functions; tests are cheap and CI-able with `npm test` added to `.github/workflows/ci.yml` |
-| [ ] | Golden-path e2e smoke | One scripted flow: post a known PNG to `/transcribe` (mocked model), pipe result to `/check`, request all three hint levels, assert the full contract. Catches schema drift between the three endpoints that unit tests miss |
-| [ ] | Sample-set regression harness | `run_samples.py` exists and writes `results.txt`. Add an `expected.txt` alongside the samples and make the script diff against it, so prompt changes show exactly which samples regressed. Add chemistry structure samples in a sibling folder with the same harness |
-| [ ] | Latency assertions | Not in CI (network), but the latency log from `transcription.py` feeds a manual check before demo: p95 under 2s over shared WiFi |
+| [ ] | Answer firewall suite | The adversarial leak tests from the firewall section. This is the highest-priority test work in the repo now |
+| [ ] | Cross-engine agreement | Run the model path over every case the deterministic suite covers and fail on disagreement. This is what makes the hybrid safe |
+| [ ] | New judge test files | `test_systems_judge.py`, `test_calculus_judge.py`, `test_expressions_judge.py`, `test_geometry_judge.py`, `test_statistics_judge.py`, `test_stoichiometry.py`, `test_solutions.py`, `test_naming.py`. Note `test_chemistry_equations.py`, `test_functional_group_judge.py`, and `test_structure_recognition.py` already exist and earlier revisions of this file wrongly listed them as to-do |
+| [ ] | Per-category classifier tests | For every error category a judge can emit, one canonical wrong step that must classify as exactly that category, plus one near-miss that must stay generic |
+| [ ] | Worked-example verification | Test the level 2 loop itself, not a library: feed it deliberately wrong generated solutions (mocked model output) and assert the verifier rejects every one. The failure mode that matters is an unverified example reaching a student, so test the rejection path harder than the happy path |
+| [x] | Frontend test harness | **Done, PR #9.** Vitest installed, `npm test` wired into `.github/workflows/ci.yml`, `canvas/geometry.test.js` covering `segmentIntoLines`, `getStrokeRow`, `distanceToSegment`, `strokeTouchesPoint` |
+| [ ] | Frontend tests, next targets | The PNG-export crop maths once `renderLineToPng` moves out, the pen-lift version of `segmentIntoLines`, and divider detection. Each of these is a pure function and each is a place a silent bug costs a demo |
+| [ ] | Golden-path e2e smoke | One scripted flow: post a known PNG to `/transcribe` (mocked model), pipe to `/check`, request all three hint levels, assert the full contract. Catches schema drift between endpoints |
+| [ ] | Sample-set regression harness | `run_samples.py` exists and writes `results.txt`. Add `expected.txt` and diff against it, so prompt changes show exactly which samples regressed. Add chemistry structure samples in a sibling folder with the same harness |
+| [ ] | Latency assertions | Not in CI (network). The latency log feeds a manual check before demo: p95 under 2s over shared WiFi, measured with the model judge enabled, not just transcription |
+
+**No live Gemini calls in the test suite.** Mock the client the way
+`backend/tests/test_transcription.py` and `test_structure_recognition.py` do.
+Real calls are for genuine recognition-quality testing only, logged in
+`backend/tests/transcription/`.
+
+---
+
+## Domain and hosting (still priority 1)
+
+Right now the app only runs by opening two terminals locally. That changes
+before demo day regardless of what happens with the domain name.
+
+### Domain name
+
+`verity.ai` itself is very likely already taken or held on the aftermarket.
+`.ai` domains run about $70-100/year with a mandatory two-year minimum, so a
+fresh one is $140-200 up front even if the exact name is free. Options,
+cheapest first:
+
+1. The free domain from GitHub's Student Developer Pack (a free `.me` via
+   Namecheap, plus other extensions depending on current partner offers).
+   `verity.me` or similar costs nothing for a year.
+2. A `.dev`, `.app`, or `.io` alternative at $10-20/year (Namecheap, Squarespace
+   Domains, Cloudflare Registrar at-cost).
+3. Skip a custom domain for the SAIL demo entirely. Every host below gives a
+   free subdomain that is perfectly demo-able. Buy the real domain only once you
+   know the product continues past the program.
+4. If `verity.ai` really matters as a brand, check availability and price
+   directly rather than assuming. Aftermarket resale is typically hundreds of
+   dollars and not a 10-day-timeline task.
+
+### Hosting
+
+| Piece | Recommended | Why |
+|---|---|---|
+| Frontend | Vercel or Netlify, free tier | Connect the repo, auto-deploy on push to `main`, free custom domain, zero config for Vite |
+| Backend | Render, free web service tier | No credit card, detects Python automatically, free tier sleeps after inactivity which is fine for a demo you control the timing of |
+| Alternative backend | Railway | Cleaner UI, credit-based free tier; fine for short demo windows, watch usage |
+| Env vars | Set `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `GEMINI_MODEL`, `CORS_ORIGINS` in the platform dashboard, not a committed file | `.env.example` documents exactly what is needed |
+| Vertex AI auth in production | ADC via `gcloud` works locally but not on Render. Needs a service account key or workload identity federation | The one piece needing real research, not just "pick a host" |
+
+Checklist:
+
+- [ ] Decide domain path (free `.me`/subdomain for demo vs. paid for after SAIL)
+- [ ] If buying, register it
+- [ ] Create a Render account, connect the repo, deploy `backend/`
+- [ ] Set up Vertex AI auth for the hosted backend (service account key stored as a Render secret, never committed)
+- [ ] Deploy `frontend/` to Vercel or Netlify, set `VITE_API_BASE_URL` to the Render URL
+- [ ] Update `CORS_ORIGINS` to include the real frontend URL
+- [ ] Point the custom domain (if bought) at the frontend host via DNS
+- [ ] Test the full pipeline end to end on the hosted URL before the demo
+- [ ] Add the live URL to `README.md`
+
+---
+
+## Documentation: bring the story in line
+
+The pivot makes three documents wrong. They are not cosmetic; they are what a
+judge or a teacher reads.
+
+| Done | Doc | What changes |
+|------|---|---|
+| [ ] | `CLAUDE.md` | "AI never judges correctness" and "the hint layer only ever receives a line number and an error category" are both now false. Replace with the answer-firewall rules and the deterministic-preferred routing rule |
+| [ ] | `README.md` | "The AI never grades" and "Hints cannot leak the answer... This is structural" need rewriting to the new guarantee. Add the `judged_by` concept to the architecture section |
+| [ ] | Deck slide 6 | "The AI never decides whether the student is correct" is the line to replace |
+| [ ] | Deck slide 7 | The Hints row ("No model input means no leak path") and the Verdict row both change |
+| [ ] | Deck slide 10 | The whole slide is built on the old guarantee. It becomes the strongest slide in the deck under the new one, because "it solves it and refuses to tell you" is a better story than "it is too limited to tell you" |
+| [ ] | Deck slide 4 | Already says "the hint writer receives the error category and enough context to phrase a relevant hint", which is closer to the new design than to the old code. It only needs the leak mechanism updated |
+| [ ] | Deck slide 11 | Status slide: chemistry is no longer "not yet". Balancing, redox, functional groups, structure recognition, and chemistry mode in the frontend all ship today |
+| [ ] | Deck slides 3 and 12 | "Math now, chemistry next" is out of date, and the roadmap milestones are all either done or superseded |
 
 ---
 
@@ -644,59 +976,403 @@ Current state: 85 backend test functions across 5 files, CI runs backend pytest 
 
 | Done | Item | Action |
 |------|---|---|
-| [x] | `README.md` | Done. Retitled to verity.ai, and PROJECT_NOTES.md plus the default Vite `frontend/README.md` were folded into it. The GitHub repo is now `verity_ai`, so the old product name is gone from the codebase entirely |
-| [ ] | `frontend/README.md` | Untouched default Vite template text ("React + Vite... two official plugins"). Replace with three lines pointing at the root README, or delete |
-| [ ] | `frontend/src/assets/react.svg`, `vite.svg` | Default template assets. Check for references (`grep -r "react.svg" frontend/src`), delete if unused |
-| [ ] | `frontend/src/assets/hero.png` | Verify it is actually rendered somewhere; delete if not |
-| [ ] | `CLAUDE.md`, `backend/tests/transcription/results.txt` | `results.txt` is machine-regenerated output from `run_samples.py` and was just committed; it should be gitignored instead, with `expected.txt` (curated) being the committed artifact. Decide `CLAUDE.md` deliberately |
+| [x] | `README.md` | Done. Retitled to verity.ai; `PROJECT_NOTES.md` and the default Vite `frontend/README.md` folded in. Repo is now `verity_ai`, so the old product name is gone from the codebase |
+| [ ] | `frontend/README.md` | Untouched default Vite template text. Replace with three lines pointing at the root README, or delete |
+| [ ] | `frontend/src/assets/react.svg`, `vite.svg` | Default template assets. `grep -r "react.svg" frontend/src`, delete if unused |
+| [ ] | `frontend/src/assets/hero.png` | Verify it is rendered somewhere; delete if not |
+| [ ] | `backend/tests/transcription/results.txt` | Machine-regenerated output from `run_samples.py`. Gitignore it; `expected.txt` (curated) is the committed artifact |
 | [ ] | `backend/start_backend.ps1` | Intentional backward-compat wrapper around `start-backend.ps1`. Keep |
-| [ ] | `backend/scripts/check_gemini_connection.py` | Correctly excluded from pytest (makes real network calls). Keep, it is the fastest auth sanity check |
-| [ ] | Dependency additions | `backend/requirements.txt` gains `periodictable` (stoichiometry) and `py2opsin` (naming; note it needs a Java runtime, so gate the naming feature on OPSIN availability rather than making Java a hard requirement for everyone) |
+| [ ] | `backend/scripts/check_gemini_connection.py` | Correctly excluded from pytest (real network calls). Keep, it is the fastest auth sanity check |
+| [ ] | Dependency additions | `backend/requirements.txt` gains `periodictable` (stoichiometry) and `py2opsin` (naming; needs a Java runtime, so gate the naming feature on OPSIN availability rather than making Java a hard requirement) |
 
 ---
 
 ## Priority order for the remaining days
 
-Revised Aug 4. Not milestones, just the order that keeps the demo safe.
+Revised Aug 5. Not milestones, just the order that keeps the demo safe.
 
-**Already done since this file was first written:** chemistry equation
-balancing and redox, functional-group identification, hand-drawn structure
-recognition with its failure log, the chemistry endpoints, chemistry hint
-templates, chemistry mode in the frontend, and the repo cleanup and rebrand.
+**Already done:** chemistry equation balancing and redox, functional-group
+identification, hand-drawn structure recognition with its failure log, the
+chemistry endpoints, chemistry hint templates, chemistry mode in the frontend,
+and the repo cleanup and rebrand.
 
-**Blocking everything else, do first:**
+**Blocking, do first:**
 
-0. **Settle the architecture decision** above. It is not a large amount of
-   writing, but every backend and topic task below reads differently depending
-   on the answer, and two people building against two different answers is the
-   most expensive mistake available right now.
+0. **The handwriting corpus.** 200 real samples, captured and measured. This
+   comes before everything, including the firewall, because it is the only way
+   to find out which of the "Done" rows in this file are actually true. Every
+   other priority below is planned against assumptions the corpus will either
+   confirm or destroy, and finding out after we have built on them is the
+   expensive version. The capture harness is a few hours; the capture is one
+   evening across three people.
+
+0b. **The answer firewall.** It replaces the guarantee we are giving up, and
+   every AI-touching task below is unsafe to ship without it. Second only to
+   knowing whether we can read a page at all.
 
 **Then, roughly in parallel:**
 
-1. **Domain and hosting.** Still priority 1 and still blocked on nobody. Get
-   off local terminals and onto a real URL. The Vertex AI auth story on a
-   hosted backend is the one piece needing real research.
-2. **The four cheap fixes** from Option 1: render the structure back as a
-   picture, support generic structures with `*`, stop throttling the chemistry
-   model call, and route to the judge that matches the question. All small, all
-   needed under every option, and together they fix the worst thing a real user
-   has hit so far.
-3. **Frontend component split.** Prerequisite for parallel frontend work, per
-   constraint 8 at the top. Do this before anyone adds another mode to
-   `App.jsx`.
-4. **Hint strategy v2.** The worked-example library is the highest-value
-   product change available: it is what makes hints useful on hard problems,
-   and the pre-generated version costs nothing at runtime.
-5. **Algebra depth** (exponents, quadratics, inequalities, new classifiers).
+1. **The four cheap fixes.** Small, needed under any architecture, and together
+   they fix the worst thing a real user has hit. Render structures as pictures
+   first; it is the single biggest usability win available.
+2. **Frontend component split.** Prerequisite for all parallel frontend work.
+   Nobody adds another mode to `App.jsx` before this lands.
+3. **Domain and hosting.** Still blocked on nobody. Get off local terminals and
+   onto a real URL. Vertex AI auth on a hosted backend is the one piece needing
+   real research.
+4. **Hint ladder v3, levels 1 and 2.** The highest-value product change
+   available. Level 1 is one prompt and turns the weakest thing in the product
+   into a real diagnosis. Level 2 is the generated-and-verified parallel
+   problem, which is the feature people will remember. Ship both before level 3,
+   because level 3 is the only rung that needs the full firewall to be safe.
+5. **Solutions, acids and bases** (`solutions.py`). Highest value per effort on
+   either subject list, no new dependency, entirely deterministic.
+6. **Algebra depth** (exponents, quadratics, inequalities, new classifiers).
    Small diffs to proven code, immediate visible win.
-6. **Calculus judge.** High wow-factor per line of code; the
-   differentiate-to-verify trick is genuinely simple.
+7. **Calculus judge.** High wow-factor per line of code; differentiate-to-verify
+   is genuinely simple.
 
 **Then, once the above holds:**
 
-7. **The multi-problem and note-taking model** from the intuitiveness section.
-   This decides whether a demo can cover more than one problem without
-   awkwardness, so do not leave it to the last week.
-8. **New topics** enabled by the architecture decision: geometry, statistics,
-   physics.
-9. **Naming via OPSIN and stoichiometry.** Nice-to-have breadth.
+8. **Hint level 3** with the terminal gate and the budget, behind everything in
+   step 0.
+9. **The model judge path** with provenance labelling, and the cross-engine
+   agreement suite alongside it, not after it.
+10. **The notebook model.** This decides whether a demo can cover more than one
+    problem without awkwardness, so do not leave it to the last week.
+11. **Geometry proofs, statistics interpretation, organic reactions.** The
+    topics the architecture decision unlocked.
+12. **Naming via OPSIN, stoichiometry breadth, physics.** Nice-to-have breadth.
+
+---
+
+# Chemistry status and what is left — added Aug 5, end of the chemistry pass
+
+Everything above this line is the plan. This section is what actually
+happened, what remains, and how deployment works. Read it first if you are
+picking the work back up.
+
+## What shipped in this pass
+
+All six chemistry subjects are built, tested, and reachable from the UI.
+The backend suite went from **182 tests to 555**; the frontend from 6 to 29.
+
+### The engines
+
+| Module | What it does |
+|---|---|
+| `judge/quantities.py` (new) | Reads a written numeric claim: value, unit, label, sig figs. Handles `500 mL` = `0.5 L` and scientific notation in four spellings, and refuses a line containing two numbers rather than guessing which one was the answer |
+| `judge/numeric.py` (new) | The shared shape of a solved problem. The backend solves first and compares second, which is what makes the answer vault, terminal-step detection, and worked-example verification all fall out for free |
+| `judge/stoichiometry.py` (new) | Molar mass, percent composition, mole conversions, empirical and molecular formula, limiting reagent, theoretical and percent yield. Atomic weights come from RDKit rather than adding the `periodictable` dependency this file originally specified |
+| `judge/solutions.py` (new) | Molarity, dilution, pH/pOH, strong and weak acids and bases, Ka/Kb, buffers, ICE tables solved as an exact quadratic, titration, percent by mass |
+| `judge/redox.py` (new) | Oxidation-state assignment from the standard rule set, and standard cell potentials from a 34-entry table |
+| `judge/net_ionic.py` (new) | Ion table, solubility rules, dissociation, spectator-ion cancellation |
+| `judge/naming.py` (new) | IUPAC naming via OPSIN, gated on availability so Java is not a hard requirement |
+| `judge/chemistry_equations.py` | Extended with an exact rational balancer, the balanced-equation string, and `coefficient_distance` for terminal-step detection |
+| `judge/chemistry.py` | Extended with R-group normalisation, generic-aware SMARTS, `IsomerJudge`, and SVG rendering |
+| `chem_model.py` (new) | The model path for reaction prediction: deterministic checks first, model only for the remainder, asked twice, always labelled `judged_by="model"` |
+
+### The Aug 4 ester
+
+The one real-world failure we had observed is fixed. `normalise_generic_smiles`
+rewrites `R`, `R'`, `R1`, `Ar`, and `X` onto the SMILES wildcard `*`, so
+`O=C(R)OR'` and `*C(=O)O*` both canonicalise to `*OC(*)=O` and compare equal.
+The functional-group patterns gained generic-aware variants, used only when
+the drawing actually contains a wildcard, so the exclusions still hold: a
+generic ether is still not an ester.
+
+`tests/test_generic_structures.py` is the before/after. Every test in it fails
+against the pre-fix judge.
+
+### The four cheap fixes, all done
+
+- **Structures render as pictures.** `/chemistry/render` returns RDKit SVG, and
+  `/chemistry/transcribe` now returns the drawing read back as a picture
+  alongside the SMILES.
+- **Generic structures supported**, as above.
+- **The chemistry model call is no longer throttled.** It ran at 128 output
+  tokens with thinking disabled, inherited from math. `model.py` now holds
+  named per-job budgets, and structure reading gets dynamic thinking.
+- **The UI reaches the judges we already shipped**, plus nine more.
+
+### The answer firewall
+
+All four mechanisms are built and tested: `answer_vault.py`, `redaction.py`,
+the terminal-step gate, and the per-problem level-3 budget in `sessions.py`.
+`tests/test_answer_firewall.py` includes the adversarial suite. Every way we
+could think of to state an answer — assignment shapes, scientific notation,
+unicode minus, fullwidth equals, an interpunct decimal point, digits with
+spaces wedged between them, an equivalent SMILES, the molecular formula — is
+asserted to be blocked.
+
+Two structural tests are worth knowing about, because they fail loudly if
+someone refactors carelessly. One greps `hints.py` and fails if `HintResponse`
+is constructed anywhere but `_finalise`. The other walks every model in
+`schemas.py` recursively and fails if any field could carry vault data.
+
+### Hints v3
+
+Levels 1, 2, and 3 all generate live for chemistry. The level-2 verification
+loop is the important piece: the model returns a worked example *plus a
+machine-checkable spec*, our own engine solves that spec independently, and
+every numeric line of the generated working must match a quantity our solver
+produced. One invented intermediate and the whole example is thrown away.
+`tests/test_hints_v3.py` spends most of its length on that rejection path.
+
+Math is untouched. It still uses the static template ladder, and a test
+asserts the math path never calls a model.
+
+---
+
+## What is left, in the order I would do it
+
+### 1. The handwriting corpus — still the blocking item
+
+**Nothing above has been seen to work on real handwriting.** All 555 tests
+mock the model. The capture harness is built and it is one click, so the
+excuse for not having a corpus is gone:
+
+```powershell
+$env:VERITY_CAPTURE_DIR = "backend/tests/transcription/samples/chemistry"
+$env:VITE_CAPTURE = "1"
+# start the backend and frontend, draw, type what you drew, press Capture Sample
+```
+
+Then measure:
+
+```powershell
+.\backend\venv\Scripts\python.exe backend\tests\transcription\run_chemistry_corpus.py
+```
+
+It prints the **fatal-failure rate** as the headline number — a confident
+verdict on a misread drawing, or a wrong verdict on a correctly read one.
+Target zero. Everything else is recoverable in the correction panel.
+
+100 chemistry samples across three people is one evening. Do it before
+believing any status in this file.
+
+- [ ] 100 chemistry samples captured, ground-truthed, and run
+- [ ] Fatal rate measured and stated
+- [ ] Failures filed into `chemistry_failures.md`
+- [ ] Demo problems chosen **from samples that passed**
+- [ ] Specifically measure the R-group family before and after the wildcard fix
+
+### 2. Run the live check once, end to end
+
+Never yet run against a live model, because the ADC token expired mid-pass:
+
+```powershell
+gcloud auth application-default login
+.\backend\venv\Scripts\python.exe backend\scripts\live_chemistry_check.py
+```
+
+It makes real calls across all six topics, asserts every generated hint is
+leak-free, and asserts every level-2 example passed verification. It prints a
+pass/fail table and exits non-zero on failure. **Run this before the demo.**
+Until it has run once, "hints generate" is an untested claim.
+
+- [ ] `live_chemistry_check.py` passes on all six topics
+- [ ] p95 latency measured over WiFi rather than localhost, against the
+      under-2s target
+
+### 3. Smaller chemistry gaps
+
+- [ ] **Cross-engine agreement suite.** Run the model path over every case the
+      deterministic suite covers and fail on disagreement. This is what makes
+      the hybrid safe, and it is not built.
+- [ ] **Le Chatelier direction.** `wrong_direction` exists as an error category
+      with hint text, but no judge emits it. Either build the judge or drop
+      the category.
+- [ ] **Redox problems open no session.** `topics.js` returns `null` from
+      `session()` for oxidation state and cell potential, so hints there fall
+      back to templates. `answer_vault.py` already has
+      `vault_for_oxidation_state` and `vault_for_cell_potential`; they are
+      simply not wired to an endpoint yet.
+- [ ] **Isomer and reaction problems open no session** either, same fix.
+- [ ] **Net ionic opens a balancing-shaped session**, so its vault holds the
+      balanced equation rather than the net ionic one. `vault_for_net_ionic`
+      exists and is unused.
+- [ ] **Golden-path e2e smoke test.** One scripted flow through transcribe →
+      check → all three hint levels, asserting the full contract. Catches
+      schema drift between endpoints.
+- [ ] **Per-category classifier tests.** For every chemistry error category,
+      one canonical wrong step that must classify as exactly that category.
+
+### 4. Frontend polish
+
+- [ ] `App.jsx` is still around 2400 lines. The chemistry side is extracted
+      into `chemistry/`, `components/`, and `notebook/`, but the math side and
+      all the canvas code are still in one file. The line-count CI gate from
+      the component-split section still does not exist.
+- [ ] `canvas/render.js` — `renderLineToPng` is still in `App.jsx`.
+- [ ] Chemistry reads the **whole page** as one answer. A student writing
+      three lines of stoichiometry working gets one verdict, on whatever was
+      readable. Multi-line chemistry needs the row segmentation math uses.
+- [ ] The structure preview renders backend SVG with `dangerouslySetInnerHTML`.
+      It comes from our own RDKit endpoint and never from the model, so it is
+      safe today — but that invariant deserves a comment and a test.
+
+### 5. Not started at all
+
+- [ ] Lewis structures, VSEPR, mechanism arrows — explicitly out of scope
+- [ ] Gas laws, thermochemistry, kinetics — a seventh and eighth subject
+- [ ] Everything in the math sections above. This pass was chemistry only.
+
+---
+
+## Deployment: how it works, in plain language
+
+### The problem this solves
+
+Running the app today means two terminals, a laptop that must stay awake, and
+re-running `gcloud auth application-default login` whenever the token expires.
+None of that survives contact with a demo.
+
+### The shape of the answer
+
+**One box, one link.**
+
+The app needs Python 3.11, RDKit, SymPy, FastAPI, and Node to build the React
+frontend. All of that was installed on a laptop over weeks. A fresh server in
+a Google datacentre has none of it.
+
+The `Dockerfile` is a **written recipe** for building a small computer from
+scratch: start from clean Linux with Python 3.11, install these system
+libraries, install these Python packages, build the React app, copy everything
+in, run this command to start. Google reads the recipe, follows it once, and
+freezes the result into an **image** — a snapshot of a whole working machine
+with the app already installed. Running the app means booting a copy of that
+snapshot, so it behaves identically every time, on any machine.
+
+Docker does not need to be installed to deploy. Google builds the image in the
+cloud from the recipe. Docker locally is only useful for testing an image
+change in two minutes instead of five.
+
+**This is also why the two-terminal problem disappears.** The recipe builds the
+React app into plain files and places them next to the Python app, and one
+Python process serves both. One box, one URL, and no CORS to configure.
+`main.py` also treats `/api/check` and `/check` as the same endpoint, so the
+frontend needs no build-time configuration and behaves identically in
+development and in production.
+
+### The authentication answer
+
+This was listed above as "the one piece needing real research". It has a clean
+answer.
+
+`gcloud auth application-default login` exists because a laptop has no
+identity of its own. **A Cloud Run service does.** Deployed into
+`cs-sail-2b08`, the service runs as a service account that already exists in
+that project, and the Google client libraries read that identity straight from
+the metadata server. `transcription.py` already does the right thing; not one
+line of application code changes.
+
+- No `gcloud auth` command on the server, ever
+- **No service-account JSON key** — nothing to download, store, rotate, or
+  accidentally commit
+- One IAM grant, `roles/aiplatform.user`, and it is done
+
+This is also why Render, suggested in the hosting section above, is the wrong
+choice despite its free tier: Render sits outside GCP, so it *requires* a
+downloaded key file, which is exactly the thing worth avoiding.
+
+Note that there are **two separate Google logins** on a developer laptop, and
+they expire independently. `gcloud auth login` lets *you* run gcloud commands,
+including deploying. `gcloud auth application-default login` lets the app
+*running on your laptop* call Gemini. The deployed service needs neither.
+
+### What "instances" means
+
+An **instance** is one running copy of the frozen box.
+
+- `--max-instances 1` — never run more than one copy. Two reasons, and the
+  first is a correctness requirement rather than caution: problem sessions,
+  meaning the answer vault and the level-3 budget, live in the serving
+  process's memory. A second instance would hold its own separate set, and a
+  hint request landing on the wrong one would silently fall back to the static
+  template. It is also a hard ceiling on spend, since one box cannot run up a
+  bill.
+- `--min-instances 0` — when nobody is using it, shut the box down entirely.
+  Free while idle. The cost is that the first request after a quiet spell
+  waits a few seconds while a box boots. That is the "cold start", and it is
+  the ordinary trade for "free when nobody is using it".
+- `--min-instances 1` — always keep one box running. Instant for everyone, but
+  billed around the clock whether anyone shows up or not. **This is the only
+  setting here that charges while nothing is happening.** Turn it on the
+  morning of the demo and off afterwards; `deploy.ps1` prints both commands.
+
+### What it costs
+
+| Thing | Cost |
+|---|---|
+| Building the image | Free tier, roughly 5 minutes per deploy |
+| Storing the image | Pennies a month |
+| Running, at min-instances 0 | Only while handling requests. The free tier covers roughly 50 hours of active CPU a month |
+| Gemini calls | Fractions of a cent each — the main variable cost |
+| min-instances 1 | The only thing that bills while idle |
+
+Nothing here charges by the minute for merely existing. Idle is genuinely
+free. Confirm current figures on Google's pricing page, which changes; the
+orders of magnitude are what matter.
+
+Because the billing account is shared across the whole programme, an
+account-wide budget alert would notify fifty people and probably cannot be
+created without permissions we have. Two alternatives that work at project
+scope instead:
+
+- [ ] A budget **scoped to `cs-sail-2b08`**, if billing permissions allow it
+- [ ] A **daily quota cap on the Vertex AI API** for this project, which is a
+      real circuit breaker rather than a notification
+- Failing both: Billing → Reports, filtered to this project, checked
+  occasionally. `--max-instances 1` already bounds the worst case.
+
+### How to deploy
+
+```powershell
+gcloud auth login          # only when the session has expired
+.\deploy.ps1
+```
+
+The script is idempotent. The first run does the one-time setup — enable APIs,
+create the service account, grant the IAM role — and then deploys; every run
+after that just deploys. It checks the exit code after every command and stops
+at the first failure. An earlier version did not, and cheerfully printed a
+success banner for a deploy that had failed at every step.
+
+### Status of the deployment
+
+**The image builds and the container runs correctly.** Verified locally: it
+starts, serves `/health`, serves the frontend, and routes `/api/*` to the
+right endpoints.
+
+One real bug was found and fixed on the way. `python:3.11-slim` does not ship
+`libexpat1`, which RDKit's drawing module needs, so the container crashed at
+*import* time — taking down the whole service rather than one endpoint. The
+Dockerfile now installs it along with the other system libraries RDKit links
+against.
+
+- [x] `Dockerfile`, `.dockerignore`, and `deploy.ps1` written
+- [x] Single-process serving of both the frontend and the API
+- [x] Image builds and the container starts clean
+- [ ] **`.\deploy.ps1` run to completion** — stopped here deliberately
+- [ ] Live URL added to `README.md`
+- [ ] Full pipeline tested on the hosted URL
+- [ ] Optional: Firebase Hosting in front, for a `verity-ai.web.app` address
+      rather than a Cloud Run hash. Ten minutes, free, and a much better link
+      to say out loud at a demo. Do this instead of buying a domain before
+      SAIL; buy one only if the product continues afterwards.
+
+### Known deployment caveats
+
+- **Sessions are in-memory.** Fine at `--max-instances 1`. If that ever rises,
+  sessions need a shared store or Cloud Run session affinity.
+- **`/capture/chemistry` writes to disk**, and a container's filesystem is
+  ephemeral. It is gated on `VERITY_CAPTURE_DIR`, so simply do not set that
+  variable in production. Corpus capture is a local-machine activity anyway.
+- **IUPAC naming needs Java**, which is deliberately not in the image: it adds
+  roughly 200 MB and slows cold start. `judge/naming.py` reports `unsupported`
+  cleanly without it. A commented three-line block in the Dockerfile enables
+  it if naming is part of the demo.
+- **The URL is public and unauthenticated.** Fine while only three people have
+  an unguessable Cloud Run address, and `--max-instances 1` bounds the damage.
+  If the link is ever posted anywhere, add a shared-secret header first.

@@ -1,0 +1,27 @@
+# Keep the build context small. Without this, `gcloud run deploy --source`
+# uploads backend/venv and frontend/node_modules to Cloud Build, which turns
+# a one-minute deploy into a ten-minute one and can fail outright.
+
+**/venv/
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.vitest/
+
+.git/
+.github/
+.claude/
+
+frontend/dist/
+backend/tests/
+backend/scripts/
+
+# Captured handwriting samples are a local research artifact, not part of
+# the running service, and they are large.
+backend/tests/transcription/samples/
+
+*.md
+!README.md
+.env
+.env.*

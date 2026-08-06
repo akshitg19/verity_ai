@@ -69,7 +69,7 @@ def test_prompt_lists_the_judge_supported_elements():
 
 
 def test_prompt_forbids_prose_and_fences():
-    assert "ONLY the SMILES" in PROMPT
+    assert "nothing else on that line" in " ".join(PROMPT.split())
     assert "markdown" in PROMPT
 
 
@@ -82,43 +82,43 @@ def test_prompt_defines_the_unreadable_fallback():
 # --------------------------------------------------------------------------
 
 
-@patch("structure_recognition._create_client")
+@patch("model._create_client")
 def test_transcribe_structure_returns_cleaned_smiles(mock_create_client):
     mock_create_client.return_value.models.generate_content.return_value = (
         mock_response("```\nCCO\n```")
     )
 
-    smiles, unreadable = transcribe_structure(PNG)
+    smiles, unreadable, _confidence, _latency = transcribe_structure(PNG)
 
     assert smiles == "CCO"
     assert unreadable is False
 
 
-@patch("structure_recognition._create_client")
+@patch("model._create_client")
 def test_transcribe_structure_flags_unreadable_drawing(mock_create_client):
     mock_create_client.return_value.models.generate_content.return_value = (
         mock_response("UNREADABLE")
     )
 
-    smiles, unreadable = transcribe_structure(PNG)
+    smiles, unreadable, _confidence, _latency = transcribe_structure(PNG)
 
     assert unreadable is True
     assert smiles == ""
 
 
-@patch("structure_recognition._create_client")
+@patch("model._create_client")
 def test_transcribe_structure_treats_empty_output_as_unreadable(mock_create_client):
     mock_create_client.return_value.models.generate_content.return_value = (
         mock_response("")
     )
 
-    smiles, unreadable = transcribe_structure(PNG)
+    smiles, unreadable, _confidence, _latency = transcribe_structure(PNG)
 
     assert unreadable is True
     assert smiles == ""
 
 
-@patch("structure_recognition._create_client")
+@patch("model._create_client")
 def test_transcribe_structure_does_not_validate_chemistry(mock_create_client):
     """Recognition only reads. Whether the SMILES is valid or in scope is
     the judge's decision, and the student can fix a misread one first."""
@@ -126,7 +126,7 @@ def test_transcribe_structure_does_not_validate_chemistry(mock_create_client):
         mock_response("C1CC")
     )
 
-    smiles, unreadable = transcribe_structure(PNG)
+    smiles, unreadable, _confidence, _latency = transcribe_structure(PNG)
 
     assert smiles == "C1CC"
     assert unreadable is False
@@ -144,7 +144,7 @@ def test_transcribe_structure_rejects_non_png_data():
         transcribe_structure(value)
 
 
-@patch("structure_recognition._create_client")
+@patch("model._create_client")
 def test_transcribe_structure_maps_missing_credentials_to_service_error(
     mock_create_client,
 ):
@@ -157,7 +157,7 @@ def test_transcribe_structure_maps_missing_credentials_to_service_error(
 
 
 @patch(
-    "structure_recognition._create_client",
+    "model._create_client",
     side_effect=ValueError("bad configuration"),
 )
 def test_transcribe_structure_maps_configuration_failure_to_service_error(
@@ -167,7 +167,7 @@ def test_transcribe_structure_maps_configuration_failure_to_service_error(
         transcribe_structure(PNG)
 
 
-@patch("structure_recognition._create_client")
+@patch("model._create_client")
 def test_service_error_does_not_expose_provider_internals(mock_create_client):
     """A raised credential message must not travel out to the caller."""
     mock_create_client.return_value.models.generate_content.side_effect = (

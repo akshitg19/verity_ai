@@ -7,6 +7,8 @@ nothing more.
 """
 
 import re
+from fractions import Fraction
+from math import gcd
 
 from schemas import BalanceLineVerdict, ChemistryEquationStep
 from .base import Judge
@@ -253,6 +255,206 @@ def _balance_verdict(
         )
 
     return BalanceLineVerdict(line_number=line_number, valid=True)
+
+
+# ---------------------------------------------------------------------------
+# Solving for the coefficients.
+#
+# Checking a line balances is arithmetic. Producing the balanced coefficients
+# is linear algebra: one equation per element (plus one for charge), one
+# unknown per species, solved exactly over the rationals. It is what the
+# answer vault needs, what a generated worked example is verified against,
+# and what tells the hint layer how many steps are left before the answer.
+#
+# Done with Fractions rather than SymPy on purpose: this module stays free of
+# both RDKit and SymPy, so a balancing bug can never be a symbolic-algebra
+# bug in disguise.
+# ---------------------------------------------------------------------------
+
+
+class EquationUnbalanceableError(ValueError):
+    """No positive integer coefficients balance this equation."""
+
+
+def _rref(matrix: list[list[Fraction]]) -> tuple[list[list[Fraction]], list[int]]:
+    """Reduced row echelon form, exact. Returns the matrix and pivot columns."""
+    rows = [row[:] for row in matrix]
+    pivots: list[int] = []
+    pivot_row = 0
+    width = len(rows[0]) if rows else 0
+
+    for column in range(width):
+        candidate = next(
+            (r for r in range(pivot_row, len(rows)) if rows[r][column] != 0),
+            None,
+        )
+        if candidate is None:
+            continue
+        rows[pivot_row], rows[candidate] = rows[candidate], rows[pivot_row]
+        scale = rows[pivot_row][column]
+        rows[pivot_row] = [value / scale for value in rows[pivot_row]]
+        for r in range(len(rows)):
+            if r != pivot_row and rows[r][column] != 0:
+                factor = rows[r][column]
+                rows[r] = [
+                    value - factor * pivot_value
+                    for value, pivot_value in zip(rows[r], rows[pivot_row])
+                ]
+        pivots.append(column)
+        pivot_row += 1
+        if pivot_row == len(rows):
+            break
+
+    return rows, pivots
+
+
+def _nullspace(matrix: list[list[Fraction]], width: int) -> list[list[Fraction]]:
+    if not matrix:
+        return [
+            [Fraction(1) if i == j else Fraction(0) for i in range(width)]
+            for j in range(width)
+        ]
+    rows, pivots = _rref(matrix)
+    free_columns = [column for column in range(width) if column not in pivots]
+
+    basis: list[list[Fraction]] = []
+    for free in free_columns:
+        vector = [Fraction(0)] * width
+        vector[free] = Fraction(1)
+        for row_index, pivot_column in enumerate(pivots):
+            vector[pivot_column] = -rows[row_index][free]
+        basis.append(vector)
+    return basis
+
+
+def _species_matrix(
+    left: list[tuple[int, str]],
+    right: list[tuple[int, str]],
+) -> tuple[list[list[Fraction]], int]:
+    """One row per element (and one for charge), one column per species."""
+    species = [formula for _, formula in left] + [formula for _, formula in right]
+    signs = [1] * len(left) + [-1] * len(right)
+
+    parsed = [parse_formula(formula) for formula in species]
+    elements = sorted({symbol for atoms, _ in parsed for symbol in atoms})
+
+    matrix: list[list[Fraction]] = []
+    for element in elements:
+        matrix.append(
+            [
+                Fraction(atoms.get(element, 0) * sign)
+                for (atoms, _), sign in zip(parsed, signs)
+            ]
+        )
+    if any(charge for _, charge in parsed):
+        matrix.append(
+            [Fraction(charge * sign) for (_, charge), sign in zip(parsed, signs)]
+        )
+    return matrix, len(species)
+
+
+def balance_coefficients(equation: str) -> tuple[list[int], list[int]]:
+    """Return the smallest positive integer coefficients that balance it.
+
+    >>> balance_coefficients("H2 + O2 -> H2O")
+    ([2, 1], [2])
+
+    The coefficients already written on the reference equation are ignored,
+    so "2H2 + O2 -> 2H2O" and "H2 + O2 -> H2O" solve identically.
+    """
+    left, right = parse_equation(equation)
+    matrix, width = _species_matrix(left, right)
+    basis = _nullspace(matrix, width)
+
+    if not basis:
+        raise EquationUnbalanceableError(
+            "no combination of coefficients balances this equation"
+        )
+    if len(basis) > 1:
+        # More than one independent solution means the equation as written
+        # does not pin down a single answer (typically two unrelated
+        # reactions written as one). Guessing one would be a confident
+        # wrong answer, which is the failure this product must not have.
+        raise EquationUnbalanceableError(
+            "this equation has more than one independent set of coefficients"
+        )
+
+    vector = basis[0]
+    denominators = [value.denominator for value in vector]
+    multiplier = 1
+    for denominator in denominators:
+        multiplier = multiplier * denominator // gcd(multiplier, denominator)
+    integers = [int(value * multiplier) for value in vector]
+
+    if all(value < 0 for value in integers):
+        integers = [-value for value in integers]
+    if any(value <= 0 for value in integers):
+        raise EquationUnbalanceableError(
+            "balancing this equation would need a zero or negative coefficient"
+        )
+
+    divisor = 0
+    for value in integers:
+        divisor = gcd(divisor, value)
+    if divisor > 1:
+        integers = [value // divisor for value in integers]
+    if any(value > MAX_COEFFICIENT for value in integers):
+        raise EquationUnbalanceableError("balanced coefficients are implausibly large")
+
+    return integers[: len(left)], integers[len(left):]
+
+
+def _format_side(side: list[tuple[int, str]], coefficients: list[int]) -> str:
+    return " + ".join(
+        (formula if coefficient == 1 else f"{coefficient}{formula}")
+        for coefficient, (_, formula) in zip(coefficients, side)
+    )
+
+
+def balanced_equation(equation: str) -> str:
+    """The fully balanced form of an equation, as a string.
+
+    >>> balanced_equation("H2 + O2 -> H2O")
+    '2H2 + O2 -> 2H2O'
+    """
+    left, right = parse_equation(equation)
+    left_coefficients, right_coefficients = balance_coefficients(equation)
+    return (
+        f"{_format_side(left, left_coefficients)} -> "
+        f"{_format_side(right, right_coefficients)}"
+    )
+
+
+def is_balanced(equation: str) -> bool:
+    """True when both atoms and charge already balance as written."""
+    left, right = parse_equation(equation)
+    left_atoms, left_charge = _tally(left)
+    right_atoms, right_charge = _tally(right)
+    return left_atoms == right_atoms and left_charge == right_charge
+
+
+def coefficient_distance(equation: str) -> int | None:
+    """How many coefficients differ from the balanced answer, or None.
+
+    This is what makes terminal-step detection possible for balancing: a
+    line one coefficient away from balanced is the last step, and level 3
+    must decline on it.
+    """
+    left, right = parse_equation(equation)
+    try:
+        left_correct, right_correct = balance_coefficients(equation)
+    except (EquationUnbalanceableError, EquationParseError):
+        return None
+    written = [coefficient for coefficient, _ in left + right]
+    correct = left_correct + right_correct
+    # A student who writes 4H2 + 2O2 -> 4H2O is balanced, just not reduced,
+    # so compare the reduced forms rather than counting that as four errors.
+    divisor = 0
+    for value in written:
+        divisor = gcd(divisor, value)
+    if divisor > 1:
+        written = [value // divisor for value in written]
+    return sum(1 for a, b in zip(written, correct) if a != b)
 
 
 class BalanceJudge(Judge[str, ChemistryEquationStep, BalanceLineVerdict]):

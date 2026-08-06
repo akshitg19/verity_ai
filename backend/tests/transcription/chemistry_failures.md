@@ -27,13 +27,35 @@ molecule*, not merely a different spelling of the same one. Check with
 
 ## Samples
 
-_No real drawings tested yet. The prompt is written but unproven against
-handwriting: everything below the line is what to watch for first, based on
-the patterns the math log already established._
+One real drawing has been tested. It failed, and fixing it is what the
+generic-structure work in `judge/chemistry.py` was for.
 
 | file | drawn | expected | actual | notes |
 |---|---|---|---|---|
-| | | | | |
+| (not kept) | general ester, `R-C(=O)-O-R'`, skeletal | `*OC(*)=O` | `O=C(R)OR` | **Aug 4. Recognition was correct.** The failure was downstream: `MolFromSmiles` returned `None` because there is no atom called R, and the app showed "Could not check". Fixed Aug 5 by `normalise_generic_smiles`, which rewrites the R-group family onto the SMILES wildcard `*`. Covered by `tests/test_generic_structures.py`; every test in that file fails against the pre-fix judge |
+
+The lesson from that single sample is worth more than the sample: **the
+model read the drawing correctly and the product still failed**. Grade every
+future row by which stage broke, because "Gemini misread it" and "we could
+not represent what Gemini read" need completely different fixes.
+
+## Collecting the corpus
+
+Capture is one click rather than a manual file copy, because a miserable
+process produces no corpus:
+
+1. `$env:VERITY_CAPTURE_DIR = "backend/tests/transcription/samples/chemistry"`
+2. Start the backend, open the app, switch to Chemistry.
+3. Draw, type what you drew into the ground-truth field, press **Capture
+   Sample**. The PNG and its sidecar JSON land in that folder.
+4. When you have a batch, run
+   `backend/tests/transcription/run_chemistry_corpus.py`. It prints the
+   fatal-failure rate as the headline number and writes
+   `chemistry_results.txt`.
+
+Ground truth is typed by whoever drew it, at the time they drew it. Never
+reconstruct it later from model output; that is how a corpus quietly becomes
+self-fulfilling.
 
 ## Patterns to watch for
 
