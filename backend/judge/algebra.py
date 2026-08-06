@@ -34,7 +34,7 @@ MAX_NUMBER_DIGITS = 12
 ALLOWED_MATH_RE = re.compile(r"^[0-9a-z+\-*/^=().\s]+$")
 IDENTIFIER_RE = re.compile(r"[a-z]+")
 NUMBER_RE = re.compile(r"\d+")
-TOKEN_RE = re.compile(r"(?:\d+(?:\.\d*)?|\.\d+|[a-z]|[+\-*/=()])")
+TOKEN_RE = re.compile(r"(?:\d+(?:\.\d*)?|\.\d+|[a-z]|[+\-*/^=()])")
 SCIENTIFIC_NOTATION_RE = re.compile(
     r"(?:\d+(?:\.\d*)?|\.\d+)e[+\-]?\d+"
 )
@@ -92,8 +92,6 @@ def _validated_local_dict(text: str) -> dict[str, Symbol]:
         raise ValueError("math input contains unsupported characters")
     if text.count("=") > 1:
         raise ValueError("math input must contain at most one equals sign")
-    if "^" in text or "**" in text:
-        raise UnsupportedMathError("exponents are not supported")
     if SCIENTIFIC_NOTATION_RE.search(text):
         raise UnsupportedMathError("scientific notation is not supported")
     _validate_tokens(text)

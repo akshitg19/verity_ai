@@ -36,6 +36,30 @@ def test_bare_arithmetic_valid():
     v = check("7 + 5", "12")
     assert v[0].valid
 
+def test_numeric_caret_exponent_is_valid():
+    v = check("2^3", "8")
+    assert v[0].valid
+
+
+def test_numeric_double_star_exponent_is_valid():
+    v = check("3**2", "9")
+    assert v[0].valid
+
+
+def test_numeric_exponent_inside_expression_is_valid():
+    v = check("2^3 + 4", "12")
+    assert v[0].valid
+
+
+def test_wrong_numeric_exponent_result_is_invalid():
+    v = check("2^3", "6")
+    assert not v[0].valid
+
+
+def test_variable_exponent_remains_unsupported():
+    v = check("x^2 = 9", "x = 3")
+    assert v[0].line_number == 0
+    assert v[0].error_type == "unsupported"
 
 def test_identity_equation_does_not_crash():
     v = check("x = x", "x = x")
@@ -274,3 +298,5 @@ def test_valid_step_becomes_new_reference():
     # line 2 follows from line 1, not directly from the problem statement
     v = check("3x - 12 = 2x + 5", "x - 17 = 0", "x = 17")
     assert v[0].valid and v[1].valid
+
+
