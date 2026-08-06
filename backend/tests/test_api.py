@@ -157,6 +157,8 @@ def test_chemistry_check_accepts_equivalent_structure() -> None:
                 "valid": True,
                 "error_type": None,
                 "detail": None,
+                "judged_by": "deterministic",
+                "needs_confirmation": False,
                 "status": "valid",
             }
         ],
@@ -313,6 +315,8 @@ def test_transcribe_contract(mock_transcribe) -> None:
     assert response.json() == {
         "text": "3*x - 12 = 2*x + 5",
         "unreadable": False,
+        "confidence": "high",
+        "latency_ms": None,
     }
     mock_transcribe.assert_called_once_with("mock-image")
 
@@ -333,25 +337,37 @@ def test_transcribe_hides_service_error(_mock_transcribe) -> None:
     assert response.json() == {"detail": "Transcription is temporarily unavailable"}
 
 
-@patch("main.transcribe_structure", return_value=("CC(=O)OC", False))
+@patch("main.transcribe_structure", return_value=("CC(=O)OC", False, "high", 812))
 def test_chemistry_transcribe_contract(mock_transcribe) -> None:
     response = client.post(
         "/chemistry/transcribe", json={"image_base64": "mock-image"}
     )
 
     assert response.status_code == 200
-    assert response.json() == {"smiles": "CC(=O)OC", "unreadable": False}
+    body = response.json()
+    assert body["smiles"] == "CC(=O)OC"
+    assert body["unreadable"] is False
+    assert body["confidence"] == "high"
+    assert body["latency_ms"] == 812
+    assert body["generic"] is False
+    # The drawing is rendered back so a student can check a picture rather
+    # than checking a SMILES string.
+    assert body["svg"].lstrip().startswith("<?xml") or "<svg" in body["svg"]
     mock_transcribe.assert_called_once_with("mock-image")
 
 
-@patch("main.transcribe_structure", return_value=("", True))
+@patch("main.transcribe_structure", return_value=("", True, "low", 640))
 def test_chemistry_transcribe_reports_unreadable_drawing(_mock_transcribe) -> None:
     response = client.post(
         "/chemistry/transcribe", json={"image_base64": "mock-image"}
     )
 
     assert response.status_code == 200
-    assert response.json() == {"smiles": "", "unreadable": True}
+    body = response.json()
+    assert body["smiles"] == ""
+    assert body["unreadable"] is True
+    assert body["confidence"] == "low"
+    assert body["svg"] is None
 
 
 @patch(
@@ -396,6 +412,8 @@ def test_functional_group_check_accepts_a_matching_molecule() -> None:
                 "valid": True,
                 "error_type": None,
                 "detail": None,
+                "judged_by": "deterministic",
+                "needs_confirmation": False,
                 "status": "valid",
             }
         ],
@@ -474,6 +492,8 @@ def test_balance_check_accepts_a_balanced_equation() -> None:
                 "valid": True,
                 "error_type": None,
                 "detail": None,
+                "judged_by": "deterministic",
+                "needs_confirmation": False,
                 "status": "valid",
             }
         ],

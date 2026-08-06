@@ -1,0 +1,458 @@
+import { useEffect, useRef } from "react";
+
+import HintLadder from "../components/HintLadder";
+import VerdictCard from "../components/VerdictCard";
+import { COLORS, FONT, RADIUS, SUBJECTS } from "../theme";
+import { TOPICS } from "./topics";
+
+// The chemistry side of the feedback panel.
+//
+// Everything the backend can judge is reachable from here: six topics, and
+// under each the problem types that map onto real endpoints. The old panel
+// could only ask "is this the exact molecule I'm thinking of", which is one
+// of eleven questions the backend can now answer.
+
+const accent = SUBJECTS.chemistry.accent;
+
+function SectionLabel({ children }) {
+  return (
+    <div
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: 0.7,
+        textTransform: "uppercase",
+        color: COLORS.muted,
+        margin: "14px 0 6px",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function TopicPicker({ topicId, onChoose }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: 6,
+      }}
+    >
+      {TOPICS.map((topic) => {
+        const selected = topic.id === topicId;
+        return (
+          <button
+            key={topic.id}
+            type="button"
+            title={topic.blurb}
+            onClick={() => onChoose(topic.id)}
+            style={{
+              padding: "9px 6px",
+              borderRadius: RADIUS.md,
+              border: `1px solid ${selected ? accent : COLORS.border}`,
+              background: selected ? SUBJECTS.chemistry.accentLight : COLORS.surface,
+              color: selected ? accent : COLORS.muted,
+              fontSize: 10.5,
+              fontWeight: selected ? 700 : 500,
+              lineHeight: 1.25,
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <span style={{ fontSize: 15 }}>{topic.glyph}</span>
+            {topic.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProblemFields({ problemType, values, setValue }) {
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      {problemType.fields.map((field) => (
+        <label key={field.name} style={{ display: "block" }}>
+          <div
+            style={{
+              fontSize: 11,
+              color: COLORS.muted,
+              marginBottom: 3,
+              fontWeight: 600,
+            }}
+          >
+            {field.label}
+          </div>
+          {field.type === "select" ? (
+            <select
+              value={values[field.name] ?? field.options[0]}
+              onChange={(event) => setValue(field.name, event.target.value)}
+              style={inputStyle}
+            >
+              {field.options.map((option) => (
+                <option key={option} value={option}>
+                  {option.replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={values[field.name] ?? ""}
+              placeholder={field.placeholder}
+              onChange={(event) => setValue(field.name, event.target.value)}
+              style={{
+                ...inputStyle,
+                fontFamily: /smiles|equation|formula|composition|amounts/i.test(
+                  field.label + field.name
+                )
+                  ? FONT.mono
+                  : FONT.sans,
+              }}
+            />
+          )}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+const inputStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "8px 10px",
+  border: `1px solid ${COLORS.border}`,
+  borderRadius: RADIUS.sm,
+  background: COLORS.surface,
+  color: COLORS.text,
+  fontSize: 13,
+  outline: "none",
+};
+
+function StructurePreview({ preview }) {
+  if (!preview?.svg) return null;
+  return (
+    <div
+      style={{
+        marginTop: 10,
+        padding: 8,
+        borderRadius: RADIUS.md,
+        background: "#fff",
+        border: `1px solid ${COLORS.border}`,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: 0.6,
+          textTransform: "uppercase",
+          color: COLORS.muted,
+          marginBottom: 6,
+        }}
+      >
+        What we read, drawn back
+      </div>
+      <div
+        style={{ display: "grid", placeItems: "center" }}
+        // The SVG comes from our own RDKit render endpoint, never from the
+        // model and never from user text that has not been through it.
+        dangerouslySetInnerHTML={{ __html: preview.svg }}
+      />
+      <div
+        style={{
+          marginTop: 4,
+          fontSize: 11,
+          color: COLORS.muted,
+          textAlign: "center",
+        }}
+      >
+        {preview.formula && <span>{preview.formula}</span>}
+        {preview.generic && (
+          <span style={{ marginLeft: 8, color: accent, fontWeight: 600 }}>
+            generic (R groups read as wildcards)
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function ChemistryPanel({ chemistry, captureEnabled, onCapture }) {
+  const {
+    topic,
+    topicId,
+    chooseTopic,
+    problemType,
+    chooseType,
+    values,
+    setValue,
+    inputMode,
+    ready,
+    answer,
+    editAnswer,
+    read,
+    unreadable,
+    confidence,
+    preview,
+    verdict,
+    problemError,
+    checking,
+    checkAnswer,
+    hintLevel,
+    hint,
+    hintLoading,
+    requestHint,
+    cancelHint,
+    captureNote,
+    setCaptureNote,
+  } = chemistry;
+
+  const answerRef = useRef(null);
+
+  // Low confidence means the reading is a coin flip, so put the cursor where
+  // the student can fix it before they ever see a verdict.
+  useEffect(() => {
+    if (read && (confidence === "low" || unreadable) && answerRef.current) {
+      answerRef.current.focus();
+      answerRef.current.select();
+    }
+  }, [confidence, read, unreadable]);
+
+  const canCheck = Boolean(answer.trim()) && ready && !checking;
+  const showHints = verdict?.status === "invalid";
+
+  return (
+    <div>
+      <SectionLabel>Subject</SectionLabel>
+      <TopicPicker topicId={topicId} onChoose={chooseTopic} />
+      <div
+        style={{
+          marginTop: 6,
+          fontSize: 11.5,
+          color: COLORS.muted,
+          lineHeight: 1.4,
+        }}
+      >
+        {topic.blurb}
+      </div>
+
+      <SectionLabel>Question</SectionLabel>
+      <select
+        value={problemType.id}
+        onChange={(event) => chooseType(event.target.value)}
+        style={{ ...inputStyle, marginBottom: 8, fontWeight: 600 }}
+      >
+        {topic.types.map((type) => (
+          <option key={type.id} value={type.id}>
+            {type.label}
+          </option>
+        ))}
+      </select>
+      <ProblemFields
+        problemType={problemType}
+        values={values}
+        setValue={setValue}
+      />
+
+      {problemError && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: 10,
+            borderRadius: RADIUS.md,
+            background: "#fff7e8",
+            border: "1px solid #a96b1f33",
+            color: "#8a6d3b",
+            fontSize: 12,
+            lineHeight: 1.45,
+          }}
+        >
+          {problemError === "unsupported"
+            ? "That problem is outside what we can check yet. That's our limit, not a mistake in your work."
+            : "We couldn't read that problem. Check the formula or equation above."}
+        </div>
+      )}
+
+      <SectionLabel>
+        {inputMode === "drawing" ? "Your structure" : "Your answer"}
+      </SectionLabel>
+
+      {!read && !answer ? (
+        <div
+          style={{
+            minHeight: 130,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+            padding: 18,
+            boxSizing: "border-box",
+            borderRadius: RADIUS.lg,
+            background: COLORS.background,
+            border: `1px dashed ${COLORS.border}`,
+          }}
+        >
+          <div
+            style={{
+              width: 42,
+              height: 42,
+              display: "grid",
+              placeItems: "center",
+              marginBottom: 10,
+              borderRadius: "50%",
+              background: SUBJECTS.chemistry.accentLight,
+              color: accent,
+              fontSize: 19,
+            }}
+          >
+            {topic.glyph}
+          </div>
+          <div
+            style={{
+              marginBottom: 5,
+              color: COLORS.text,
+              fontSize: 14,
+              fontWeight: 700,
+            }}
+          >
+            {inputMode === "drawing" ? "Draw it on the page" : "Write it on the page"}
+          </div>
+          <div
+            style={{ maxWidth: 240, color: COLORS.muted, fontSize: 12, lineHeight: 1.5 }}
+          >
+            {inputMode === "drawing"
+              ? "Use the whole page for one structure, then press Read Page. R groups are fine — draw R, R', or Ar."
+              : "Write one line, then press Read Page. You can also type it below."}
+          </div>
+        </div>
+      ) : (
+        <VerdictCard
+          title={inputMode === "drawing" ? "Structure" : "Answer"}
+          verdict={verdict}
+          waitingDetail={
+            unreadable
+              ? "We couldn't read that confidently. Correct it below before checking."
+              : confidence === "low"
+              ? "We're not sure we read this correctly — check it before we judge it."
+              : "Ready to check."
+          }
+          onConfirm={checkAnswer}
+        >
+          <input
+            ref={answerRef}
+            type="text"
+            value={answer}
+            placeholder={problemType.answerPlaceholder ?? topic.answerPlaceholder}
+            onChange={(event) => editAnswer(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+                checkAnswer();
+              }
+            }}
+            style={{
+              ...inputStyle,
+              fontFamily: inputMode === "numeric" ? FONT.sans : FONT.mono,
+              borderColor: confidence === "low" ? "#a96b1f" : COLORS.border,
+            }}
+          />
+
+          <StructurePreview preview={preview} />
+
+          <button
+            type="button"
+            onClick={checkAnswer}
+            disabled={!canCheck}
+            style={{
+              width: "100%",
+              marginTop: 8,
+              padding: "9px 14px",
+              background: canCheck ? accent : "#d8ddda",
+              color: "#fff",
+              border: "none",
+              borderRadius: RADIUS.sm,
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: canCheck ? "pointer" : "not-allowed",
+            }}
+          >
+            {checking
+              ? "Checking…"
+              : !ready
+              ? "Fill in the question above first"
+              : "Check it"}
+          </button>
+        </VerdictCard>
+      )}
+
+      {showHints && (
+        <HintLadder
+          level={hintLevel}
+          hint={hint?.hint}
+          workedExample={hint?.worked_example}
+          terminalStep={hint?.terminal_step}
+          levelThreeRemaining={hint?.level_3_remaining}
+          source={hint?.source}
+          resource={hint?.resource}
+          loading={hintLoading}
+          onRequest={requestHint}
+          onCancel={cancelHint}
+        />
+      )}
+
+      {captureEnabled && (
+        <div
+          style={{
+            marginTop: 16,
+            paddingTop: 12,
+            borderTop: `1px dashed ${COLORS.border}`,
+          }}
+        >
+          <SectionLabel>Corpus capture</SectionLabel>
+          <div
+            style={{
+              fontSize: 11.5,
+              color: COLORS.muted,
+              lineHeight: 1.45,
+              marginBottom: 6,
+            }}
+          >
+            Type what you actually drew, then save it. Ground truth has to come
+            from you, not from what the model read back.
+          </div>
+          <input
+            type="text"
+            value={captureNote}
+            placeholder="note, e.g. skeletal, crowded ring, fast handwriting"
+            onChange={(event) => setCaptureNote(event.target.value)}
+            style={{ ...inputStyle, marginBottom: 6 }}
+          />
+          <button
+            type="button"
+            onClick={onCapture}
+            style={{
+              width: "100%",
+              padding: "8px 14px",
+              borderRadius: RADIUS.sm,
+              border: `1px solid ${COLORS.border}`,
+              background: COLORS.surface,
+              color: COLORS.text,
+              fontWeight: 600,
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            Capture sample
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
