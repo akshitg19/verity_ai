@@ -113,10 +113,19 @@ class WorkedSolution:
     def match(self, written: Quantity) -> SolvedStep | None:
         """The step this written quantity states, if any.
 
-        A label is used to disambiguate, never to reject: a student who
-        writes "n = 0.125" when 0.125 is the molarity has still written a
-        number the working produces, and calling that a mistake would be
-        exactly the confident-wrong verdict the product must never give.
+        An unrecognised label never rejects. A student who writes "n = 0.125"
+        when 0.125 is the molarity has still written a number the working
+        produces, and calling that a mistake would be exactly the
+        confident-wrong verdict this product must never give. So a label the
+        solution does not know falls through to matching on value alone.
+
+        A label the solution *does* know is different, and this used to fall
+        through too. On a pH problem the answer group holds pH, pOH, [H+] and
+        [OH-], so a student writing "pH = 12.00" when the pH is 2.00 matched
+        the pOH step, which is 12.00, and was told they were right. That is
+        the fatal failure in this file's own taxonomy: a confident valid on a
+        wrong line. Naming a quantity we computed and giving it a different
+        value is now a mismatch, full stop.
         """
         labelled = [
             step
@@ -127,10 +136,6 @@ class WorkedSolution:
         for step in labelled or self.steps:
             if quantities_match(step.quantity, written):
                 return step
-        if labelled:
-            for step in self.steps:
-                if quantities_match(step.quantity, written):
-                    return step
         return None
 
     def is_terminal(self, step: SolvedStep) -> bool:
