@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { COLORS, RADIUS, SHADOW, SUBJECTS } from "../theme";
 import Logo from "./Logo";
+import PageStrip from "../notebook/PageStrip";
 
 const PEN_WIDTHS = [
   { label: "Extra thin", value: 1.5 },
@@ -248,19 +249,12 @@ export default function WorkspaceToolbar({
             {notebook.activeNote.title}
           </div>
           <div style={{ color: COLORS.muted, fontSize: 11, marginTop: 2, fontFamily: "sans-serif" }}>
-            Page {notebook.pageIndex + 1} of {notebook.pageCount}
-            <button
-              type="button"
-              title="Add a page"
-              aria-label="Add a page"
-              onClick={notebook.addPage}
-              style={{ marginLeft: 6, border: "none", background: "transparent", color: COLORS.primary, fontSize: 13, cursor: "pointer", padding: 0, lineHeight: 1 }}
-            >
-              +
-            </button>
+            {SUBJECTS[mode].label}
           </div>
         </div>
       </div>
+
+      <PageStrip notebook={notebook} mode={mode} />
 
       <div style={{ display: "flex", flexShrink: 0, padding: 3, gap: 2, borderRadius: RADIUS.md, background: COLORS.background, border: `1px solid ${COLORS.border}` }}>
         {[{ value: "math", label: "Math" }, { value: "chemistry", label: "Chemistry" }].map((option) => {

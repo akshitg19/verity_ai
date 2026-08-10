@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // is a JSON round-trip and needs no backend, no account, and no network.
 
 const STORAGE_KEY = "verity.notebook.v1";
+const MAX_FOLDERS = 40;
 const MAX_NOTES = 200;
 
 const now = () => Date.now();
@@ -21,10 +22,15 @@ function blankPage() {
   return { id: newId(), strokes: [] };
 }
 
-function blankNote(subject, title) {
+function blankFolder(subject, name) {
+  return { id: newId(), subject, name: name || "New folder", createdAt: now() };
+}
+
+function blankNote(subject, title, folderId = null) {
   return {
     id: newId(),
     subject,
+    folderId,
     title: title || (subject === "chemistry" ? "Chemistry" : "Math"),
     pages: [blankPage()],
     activePageId: null,
@@ -53,10 +59,18 @@ function load() {
 
 function initial() {
   const stored = load();
-  if (stored) return stored;
+  if (stored) {
+    // Migration: notes written before folders existed have no folderId, and
+    // null means "loose in this subject", which is exactly where they were.
+    return {
+      folders: [],
+      ...stored,
+      notes: stored.notes.map((note) => ({ folderId: null, ...note })),
+    };
+  }
   const math = blankNote("math", "First problem");
   const chemistry = blankNote("chemistry", "First structure");
-  return { notes: [math, chemistry], activeNoteId: math.id };
+  return { folders: [], notes: [math, chemistry], activeNoteId: math.id };
 }
 
 export default function useNotebook() {
@@ -84,6 +98,9 @@ export default function useNotebook() {
     activeNote.pages.find((page) => page.id === activeNote.activePageId) ??
     activeNote.pages[0];
 
+  // `folders` keeps its old shape, notes grouped by subject, because App and
+  // the toolbar both index it by subject. The user-created folders are a
+  // separate structure layered on top.
   const folders = useMemo(() => {
     const grouped = { math: [], chemistry: [] };
     for (const note of notes) {
@@ -94,6 +111,31 @@ export default function useNotebook() {
     }
     return grouped;
   }, [notes]);
+
+  // What the sidebar renders for one subject: the folders a student made,
+  // each with its notes, plus whatever is still loose at the top level.
+  const treeFor = useCallback(
+    (subject) => {
+      const subjectNotes = (folders[subject] ?? []);
+      const subjectFolders = (state.folders ?? [])
+        .filter((folder) => folder.subject === subject)
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .map((folder) => ({
+          ...folder,
+          notes: subjectNotes.filter((note) => note.folderId === folder.id),
+        }));
+      const known = new Set(subjectFolders.map((folder) => folder.id));
+      return {
+        folders: subjectFolders,
+        // A note whose folder was deleted falls back to loose rather than
+        // disappearing from the sidebar entirely.
+        loose: subjectNotes.filter(
+          (note) => !note.folderId || !known.has(note.folderId)
+        ),
+      };
+    },
+    [folders, state.folders]
+  );
 
   const update = useCallback((noteId, change) => {
     setState((current) => ({
@@ -130,15 +172,51 @@ export default function useNotebook() {
   );
 
   const createNote = useCallback(
-    (forSubject = "math", title) => {
-      const note = blankNote(forSubject, title);
+    (forSubject = "math", title, folderId = null) => {
+      const note = blankNote(forSubject, title, folderId);
       setState((current) => ({
+        ...current,
         notes: [note, ...current.notes].slice(0, MAX_NOTES),
         activeNoteId: note.id,
       }));
       return note;
     },
     []
+  );
+
+  const createFolder = useCallback((subject, name) => {
+    const folder = blankFolder(subject, name);
+    setState((current) => ({
+      ...current,
+      folders: [...(current.folders ?? []), folder].slice(0, MAX_FOLDERS),
+    }));
+    return folder;
+  }, []);
+
+  const renameFolder = useCallback((folderId, name) => {
+    setState((current) => ({
+      ...current,
+      folders: (current.folders ?? []).map((folder) =>
+        folder.id === folderId ? { ...folder, name: name.slice(0, 60) } : folder
+      ),
+    }));
+  }, []);
+
+  // Deleting a folder keeps its notes. Losing a term of homework because a
+  // folder was tidied away is not a trade worth offering.
+  const deleteFolder = useCallback((folderId) => {
+    setState((current) => ({
+      ...current,
+      folders: (current.folders ?? []).filter((folder) => folder.id !== folderId),
+      notes: current.notes.map((note) =>
+        note.folderId === folderId ? { ...note, folderId: null } : note
+      ),
+    }));
+  }, []);
+
+  const moveNoteToFolder = useCallback(
+    (noteId, folderId) => update(noteId, { folderId: folderId ?? null }),
+    [update]
   );
 
   const openNote = useCallback((noteId) => {
@@ -155,9 +233,10 @@ export default function useNotebook() {
       const remaining = current.notes.filter((note) => note.id !== noteId);
       if (!remaining.length) {
         const replacement = blankNote("math", "First problem");
-        return { notes: [replacement], activeNoteId: replacement.id };
+        return { ...current, notes: [replacement], activeNoteId: replacement.id };
       }
       return {
+        ...current,
         notes: remaining,
         activeNoteId:
           current.activeNoteId === noteId ? remaining[0].id : current.activeNoteId,
@@ -219,6 +298,12 @@ export default function useNotebook() {
   return {
     notes,
     folders,
+    folderList: state.folders ?? [],
+    treeFor,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    moveNoteToFolder,
     activeNote,
     activePage,
     pageIndex: activeNote.pages.findIndex((page) => page.id === activePage.id),
