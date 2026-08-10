@@ -3,6 +3,8 @@ import { useEffect, useRef } from "react";
 import HintLadder from "../components/HintLadder";
 import VerdictCard from "../components/VerdictCard";
 import { COLORS, FONT, RADIUS, SUBJECTS } from "../theme";
+import StructurePreviewCard from "./StructurePreviewCard";
+import WrittenChemistrySteps from "./WrittenChemistrySteps";
 import { TOPICS } from "./topics";
 
 // The chemistry side of the feedback panel.
@@ -134,55 +136,6 @@ const inputStyle = {
   outline: "none",
 };
 
-function StructurePreview({ preview }) {
-  if (!preview?.svg) return null;
-  return (
-    <div
-      style={{
-        marginTop: 10,
-        padding: 8,
-        borderRadius: RADIUS.md,
-        background: "#fff",
-        border: `1px solid ${COLORS.border}`,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: 0.6,
-          textTransform: "uppercase",
-          color: COLORS.muted,
-          marginBottom: 6,
-        }}
-      >
-        What we read, drawn back
-      </div>
-      <div
-        style={{ display: "grid", placeItems: "center" }}
-        // The SVG comes from our own RDKit render endpoint, never from the
-        // model and never from user text that has not been through it.
-        dangerouslySetInnerHTML={{ __html: preview.svg }}
-      />
-      <div
-        style={{
-          marginTop: 4,
-          fontSize: 11,
-          color: COLORS.muted,
-          textAlign: "center",
-        }}
-      >
-        {preview.formula && <span>{preview.formula}</span>}
-        {preview.generic && (
-          <span style={{ marginLeft: 8, color: accent, fontWeight: 600 }}>
-            generic (R groups read as wildcards)
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function ChemistryPanel({ chemistry, captureEnabled, onCapture }) {
   const {
     topic,
@@ -196,11 +149,15 @@ export default function ChemistryPanel({ chemistry, captureEnabled, onCapture })
     ready,
     answer,
     editAnswer,
+    lines,
+    editLine,
     read,
     unreadable,
     confidence,
     preview,
     verdict,
+    verdictsByLine,
+    firstWrongRow,
     problemError,
     checking,
     checkAnswer,
@@ -218,14 +175,22 @@ export default function ChemistryPanel({ chemistry, captureEnabled, onCapture })
   // Low confidence means the reading is a coin flip, so put the cursor where
   // the student can fix it before they ever see a verdict.
   useEffect(() => {
-    if (read && (confidence === "low" || unreadable) && answerRef.current) {
+    if (
+      inputMode === "drawing" &&
+      read &&
+      (confidence === "low" || unreadable) &&
+      answerRef.current
+    ) {
       answerRef.current.focus();
       answerRef.current.select();
     }
-  }, [confidence, read, unreadable]);
+  }, [confidence, inputMode, read, unreadable]);
 
-  const canCheck = Boolean(answer.trim()) && ready && !checking;
-  const showHints = verdict?.status === "invalid";
+  const canCheck = inputMode === "drawing" && Boolean(answer.trim()) && ready && !checking;
+  const showHints =
+    inputMode === "drawing"
+      ? verdict?.status === "invalid"
+      : firstWrongRow !== null && verdictsByLine.get(firstWrongRow)?.status === "invalid";
 
   return (
     <div>
@@ -283,7 +248,58 @@ export default function ChemistryPanel({ chemistry, captureEnabled, onCapture })
         {inputMode === "drawing" ? "Your structure" : "Your answer"}
       </SectionLabel>
 
-      {!read && !answer ? (
+      {inputMode !== "drawing" ? (
+        lines.length === 0 ? (
+          <div
+            style={{
+              minHeight: 130,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              padding: 18,
+              boxSizing: "border-box",
+              borderRadius: RADIUS.lg,
+              background: COLORS.background,
+              border: `1px dashed ${COLORS.border}`,
+            }}
+          >
+            <div
+              style={{
+                width: 42,
+                height: 42,
+                display: "grid",
+                placeItems: "center",
+                marginBottom: 10,
+                borderRadius: "50%",
+                background: SUBJECTS.chemistry.accentLight,
+                color: accent,
+                fontSize: 19,
+              }}
+            >
+              {topic.glyph}
+            </div>
+            <div style={{ marginBottom: 5, color: COLORS.text, fontSize: 14, fontWeight: 700 }}>
+              Write one row at a time
+            </div>
+            <div style={{ maxWidth: 240, color: COLORS.muted, fontSize: 12, lineHeight: 1.5 }}>
+              Finish each chemistry row before moving lower. Each row is read,
+              editable, and checked as its own step.
+            </div>
+          </div>
+        ) : (
+          <WrittenChemistrySteps
+            lines={lines}
+            verdictsByLine={verdictsByLine}
+            inputMode={inputMode}
+            ready={ready}
+            checking={checking}
+            onEdit={editLine}
+            onCheck={checkAnswer}
+          />
+        )
+      ) : !read && !answer ? (
         <div
           style={{
             minHeight: 130,
@@ -329,7 +345,7 @@ export default function ChemistryPanel({ chemistry, captureEnabled, onCapture })
           >
             {inputMode === "drawing"
               ? "Use the whole page for one structure, then press Read Page. R groups are fine — draw R, R', or Ar."
-              : "Write one line, then press Read Page. You can also type it below."}
+              : "Write one row, then press Read Page. You can also type it below."}
           </div>
         </div>
       ) : (
@@ -364,7 +380,7 @@ export default function ChemistryPanel({ chemistry, captureEnabled, onCapture })
             }}
           />
 
-          <StructurePreview preview={preview} />
+          <StructurePreviewCard preview={preview} />
 
           <button
             type="button"

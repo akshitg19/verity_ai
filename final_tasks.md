@@ -1200,17 +1200,19 @@ Until it has run once, "hints generate" is an untested claim.
 
 ### 4. Frontend polish
 
-- [ ] `App.jsx` is still around 2400 lines. The chemistry side is extracted
-      into `chemistry/`, `components/`, and `notebook/`, but the math side and
-      all the canvas code are still in one file. The line-count CI gate from
-      the component-split section still does not exist.
-- [ ] `canvas/render.js` — `renderLineToPng` is still in `App.jsx`.
-- [ ] Chemistry reads the **whole page** as one answer. A student writing
-      three lines of stoichiometry working gets one verdict, on whatever was
-      readable. Multi-line chemistry needs the row segmentation math uses.
-- [ ] The structure preview renders backend SVG with `dangerouslySetInnerHTML`.
-      It comes from our own RDKit endpoint and never from the model, so it is
-      safe today — but that invariant deserves a comment and a test.
+- [x] `App.jsx` now coordinates the major modes while canvas input, math
+      workflow, and panel details live in focused hooks/components. The CI
+      line-count gate is active with a 260-line ceiling and an extraction-first
+      failure message.
+- [x] `canvas/render.js` owns `renderLineToPng`, including the recognition
+      dark-ink normalization, crop bounds, scaling, and asynchronous PNG export.
+- [x] Written chemistry uses the same row segmentation as math. Each readable
+      row becomes an ordered editable step; editing/removing a row invalidates
+      that row and downstream verdicts, while structure drawings remain one
+      whole-page figure.
+- [x] The structure preview keeps the RDKit SVG trust-boundary comment and
+      requires an explicit RDKit-render marker before using
+      `dangerouslySetInnerHTML`, with focused source-invariant coverage.
 
 ### 5. Not started at all
 
