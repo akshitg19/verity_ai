@@ -3,9 +3,12 @@ export function orderedChemistryLines(lines) {
 }
 
 export function readableChemistryLines(lines) {
-  return orderedChemistryLines(lines).filter(
-    (line) => line.text.trim() && !line.unreadable
-  );
+  const readable = [];
+  for (const line of orderedChemistryLines(lines)) {
+    if (!line.text.trim() || line.unreadable) break;
+    readable.push(line);
+  }
+  return readable;
 }
 
 export function buildChemistrySteps(lines) {

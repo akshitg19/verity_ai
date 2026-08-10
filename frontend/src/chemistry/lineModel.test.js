@@ -64,6 +64,28 @@ describe("written chemistry line model", () => {
     expect(mapped.has(7)).toBe(false);
   });
 
+  it("does not treat rows after an unreadable gap as adjacent steps", () => {
+    const gappedLines = [
+      { row: 1, text: "first", unreadable: false },
+      { row: 4, text: "", unreadable: true },
+      { row: 7, text: "third", unreadable: false },
+    ];
+
+    expect(buildChemistrySteps(gappedLines)).toEqual([
+      { line_number: 1, smiles: "first" },
+    ]);
+    expect(rowForChemistryLineNumber(gappedLines, 2)).toBe(null);
+    expect(
+      mapChemistryVerdicts(
+        [
+          { line_number: 1, status: "valid" },
+          { line_number: 2, status: "invalid" },
+        ],
+        gappedLines
+      ).has(7)
+    ).toBe(false);
+  });
+
   it("rejects stale responses after a row edit or a newer request", () => {
     expect(isStaleLineResponse(2, 3, 1, 1)).toBe(true);
     expect(isStaleLineResponse(3, 3, 1, 2)).toBe(true);

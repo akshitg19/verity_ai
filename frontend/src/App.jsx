@@ -23,6 +23,7 @@ export default function App() {
   const [showNotebook, setShowNotebook] = useState(false);
   const swipeStart = useRef(null);
   const loadedPageRef = useRef(null);
+  const pendingPageLoadRef = useRef(null);
   const captureEnabled = import.meta.env.VITE_CAPTURE === "1";
 
   const canvasMode = mode === "chemistry" && chemistry.isDrawing ? "structure" : "rows";
@@ -48,6 +49,7 @@ export default function App() {
     const pageId = notebook.activePage.id;
     if (loadedPageRef.current === pageId) return;
     loadedPageRef.current = pageId;
+    pendingPageLoadRef.current = pageId;
     canvas.loadStrokes(notebook.activePage.strokes ?? []);
     math.clear();
     chemistry.clearAnswer();
@@ -57,9 +59,13 @@ export default function App() {
 
   useEffect(() => {
     if (loadedPageRef.current !== notebook.activePage.id) return;
+    if (pendingPageLoadRef.current === notebook.activePage.id) {
+      pendingPageLoadRef.current = null;
+      return;
+    }
     notebook.saveStrokes(canvas.strokes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvas.strokes]);
+  }, [canvas.strokes, notebook.activePage.id]);
 
   useEffect(() => {
     const verdictStatus = chemistry.verdict?.status ?? (chemistry.verdict?.valid ? "valid" : null);

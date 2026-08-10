@@ -121,6 +121,20 @@ export default function useCanvas({
     return index === -1 ? null : index + 1;
   };
 
+  const reconcileActiveRow = (affectedRow) => {
+    if (isStructure) return;
+    const remainingRows = [...inkIndexRef.current.rows.keys()].sort(
+      (left, right) => left - right
+    );
+    const nextActiveRow = inkIndexRef.current.rows.has(affectedRow)
+      ? affectedRow
+      : remainingRows[remainingRows.length - 1] ?? null;
+    activeRowRef.current = nextActiveRow;
+    setActiveLineNumber(
+      nextActiveRow === null ? null : getLineNumberForRow(nextActiveRow)
+    );
+  };
+
   const notifyRowReady = useCallback((row) => {
     if (row === null || row === undefined) return;
     const rowStrokes = inkIndexRef.current.rows.get(row);
@@ -184,7 +198,10 @@ export default function useCanvas({
 
       const row = getStrokeRow(removedStroke);
       if (isStructure) onStructureChangedRef.current();
-      else notifyRowEdited(row);
+      else {
+        notifyRowEdited(row);
+        reconcileActiveRow(row);
+      }
       return;
     }
 
@@ -317,7 +334,10 @@ export default function useCanvas({
     drawOverlayFrameRef.current();
 
     if (isStructure) onStructureChangedRef.current();
-    else notifyRowEdited(affectedRow);
+    else {
+      notifyRowEdited(affectedRow);
+      reconcileActiveRow(affectedRow);
+    }
   };
 
   const clearPage = () => {
@@ -362,10 +382,6 @@ export default function useCanvas({
     if (rowIdleTimerRef.current) {
       clearTimeout(rowIdleTimerRef.current);
       rowIdleTimerRef.current = null;
-    }
-    if (activeRowRef.current !== null) {
-      notifyRowReady(activeRowRef.current);
-      return;
     }
     for (const row of [...inkIndexRef.current.rows.keys()].sort((left, right) => left - right)) {
       notifyRowReady(row);

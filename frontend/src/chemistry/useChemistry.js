@@ -82,6 +82,7 @@ export default function useChemistry() {
 
   const requestId = useRef(0);
   const hintRequestId = useRef(0);
+  const previewRequestId = useRef(0);
   const lineRequestIds = useRef(new Map());
   const lineVersions = useRef(new Map());
 
@@ -93,11 +94,6 @@ export default function useChemistry() {
 
   // -- invalidation -------------------------------------------------------
 
-  const invalidateRequests = useCallback(() => {
-    requestId.current += 1;
-    hintRequestId.current += 1;
-  }, []);
-
   const clearHints = useCallback(() => {
     hintRequestId.current += 1;
     setHintLevel(0);
@@ -107,6 +103,7 @@ export default function useChemistry() {
 
   const clearVerdict = useCallback(() => {
     requestId.current += 1;
+    setChecking(false);
     setVerdict(null);
     setVerdictsByLine(new Map());
     setFirstWrongRow(null);
@@ -114,8 +111,18 @@ export default function useChemistry() {
     clearHints();
   }, [clearHints]);
 
+  const invalidateRequests = useCallback(() => {
+    requestId.current += 1;
+    previewRequestId.current += 1;
+    setPageReading(false);
+    setChecking(false);
+    setReadingRows(new Set());
+    clearHints();
+  }, [clearHints]);
+
   const clearAnswer = useCallback(() => {
     requestId.current += 1;
+    previewRequestId.current += 1;
     lineRequestIds.current.clear();
     lineVersions.current.clear();
     linesRef.current = [];
@@ -127,6 +134,7 @@ export default function useChemistry() {
     setPreview(null);
     setReadingRows(new Set());
     setPageReading(false);
+    setChecking(false);
     clearVerdict();
   }, [clearVerdict]);
 
@@ -349,14 +357,17 @@ export default function useChemistry() {
   // -- preview ------------------------------------------------------------
 
   const refreshPreview = useCallback(async (smiles) => {
+    const id = ++previewRequestId.current;
     if (!smiles.trim()) {
       setPreview(null);
       return;
     }
     try {
       const data = await renderStructure(smiles);
+      if (id !== previewRequestId.current) return;
       setPreview(trustedStructurePreview(data));
     } catch {
+      if (id !== previewRequestId.current) return;
       setPreview(null);
     }
   }, []);

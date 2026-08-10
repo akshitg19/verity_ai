@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { COLORS, SUBJECTS } from "../theme";
 
@@ -34,6 +34,7 @@ export default function WorkspaceToolbar({
   onClear,
 }) {
   const [showPenSettings, setShowPenSettings] = useState(false);
+  const [penMenuPosition, setPenMenuPosition] = useState({ top: 80, left: 8 });
   const penSettingsRef = useRef(null);
   const {
     activeTool,
@@ -56,6 +57,43 @@ export default function WorkspaceToolbar({
     document.addEventListener("pointerdown", handleClickOutside);
     return () => document.removeEventListener("pointerdown", handleClickOutside);
   }, []);
+
+  const updatePenMenuPosition = useCallback(() => {
+    const trigger = penSettingsRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = 250;
+    const menuHeight = 215;
+    const gap = 8;
+    const margin = 8;
+    const maxTop = Math.max(margin, window.innerHeight - menuHeight - margin);
+    const belowTop = rect.bottom + gap;
+    const aboveTop = rect.top - menuHeight - gap;
+    const top =
+      belowTop + menuHeight <= window.innerHeight - margin || rect.top < menuHeight
+        ? belowTop
+        : aboveTop;
+
+    setPenMenuPosition({
+      top: Math.min(maxTop, Math.max(margin, top)),
+      left: Math.min(
+        Math.max(margin, rect.left),
+        Math.max(margin, window.innerWidth - menuWidth - margin)
+      ),
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!showPenSettings) return undefined;
+    updatePenMenuPosition();
+    window.addEventListener("resize", updatePenMenuPosition);
+    window.addEventListener("scroll", updatePenMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePenMenuPosition);
+      window.removeEventListener("scroll", updatePenMenuPosition, true);
+    };
+  }, [showPenSettings, updatePenMenuPosition]);
 
   return (
     <div
@@ -219,7 +257,7 @@ export default function WorkspaceToolbar({
           </div>
 
           {showPenSettings && (
-            <div style={{ position: "absolute", top: 48, left: 0, zIndex: 50, width: 250, padding: 16, boxSizing: "border-box", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 14, boxShadow: "0 12px 30px rgba(31, 41, 38, 0.16)", fontFamily: "sans-serif" }}>
+            <div style={{ position: "fixed", top: penMenuPosition.top, left: penMenuPosition.left, zIndex: 50, width: 250, padding: 16, boxSizing: "border-box", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 14, boxShadow: "0 12px 30px rgba(31, 41, 38, 0.16)", fontFamily: "sans-serif" }}>
               <div style={{ marginBottom: 10, color: COLORS.text, fontSize: 13, fontWeight: 700 }}>Thickness</div>
               <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
                 {PEN_WIDTHS.map((option) => {

@@ -1,18 +1,31 @@
 import { COLORS, FONT, RADIUS } from "../theme";
+import { readableChemistryLines } from "./lineModel";
 
 function verdictStatus(verdict) {
   if (!verdict) return null;
   return verdict.status ?? (verdict.valid ? "valid" : "invalid");
 }
 
-function statusForLine(line, verdict) {
-  if (line.unreadable) {
+function statusForLine(line, verdict, blocked) {
+  if (line.unreadable || !line.text.trim()) {
     return {
       label: "Needs review",
-      detail: "We could not confidently read this row. Correct it before checking.",
+      detail: line.unreadable
+        ? "We could not confidently read this row. Correct it before checking."
+        : "Enter the transcription for this row before checking.",
       color: "#a96b1f",
       background: "#fff7e8",
       symbol: "!",
+    };
+  }
+
+  if (blocked) {
+    return {
+      label: "Waiting for earlier row",
+      detail: "Correct the earlier unreadable row before checking this step.",
+      color: COLORS.muted,
+      background: "#f3f5f4",
+      symbol: "…",
     };
   }
 
@@ -68,12 +81,19 @@ export default function WrittenChemistrySteps({
   onCheck,
 }) {
   const canCheck =
-    ready && !checking && lines.some((line) => line.text.trim() && !line.unreadable);
+    ready && !checking && readableChemistryLines(lines).length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {lines.map((line, index) => {
-        const status = statusForLine(line, verdictsByLine.get(line.row));
+        const blocked = lines
+          .slice(0, index)
+          .some((previous) => previous.unreadable || !previous.text.trim());
+        const status = statusForLine(
+          line,
+          verdictsByLine.get(line.row),
+          blocked
+        );
         return (
           <div
             key={line.row}
