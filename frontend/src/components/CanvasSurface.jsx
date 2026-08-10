@@ -46,12 +46,11 @@ export default function CanvasSurface({ canvas, children }) {
         style={{
           position: "absolute",
           inset: 0,
-          // Always scrollable by finger. Touch never draws -- useCanvas
-          // returns early for it -- so suppressing pan here only ever stopped
-          // students moving down the page, which is what forced a separate
-          // hand tool to exist. Stylus draws, finger scrolls, as in Samsung
-          // Notes and iPad Notes.
-          touchAction: "pan-y",
+          // Never relaxed. `touch-action` governs pen as well as touch, so
+          // `pan-y` here handed the stylus to the browser as a pan gesture
+          // and drawing stopped working. Finger scrolling is done in JS
+          // instead -- see the touch branch in useCanvas.
+          touchAction: "none",
           userSelect: "none",
           WebkitUserSelect: "none",
           WebkitTouchCallout: "none",

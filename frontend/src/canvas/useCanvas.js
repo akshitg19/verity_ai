@@ -61,6 +61,23 @@ export function getCanvasDisplaySize(viewportWidth, viewportHeight) {
   };
 }
 
+// The nearest ancestor that actually scrolls. Touch scrolling is driven from
+// JS rather than by `touch-action`, so this is what gets moved.
+function findScrollParent(node) {
+  let current = node?.parentElement;
+  while (current) {
+    const overflowY = globalThis.getComputedStyle?.(current).overflowY;
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      current.scrollHeight > current.clientHeight
+    ) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return globalThis.document?.scrollingElement ?? null;
+}
+
 function drawStroke(context, stroke) {
   const points = stroke.points;
   if (points.length === 0) return;
@@ -131,6 +148,7 @@ export default function useCanvas({
   const erasedRowsRef = useRef(new Set());
   const eraserCursorRef = useRef(null);
   const lastErasePointRef = useRef(null);
+  const touchScrollRef = useRef(null);
 
   useEffect(() => {
     eraserRadiusRef.current = eraserRadius;
@@ -329,8 +347,23 @@ export default function useCanvas({
   };
 
   const handlePointerDown = (event) => {
+    // A finger scrolls the page; a stylus draws.
+    //
+    // This is done by hand rather than with `touch-action: pan-y`, because
+    // that property governs pen input too: relaxing it to let a finger scroll
+    // also handed the stylus to the browser as a pan gesture, and drawing
+    // stopped working altogether. `touch-action` stays `none` so the pen is
+    // always ours, and the scrolling a finger would have done is done here.
     if (event.pointerType === "touch") {
-      event.preventDefault();
+      const container = findScrollParent(canvasRef.current);
+      touchScrollRef.current = container
+        ? {
+            pointerId: event.pointerId,
+            startY: event.clientY,
+            startTop: container.scrollTop,
+            container,
+          }
+        : null;
       return;
     }
     if (activePointerId.current !== null) return;
@@ -415,10 +448,15 @@ export default function useCanvas({
   };
 
   const handlePointerMove = (event) => {
-    // Touch never draws, so it must be left alone to scroll the page. The old
-    // preventDefault here fought native scrolling, which is why a separate
-    // hand tool had to exist at all.
-    if (event.pointerType === "touch") return;
+    if (event.pointerType === "touch") {
+      const scroll = touchScrollRef.current;
+      if (scroll && scroll.pointerId === event.pointerId) {
+        event.preventDefault();
+        scroll.container.scrollTop =
+          scroll.startTop - (event.clientY - scroll.startY);
+      }
+      return;
+    }
 
     if (erasingRef.current && event.pointerId === activePointerId.current) {
       event.preventDefault();
@@ -459,7 +497,12 @@ export default function useCanvas({
   };
 
   const handlePointerUp = (event) => {
-    if (event.pointerType === "touch") return;
+    if (event.pointerType === "touch") {
+      if (touchScrollRef.current?.pointerId === event.pointerId) {
+        touchScrollRef.current = null;
+      }
+      return;
+    }
 
     if (erasingRef.current && event.pointerId === activePointerId.current) {
       if (canvasRef.current?.hasPointerCapture?.(event.pointerId)) {
@@ -546,6 +589,10 @@ export default function useCanvas({
   };
 
   const handlePointerCancel = (event) => {
+    if (touchScrollRef.current?.pointerId === event.pointerId) {
+      touchScrollRef.current = null;
+      return;
+    }
     if (event.pointerId !== activePointerId.current) return;
     if (erasingRef.current) {
       activePointerId.current = null;

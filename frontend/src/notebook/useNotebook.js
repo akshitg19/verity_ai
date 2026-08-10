@@ -25,7 +25,7 @@ function blankNote(subject, title) {
   return {
     id: newId(),
     subject,
-    title: title || (subject === "chemistry" ? "New structure" : "New problem"),
+    title: title || (subject === "chemistry" ? "Chemistry" : "Math"),
     pages: [blankPage()],
     activePageId: null,
     createdAt: now(),
