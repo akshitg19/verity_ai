@@ -1410,3 +1410,419 @@ against.
 - **The URL is public and unauthenticated.** Fine while only three people have
   an unguessable Cloud Run address, and `--max-instances 1` bounds the damage.
   If the link is ever posted anywhere, add a shared-secret header first.
+
+---
+
+# The student walkthrough — opened Aug 10
+
+A running list, written while actually using the hosted app on a tablet as a
+student would, rather than as the person who built it. **This section is
+append-only and grows every session.** Items keep their numbers once written,
+so "do 2.3 next" means something a week from now.
+
+Everything here is front end unless it says otherwise, but do not treat that
+as a boundary: several of these turn out to be backend or schema work once
+you follow them down.
+
+## How each item is written
+
+**What happened** — the observed behaviour, in a student's words.
+**Why** — the actual cause, with the file and line, or "not yet diagnosed"
+where that is the honest answer.
+**Fix** — the approach, at enough detail to start.
+**Edge cases** — the things that will break the naive version. This is the
+part worth reading twice; most of these items are easy to half-do.
+
+Where an item is a guess rather than a diagnosis, it says so. Do not let a
+guess in this file harden into a fact the way the topic tables did.
+
+---
+
+## 1. Theme: it is dark, and nobody asked for that
+
+### 1.1 The app has no dark mode. The browser invented one.
+
+**What happened.** Opened on a tablet in system dark mode. The whole app came
+up dark, too dark, and unpleasant.
+
+**Why.** This is the important finding, and it is not what it looks like.
+**There is no dark mode in this codebase.** `theme.js` is entirely light —
+`background: "#f7f6f2"`, `SURFACES.paper: "#faf8f2"` — and the string
+`prefers-color-scheme` appears nowhere in `frontend/src`. Neither
+`index.html` nor `index.css` declares `color-scheme`.
+
+Chrome on Android and Samsung Internet both apply **automatic dark theming**
+to pages that do not declare support for a scheme. So the tablet inverted a
+carefully chosen light palette algorithmically. That is why it looks wrong
+rather than merely dark: nothing in it was designed.
+
+**Fix.** Two steps, and the first is one line and stops the bleeding today:
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Declare the scheme | `<meta name="color-scheme" content="light">` in `index.html`, and `:root { color-scheme: light; }` in `index.css`. Auto-darkening stops immediately and the app looks as designed. Ship this before the next demo regardless of what happens with 1.2 |
+| [ ] | `theme-color` meta | Colours the tablet browser chrome to match the app instead of leaving a mismatched bar above it |
+
+**Edge case.** Once 1.2 lands, `color-scheme` must become `light dark` and
+track the active theme, or the browser will fight the real dark mode the same
+way it invented this one.
+
+### 1.2 A real light/dark theme
+
+**Fix.** `theme.js` currently exports flat objects consumed directly as inline
+styles all over the app (`COLORS.surface` and friends appear in nearly every
+component). Swapping palettes at runtime by re-exporting a different object
+will not work, because inline styles are captured at render time by many
+components that will not re-render.
+
+The approach that actually works here, and is the smallest change to the way
+the code is already written:
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Palette to CSS custom properties | Emit every value in `theme.js` as a `--verity-*` custom property on `:root`, and change the exported objects to reference `var(--verity-surface)` etc. Every existing `COLORS.surface` call site keeps working untouched, and a theme switch becomes one attribute on `<html>` |
+| [ ] | `data-theme` on the root | `light`, `dark`, and `system`. `system` follows `prefers-color-scheme` live via a `matchMedia` listener, not just at load |
+| [ ] | Persist the choice | `localStorage`, read **before first paint** in a tiny inline script in `index.html`. Reading it in a `useEffect` gives a flash of the wrong theme on every load, which looks broken on a tablet |
+| [ ] | Dark values for all four verdict styles | `VERDICT_STYLES` backgrounds are near-white tints (`#edf8f2`, `#fff0f0`). On dark they need re-picking, not darkening — and the four must stay distinguishable, since 4-outcome legibility is a product rule, not a preference |
+
+**Edge cases, and these are the ones that will bite:**
+
+- **The canvas is not CSS.** Ink is drawn with a hardcoded default of
+  `#1f2926` (`useCanvas.js`, `drawStroke`). On a dark page that is nearly
+  invisible. The paper surface and the ruled lines are drawn in canvas too.
+- **The PNG sent to Gemini must not change.** `canvas/render.js` renders the
+  line for recognition. If dark mode flips ink to white-on-dark and that
+  reaches the model, recognition quality moves for a reason nobody will
+  connect to a theme switch. **Force-normalise the exported PNG to dark ink
+  on white regardless of theme**, and write that down where the next person
+  will find it. This is already an open item elsewhere in this file; dark
+  mode makes it urgent rather than tidy.
+- **The RDKit structure preview will disappear.** `/chemistry/render` returns
+  SVG with black strokes, injected via `dangerouslySetInnerHTML`. Black on a
+  dark card is invisible. Either post-process the SVG to `currentColor` on
+  the client, or have the endpoint take a colour. The client-side rewrite is
+  preferable: it keeps the backend contract unchanged and the SVG is ours.
+- **Highlighter colours** (item 4.1) are chosen against white paper. They
+  need a second set for dark, or the paper stays light in both themes —
+  which is a legitimate choice a real notes app makes, and worth considering.
+
+### 1.3 Where the switch lives, and the hand tool
+
+**What happened.** "What is this hand symbol? Maybe remove it and put dark
+mode there." The toolbar is crowded and the hand is not obviously earning its
+slot.
+
+**Why the hand exists, and why removing it naively breaks the app.**
+`CanvasSurface.jsx:47` sets `touchAction: activeTool === "scroll" ? "pan-y" :
+"none"`. In pen mode the canvas swallows touch entirely, so **the hand tool
+is currently the only way to scroll the page on a tablet.** Delete the button
+and a student is trapped on one screen.
+
+**Fix.** The hand slot can be freed, but the scroll problem has to be solved
+first, and it is solvable cleanly:
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Let touch scroll natively | Touch already never draws — `useCanvas.js:214` returns early for `pointerType === "touch"`. So `touch-action` can be `pan-y` at all times. Finger scrolls, stylus draws, which is exactly the Samsung Notes and iPad model the app is being measured against |
+| [ ] | Remove the `preventDefault` on touch move | `handlePointerMove` calls `event.preventDefault()` for touch, which fights native scrolling. It is only needed to suppress the selection loupe while a pen is down |
+| [ ] | Then retire the hand tool | Only after the two above are verified on a real tablet. Keep it behind a flag for one session in case palm rejection turns out worse than expected |
+| [ ] | Put the theme control in that slot | A single icon that cycles or opens a small popover. Not a third row of chrome |
+
+**Edge case.** Palm rejection. Today `touch-action: none` plus ignoring touch
+means a resting palm does nothing at all. With `pan-y`, a resting palm may
+scroll the page mid-stroke. Test with a hand actually resting on the tablet,
+not with a fingertip. If it is a problem, suppress touch scrolling only while
+a pen pointer is active, which is a narrow and testable rule.
+
+### 1.4 The tab says "frontend"
+
+**What happened.** Browser tab and any bookmark read `frontend`.
+
+**Why.** `index.html` still has the Vite default `<title>frontend</title>`.
+
+**Fix.** Title, description meta, an apple-touch-icon, and a real favicon —
+which is item 3.2, since it needs the logo. Trivial, embarrassing on a
+projector, and it is the first thing a judge sees when the tab is open.
+
+---
+
+## 2. The question should be written, not typed
+
+This is the biggest item in this section and the most valuable. It is worth
+reading in full before starting any of it.
+
+### 2.1 What is wrong now
+
+**What happened.** Wrote `N₂ + H₂ -> NH₃` on the notes page as the question,
+then discovered the app expected the question typed into a panel field. The
+grey `C3H8 + O2 -> CO2 + H2O` in that field is a **placeholder**
+(`chemistry/topics.js:333-335`), not a value, so it reads as already filled.
+The check silently never runs: `WrittenChemistrySteps.jsx:190` renders
+"Fill in the question above first" and every row sits at "Waiting" forever.
+
+**Why it matters beyond the bug.** A handwriting-first app that requires the
+problem to be typed has a seam down the middle of it. The first and most
+natural way to enter a question is to write it, exactly as on paper.
+
+### 2.2 The interaction: a selection-style popover
+
+**Fix.** When a line is finished and no question has been set for the current
+problem, show a small floating menu anchored just above that line's ink —
+the shape of the iOS text-selection menu (*Select All · Copy · Look Up*).
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Floating action bar component | Anchored to a row's bounding box, which `inkModel.js` already tracks in `index.bounds`. Must flip below the line when the line is near the top of the page |
+| [ ] | "Make this the question" as the primary action | Plus "This is my working" to dismiss. Two actions, not five |
+| [ ] | Offer it on the first written line | The overwhelmingly common case: the first thing on a fresh page is the question |
+| [ ] | Never cover the ink it refers to | Offset above the row, and re-anchor on scroll |
+| [ ] | Dismiss on next pen-down | It must never be something to fight with. Writing again is the clearest "not now" a student can express |
+| [ ] | Keyboard and screen-reader path | It is a button; give it a focus ring and a label |
+
+### 2.3 Knowing where the question ends
+
+**The hard part, and do not pretend otherwise.** A question can run to two or
+three written lines. Committing to "the first row is the question" is wrong
+often enough to be annoying.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Multi-row questions | Let the popover's target grow: after tapping "Make this the question", show "＋ add the next line too" until the student starts working |
+| [ ] | The `?` marker idea | The suggested convention — a leading dot or `?` marks a question. Cheap to support: it is a string test on text we already transcribe, needing no new recognition. Worth building **as an accelerator, not as the only path**, since a student who does not know the convention must still succeed |
+| [ ] | Never guess silently | If it is ambiguous, ask with the popover. A wrongly-chosen question is much worse than one extra tap — see 2.6 |
+
+### 2.4 A second problem on the same page
+
+**What happened.** "The next thing I write on the same page should also have
+a lookup saying this is the first question."
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Offer the popover again after a problem is answered | Once the current problem has a verdict on its last line, the next new row is a strong candidate for a new question |
+| [ ] | Reuse the divider idea already in this file | "Problem separators" under Input and canvas quality: a long, roughly horizontal, low-variance stroke is a divider, not content. Combine the two — a divider is the clearest possible signal, and it is what students already draw |
+| [ ] | One session per problem, not per page | Each new question opens a new `/chemistry/session`. The vault, terminal-step gate, and level-3 budget are all per problem, so this is required for correctness, not tidiness |
+| [ ] | Show which problem is active | With two problems on a page, the student must be able to see which one a verdict belongs to |
+
+### 2.5 Routing written ink into the right request
+
+**Why this is not just a UI change.** The eleven chemistry endpoints take
+different shapes: `reference_equation` for balancing, `target_smiles` for
+structure, a numeric `task` plus named fields for stoichiometry and
+solutions. A written question has to become one of those.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Question text to request shape, per topic | Balancing is easy: the transcribed string *is* `reference_equation`. Numeric topics are hard: `"What is the pH of 0.100 M acetic acid, Ka = 1.8e-5"` has to become `{task, concentration_m, ka}` |
+| [ ] | Decide who parses | Either a small model call returning a structured object against the topic's schema, or keep typed fields for numeric topics and written questions for equation and structure topics. **The second is much cheaper and should probably ship first** |
+| [ ] | Show what it understood, editably | Whatever is parsed out, render it back in the panel as an editable field. This is the existing correction affordance and it must not be lost |
+
+### 2.6 The safety consequence, which is not optional
+
+`answer_vault.py` builds the vault **from the problem statement**. This file
+already says it, under the firewall's honest limitations:
+
+> **A wrong problem statement breaks the vault.** If transcription misreads
+> the problem, the vault holds the wrong answer, so redaction guards the
+> wrong string and the terminal gate fires on the wrong line. The editable
+> problem field is therefore load-bearing for safety now, not only for
+> accuracy.
+
+Reading the question off handwriting puts a recognition step in front of the
+vault. That is a real increase in risk and it must be handled explicitly:
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Confirm the question before opening a session | Show the transcribed question and require a confirm. One tap, and it is the only thing standing between a misread and a wrongly-guarded vault |
+| [ ] | Low confidence pre-focuses the correction | `TranscribeResponse.confidence` already exists. On `low`, focus the field |
+| [ ] | Re-open the session when the question is edited | A corrected question must rebuild the vault. A stale vault after a correction is the worst version of this bug, because everything looks fine |
+
+### 2.7 Keep the typed field
+
+Do not delete it. It is the fallback when recognition fails, it is how a
+teacher sets a problem, and it is the only sane path for the numeric topics
+until 2.5 is solved. **Demote it, do not remove it** — and fix the
+placeholder that reads as a value (item 5.3) either way.
+
+---
+
+## 3. Design system: palette, logo, identity
+
+**What happened.** "We need a colour palette and logo. Take inspiration from
+a nice app. Very intuitive, very good looking, colour-scheme wise."
+
+Noting honestly: the reference app named in conversation was not one I could
+identify with confidence, so **bring three screenshots of what you like** and
+we pick from those rather than guessing at a name.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Commit to one palette | `theme.js` already has a coherent light palette. The gap is not that it is bad, it is that it is unfinished: no dark values, no elevation scale, and per-component one-off colours creeping in |
+| [ ] | Two accents, kept | `SUBJECTS.math` green and `SUBJECTS.chemistry` blue already make the two subjects read as different spaces. Keep that; it is working |
+| [ ] | Contrast audit | Every text-on-surface pair to WCAG AA, in both themes. `COLORS.muted` on `SURFACES.paper` is the first one to check |
+| [ ] | Logo | Currently a plain `V`. Needs a real mark, a favicon, and an apple-touch-icon for a tablet home screen |
+| [ ] | One button vocabulary | Primary, secondary, ghost, destructive, and one disabled treatment. Right now buttons are styled inline at each call site — `WorkspaceToolbar.jsx:322` is a 300-character inline style — so nothing is consistent and nothing can be changed centrally |
+| [ ] | Spacing and radius scale | `RADIUS` exists and is good. Add spacing, and use both instead of ad-hoc pixel values |
+
+---
+
+## 4. Notes-app parity
+
+**What happened.** "It should resemble Samsung Notes or iPad Notes, with
+every formatting option, colour option, highlighting, text option."
+
+This is the bar the app is actually measured against, because it is what
+students already use. Sub-items are roughly in value order.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Highlighter | A wide, low-opacity stroke drawn **beneath** ink. Needs a second canvas layer or a per-stroke composite mode, so it is not purely cosmetic. **Must never reach the recognition PNG** or it will wreck the read |
+| [ ] | Pen widths and colours | Partly there — `penColor` and `penWidth` exist. Needs a real picker, not a menu |
+| [ ] | Redo | Undo exists (`handleUndo`); there is no redo. The strokes array makes it cheap |
+| [ ] | **The eraser** | Big enough to need its own item — see 4.1 below |
+| [ ] | Lasso select, move, delete | The single biggest "feels like a real notes app" feature, and the largest job here |
+| [ ] | Typed text boxes | Mentioned as "text option". Interacts with recognition: a typed box should bypass transcription entirely and go straight to the judge, which is a **feature**, not a complication |
+| [ ] | Ruler and straight-line snap | Useful for reaction arrows and fraction bars |
+| [ ] | Real pages, and page navigation | Already an open item under the notebook model |
+| [ ] | Pressure and tilt | `getPoint` already captures `p`. Nothing uses it. Cheap richness for a stylus |
+
+**Edge case running through all of it.** Every new ink kind — highlighter,
+typed text, lasso-moved strokes — has to answer: *does this reach the
+recognition PNG, and does moving it change which row it belongs to?* The row
+index is identity for the whole recognition and verdict pipeline. Moving ink
+across rows without updating that index will produce verdicts attached to the
+wrong line, which is the failure class this product cannot afford.
+
+### 4.1 The eraser should rub out, not delete objects
+
+**What happened.** "Make the eraser more intuitive and easy to use, from a
+small brush to a large eraser brush, and it doesn't erase by object but like
+a real eraser, in a smooth way."
+
+**Why it feels wrong today, and it is worse than it looks.** Two separate
+problems:
+
+1. **It deletes whole strokes.** `handlePointerDown` finds the last stroke
+   within `DEFAULT_ERASER_RADIUS` of the touch point and removes *all* of it.
+   Clip the tail of one long stroke and the entire stroke vanishes.
+2. **It only fires on pointer-down.** The eraser branch lives in
+   `handlePointerDown` and returns; there is no eraser case in
+   `handlePointerMove` at all. So dragging the eraser across the page does
+   nothing — a student must tap, lift, tap, lift, once per stroke. That is
+   almost certainly what made it feel unusable, and it is the cheaper half to
+   fix.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Erase continuously while dragging | An eraser case in `handlePointerMove`, sampling along the path between the last point and this one so a fast drag does not leave gaps. This alone makes it feel like an eraser |
+| [ ] | Partial erase by splitting strokes | Remove the points inside the eraser disc and re-emit what remains as **one or two strokes**. A pure function over `(stroke, centre, radius) -> stroke[]`, so it is unit-testable without a canvas, like `geometry.js` |
+| [ ] | Variable radius | A size control from a fine ~6px tip to a broad ~48px block, beside the pen width control. `DEFAULT_ERASER_RADIUS` (18) becomes the default, not the only value |
+| [ ] | Live radius cursor | Draw the eraser circle on the overlay canvas, following the pointer, at the true current radius. A student cannot aim something invisible |
+| [ ] | Keep object-erase as a second mode | Samsung Notes offers both, and stroke-erase is genuinely faster for removing a whole character. Default to the pixel eraser; offer "erase whole stroke" in the same popover as the size |
+
+**Edge cases — the reason this is not a one-hour job:**
+
+- **Splitting changes stroke identity.** `findStrokeRow` matches by object
+  identity, and the new segments are new objects. The ink index must be
+  rebuilt for the affected rows and their versions bumped, or recognition
+  re-runs against stale ink — or worse, does not re-run at all.
+- **A split can move ink between rows.** Erasing the middle of a long stroke
+  can leave two fragments whose bounds resolve to different rows. That is
+  correct behaviour, but it must go through the same row resolution as a new
+  stroke, not be assumed to stay put.
+- **Undo granularity.** One erase gesture must be one undo, not one per
+  split segment. Undo is currently "drop the last stroke"
+  (`handleUndo`), which cannot express this. **This forces a real undo
+  stack of operations rather than a stroke list** — the right change anyway,
+  and it is what unblocks redo.
+- **Performance.** Point-level hit-testing against every stroke at pointer
+  rate will drop frames on a tablet. `inkIndex.bounds` already gives a cheap
+  rejection test per row; use it to consider only rows the eraser disc
+  actually overlaps.
+- **Erasing to nothing.** A stroke fully inside the disc yields zero
+  segments. Make sure that removes it cleanly and does not leave an empty
+  stroke in the index — `getStrokeBounds` returns `null` for a pointless
+  stroke, and `addStrokeToInkIndex` would then fall back to a `NaN` row key.
+- **The dirty-rect redraw.** Static ink is redrawn from a bounds rectangle.
+  An erase gesture's dirty region is the swept path of the disc, not a single
+  point, or trails will be left behind on screen.
+- **Highlighter interaction.** Once highlighter exists (above), decide
+  whether the eraser takes both layers or only ink. Samsung Notes erases
+  both; that is probably right, but it should be a decision rather than an
+  accident.
+
+---
+
+## 5. Panel and toolbar noise
+
+### 5.1 Too much on screen at once
+
+**What happened.** "So much text, so many things here left and right, things
+we can't control."
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Audit what is on screen before a student has done anything | Currently: subject toggle, topic strip, blurb, question dropdown, question field, per-step cards, a check button, and the toolbar. Most is irrelevant until there is ink |
+| [ ] | Progressive disclosure | Show the canvas and a minimal toolbar. Reveal the panel when there is something to say |
+| [ ] | Collapse the topic grid once chosen | Six tiles plus a blurb is a lot of permanent furniture for a choice made once |
+
+### 5.2 Hints must be collapsed by default
+
+**What happened, earlier in the project.** Feedback that on-screen help while
+writing is "super disturbing".
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Hints collapsed until asked for | Nothing from the hint ladder renders until the student opens it |
+| [ ] | A quiet affordance | One unobtrusive control on a flagged line. Not a panel that grows on its own |
+| [ ] | Never steal focus or move the canvas | Opening a hint must not reflow what is being written |
+| [ ] | Remember the preference per session | A student who closes hints wants them closed |
+
+### 5.3 The placeholder that reads as a filled value
+
+**Fix.** Style placeholders so they cannot be mistaken for content, mark the
+field required, and — the real fix — say *what* is missing on the disabled
+button rather than the generic "Fill in the question above first".
+
+### 5.4 "Waiting" that waits forever
+
+**What happened.** Two rows sat at "Waiting" indefinitely with no explanation.
+
+**Fix.** "Waiting" must distinguish *not yet checked* from *cannot be checked
+because X*. A state that cannot advance has to say why, on the row itself.
+Related: an idle timer fires recognition 1500ms after the last stroke
+(`useCanvas.js`), so "nothing happened" is sometimes just that timer — a
+visible in-progress state would remove the ambiguity entirely.
+
+---
+
+## 6. Carried over — found this session, not yet fixed
+
+These came out of the deployment and live-testing work, and they are not
+front end.
+
+| Done | Item | Detail |
+|------|---|---|
+| [ ] | **Hint level 2 always falls back** | Tested live on two different problems: both returned `source: "fallback"`. The worked-example verification loop rejects every generated example, so the level-2 parallel problem — the feature people will remember — never reaches a student. The safeguard is working; the generator is not. **Highest-value backend item here** |
+| [ ] | Hint latency is 5-6s, and once 19s | Against an under-2s target elsewhere in this file. Needs measuring properly, then a real loading state, then pre-warming level 1 when a line is flagged |
+| [ ] | A confident misread was observed | `/chemistry/transcribe-text` read a rendered `C3H8 + 5O2 -> 3CO2 + 4H2O` back as `... + 4H2`, dropping the O, and reported `confidence: high`. One sample, rendered text rather than handwriting, so it is a signal and not a measurement — but a confident wrong read is the fatal category in this file's own taxonomy |
+| [ ] | Redox, isomer, and reaction problems open no session | Already listed above; re-confirmed live. Hints there fall back to templates no matter what else is fixed |
+| [ ] | The corpus is still the blocking item | One hand-drawn equation surfaced two bugs that 555 backend and 67 frontend tests did not, because every one of them mocks the model and none touch segmentation of real ink |
+
+---
+
+## Suggested order
+
+Not a schedule, just the order that gets the most value per hour.
+
+1. **1.1** — one line, stops the app looking broken on every tablet in the room.
+2. **5.3 and 5.4** — the trap that already cost a real test session.
+2b. **4.1, first two rows only** — erase-on-drag and a visible radius. Small,
+    and it turns the eraser from broken into usable without the stroke-splitting
+    work behind it.
+3. **1.3** — free the hand slot by letting touch scroll; needed before any toolbar work.
+4. **1.2** — the real theme, once 1.3 has settled the toolbar.
+5. **2.2 → 2.3 → 2.6** — the written question, for equation topics only at first. Ship it narrow.
+6. **6, level 2 hints** — backend, parallelisable with all of the above.
+7. **3** — palette and logo, once the surfaces have stopped moving.
+8. **4** — notes parity, largest and least urgent for a demo.
+9. **2.5** — numeric-topic question parsing, the hardest and most deferrable piece.
