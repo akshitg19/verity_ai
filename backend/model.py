@@ -44,7 +44,11 @@ logger = logging.getLogger(__name__)
 BUDGETS = {
     "structure": {"max_output_tokens": 1024, "thinking_budget": -1},
     "hint": {"max_output_tokens": 1536, "thinking_budget": -1},
-    "worked_example": {"max_output_tokens": 2048, "thinking_budget": -1},
+    # A worked example is a problem statement, a technique line, up to twenty
+    # steps and a machine-checkable spec, all as one JSON object. At 2048 the
+    # object was being truncated mid-string, which surfaces as "model did not
+    # return valid JSON" and drops the student to the static floor.
+    "worked_example": {"max_output_tokens": 6144, "thinking_budget": -1},
     "verdict": {"max_output_tokens": 512, "thinking_budget": -1},
     # The math transcription path keeps its original settings; a line of
     # algebra really is a few symbols and the old config was right for it.

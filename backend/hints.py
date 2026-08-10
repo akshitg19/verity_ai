@@ -380,7 +380,14 @@ def _finalise(
         worked_example = None
         source = "fallback"
 
-    if worked_example is not None:
+    # A level-2 example is a solution to a *different* problem that our own
+    # engine has already verified, and the similarity guard has already
+    # asserted its numbers differ from the student's. Running it through the
+    # answer filter as well mostly catches coincidence: an example about
+    # Fe + O2 was thrown away for containing "3O2" because the student's
+    # unrelated answer also had a 3O2 in it. With withholding off that trade
+    # is not worth making. With it on, the check stands.
+    if worked_example is not None and WITHHOLD_ANSWER:
         for line in [worked_example.problem, worked_example.technique, *worked_example.steps]:
             _, line_violation = redact_or_fallback(line, vault, fallback)
             if line_violation:
