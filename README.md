@@ -2,6 +2,8 @@
 
 **It knows the answer. It will never give it to you.**
 
+Live: <https://verity-ai-lovat.vercel.app>
+
 verity.ai is a tablet-first homework workspace. A student writes their work
 by hand with a stylus, exactly as they would on paper. As each line is
 finished, the app reads it, checks it, and flags the first line where the
@@ -210,6 +212,27 @@ It deploys to Cloud Run in the same Google Cloud project that serves the
 recognition model, so the running service authenticates through its own
 service account — there is no API key or credential file anywhere. The
 deployment plan is written up in full at the bottom of `final_tasks.md`.
+
+The public UI is served separately from Vercel, which builds `frontend/` and
+points it at the Cloud Run API through `VITE_API_BASE_URL`:
+
+| Piece | URL |
+|---|---|
+| Frontend (Vercel) | <https://verity-ai-lovat.vercel.app> |
+| API (Cloud Run) | <https://verity-ai-389644353290.us-central1.run.app> |
+
+Cloud Run still serves its own copy of the frontend at the API URL, so that
+address remains a complete, self-contained fallback if Vercel is ever in the
+way. Because the two are separate origins, `CORS_ORIGINS` on the Cloud Run
+service must list every Vercel alias — a new alias that is not in that list
+fails every request from the browser.
+
+Ship a frontend change with:
+
+```powershell
+cd frontend
+vercel deploy --prod
+```
 
 ## Gemini authentication
 

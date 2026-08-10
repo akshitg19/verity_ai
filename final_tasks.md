@@ -942,15 +942,30 @@ cheapest first:
 
 Checklist:
 
-- [ ] Decide domain path (free `.me`/subdomain for demo vs. paid for after SAIL)
-- [ ] If buying, register it
-- [ ] Create a Render account, connect the repo, deploy `backend/`
-- [ ] Set up Vertex AI auth for the hosted backend (service account key stored as a Render secret, never committed)
-- [ ] Deploy `frontend/` to Vercel or Netlify, set `VITE_API_BASE_URL` to the Render URL
-- [ ] Update `CORS_ORIGINS` to include the real frontend URL
+**Superseded Aug 10 by what was actually built.** The Render rows below were
+already contradicted by the deployment section at the bottom of this file,
+which explains why Render is the wrong host: it sits outside GCP and so
+*requires* a downloaded service-account key. The backend went to Cloud Run
+instead and needs no key at all. Only the frontend row survived contact.
+
+- [x] Decide domain path — free host subdomain for the demo, no purchase.
+      `verity-ai.vercel.app` was taken, so the address is
+      `verity-ai-lovat.vercel.app`
+- [ ] If buying, register it — deferred until the product outlives SAIL
+- [~] ~~Create a Render account, connect the repo, deploy `backend/`~~ —
+      **abandoned deliberately.** Cloud Run instead, for the auth reason above
+- [x] Set up Vertex AI auth for the hosted backend — **no key file exists.**
+      The service account identity is read from the Cloud Run metadata
+      server. Verified live against `/transcribe`
+- [x] Deploy `frontend/` to Vercel, set `VITE_API_BASE_URL` to the Cloud Run
+      URL
+- [x] Update `CORS_ORIGINS` to include the real frontend URL — all three
+      Vercel aliases plus the two localhost origins
 - [ ] Point the custom domain (if bought) at the frontend host via DNS
-- [ ] Test the full pipeline end to end on the hosted URL before the demo
-- [ ] Add the live URL to `README.md`
+- [~] Test the full pipeline end to end on the hosted URL before the demo —
+      partly; see the deployment status section at the bottom for exactly
+      what was and was not exercised
+- [x] Add the live URL to `README.md`
 
 ---
 
@@ -1357,13 +1372,29 @@ against.
 - [x] `Dockerfile`, `.dockerignore`, and `deploy.ps1` written
 - [x] Single-process serving of both the frontend and the API
 - [x] Image builds and the container starts clean
-- [ ] **`.\deploy.ps1` run to completion** — stopped here deliberately
-- [ ] Live URL added to `README.md`
-- [ ] Full pipeline tested on the hosted URL
+- [x] **`.\deploy.ps1` run to completion.** Aug 10. Service `verity-ai`,
+      revision `verity-ai-00003-ts9`, at
+      `https://verity-ai-389644353290.us-central1.run.app`
+- [x] Live URL added to `README.md`
+- [~] **Full pipeline tested on the hosted URL.** Verified live: `/health`,
+      `/chemistry/topics`, `/check` (a wrong final step is flagged on the
+      right line, `judged_by="deterministic"`), and `/transcribe` against a
+      real rendered image, which returned `2x = 8` at high confidence. That
+      last one is the one that mattered: **Vertex AI authenticates from the
+      Cloud Run metadata server with no key file**, exactly as this section
+      predicted. Not yet exercised on the hosted URL: the chemistry judges
+      beyond the topic list, and any hint level. `live_chemistry_check.py`
+      still has not been run and is still the honest gate
+- [x] Frontend also on Vercel, at `https://verity-ai-lovat.vercel.app`, built
+      from `frontend/` with `VITE_API_BASE_URL` pointing at the Cloud Run
+      API. This is a second origin, so `CORS_ORIGINS` on the service now
+      lists every Vercel alias. Cloud Run keeps serving its own copy of the
+      frontend, so the single-origin deployment above still works untouched
 - [ ] Optional: Firebase Hosting in front, for a `verity-ai.web.app` address
       rather than a Cloud Run hash. Ten minutes, free, and a much better link
       to say out loud at a demo. Do this instead of buying a domain before
-      SAIL; buy one only if the product continues afterwards.
+      SAIL; buy one only if the product continues afterwards. **Largely
+      superseded** by the Vercel address, which is already a speakable link
 
 ### Known deployment caveats
 
