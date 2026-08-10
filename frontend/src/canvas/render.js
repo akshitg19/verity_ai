@@ -1,5 +1,6 @@
 const DEFAULT_LINE_PAD = 16;
 const DEFAULT_SCALE = 1;
+export const MAX_RENDER_SCALE = 4;
 const PAPER_COLOR = "#faf8f2";
 const RULING_COLOR = "rgba(120, 150, 190, 0.4)";
 
@@ -16,6 +17,7 @@ export function getRenderBounds(lineStrokes, padding = DEFAULT_LINE_PAD) {
 
   for (const stroke of lineStrokes ?? []) {
     for (const point of stroke.points ?? []) {
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
       minX = Math.min(minX, point.x);
       maxX = Math.max(maxX, point.x);
       minY = Math.min(minY, point.y);
@@ -47,7 +49,9 @@ export function getRenderBounds(lineStrokes, padding = DEFAULT_LINE_PAD) {
 }
 
 function positiveScale(value) {
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_SCALE;
+  return Number.isFinite(value) && value > 0
+    ? Math.min(value, MAX_RENDER_SCALE)
+    : DEFAULT_SCALE;
 }
 
 export function canvasToPngDataUrl(
@@ -109,7 +113,9 @@ export async function renderLineToPng(
     context.lineJoin = "round";
 
     for (const stroke of lineStrokes ?? []) {
-      const points = stroke.points ?? [];
+      const points = (stroke.points ?? []).filter(
+        (point) => Number.isFinite(point.x) && Number.isFinite(point.y)
+      );
       if (points.length === 0) continue;
 
       const pointAt = (point) => ({

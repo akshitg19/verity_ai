@@ -119,6 +119,7 @@ export default function WorkspaceToolbar({
       <button
         type="button"
         aria-label="Open notebook"
+        aria-expanded={showNotebook}
         title="Notes and pages"
         onClick={onToggleNotebook}
         style={{
@@ -177,6 +178,7 @@ export default function WorkspaceToolbar({
             <button
               type="button"
               title="Add a page"
+              aria-label="Add a page"
               onClick={notebook.addPage}
               style={{ marginLeft: 6, border: "none", background: "transparent", color: COLORS.primary, fontSize: 13, cursor: "pointer", padding: 0, lineHeight: 1 }}
             >
@@ -193,6 +195,7 @@ export default function WorkspaceToolbar({
             <button
               key={option.value}
               type="button"
+              aria-pressed={selected}
               onClick={() => onModeChange(option.value)}
               style={{
                 padding: "7px 15px",
@@ -215,6 +218,7 @@ export default function WorkspaceToolbar({
 
       {mode === "math" ? (
         <input
+          aria-label="Optional typed math problem"
           type="text"
           value={problem}
           onChange={onProblemChange}
@@ -239,6 +243,7 @@ export default function WorkspaceToolbar({
           <div style={{ height: 40, display: "flex", alignItems: "stretch", border: activeTool === "pen" ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`, borderRadius: 10, background: activeTool === "pen" ? COLORS.primaryLight : COLORS.surface, overflow: "hidden", boxSizing: "border-box" }}>
             <button
               type="button"
+              aria-pressed={activeTool === "pen"}
               onClick={() => setActiveTool("pen")}
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 13px", background: "transparent", color: activeTool === "pen" ? COLORS.primary : COLORS.text, border: "none", fontWeight: activeTool === "pen" ? 700 : 500, fontSize: 14, cursor: "pointer" }}
             >
@@ -249,6 +254,7 @@ export default function WorkspaceToolbar({
               type="button"
               title="Pen settings"
               aria-label="Open pen settings"
+              aria-expanded={showPenSettings}
               onClick={() => { setActiveTool("pen"); setShowPenSettings((current) => !current); }}
               style={{ width: 32, padding: 0, display: "grid", placeItems: "center", background: showPenSettings ? "rgba(49, 94, 84, 0.1)" : "transparent", color: activeTool === "pen" ? COLORS.primary : COLORS.muted, border: "none", borderLeft: `1px solid ${COLORS.border}`, cursor: "pointer" }}
             >
@@ -269,6 +275,7 @@ export default function WorkspaceToolbar({
                       type="button"
                       title={option.label}
                       aria-label={`${option.label} pen thickness`}
+                      aria-pressed={selected}
                       onClick={() => { setPenWidth(option.value); setActiveTool("pen"); }}
                       style={{ flex: 1, height: 38, padding: 0, display: "grid", placeItems: "center", background: selected ? COLORS.primaryLight : COLORS.background, border: selected ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`, borderRadius: 9, cursor: "pointer" }}
                     >
@@ -287,6 +294,7 @@ export default function WorkspaceToolbar({
                       type="button"
                       title={option.label}
                       aria-label={`${option.label} pen color`}
+                      aria-pressed={selected}
                       onClick={() => { setPenColor(option.value); setActiveTool("pen"); }}
                       style={{ width: 30, height: 30, flexShrink: 0, padding: 0, borderRadius: "50%", background: option.value, border: `3px solid ${COLORS.surface}`, boxShadow: selected ? `0 0 0 2px ${COLORS.primary}` : `0 0 0 1px ${COLORS.border}`, cursor: "pointer" }}
                     />
@@ -299,6 +307,7 @@ export default function WorkspaceToolbar({
 
         <button
           type="button"
+          aria-pressed={activeTool === "eraser"}
           onClick={() => { setActiveTool("eraser"); setShowPenSettings(false); }}
           style={{ padding: "10px 16px", whiteSpace: "nowrap", background: activeTool === "eraser" ? COLORS.primaryLight : COLORS.surface, color: activeTool === "eraser" ? COLORS.primary : COLORS.text, border: activeTool === "eraser" ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`, borderRadius: 10, fontWeight: activeTool === "eraser" ? 700 : 500, cursor: "pointer" }}
         >
@@ -308,6 +317,7 @@ export default function WorkspaceToolbar({
           type="button"
           title="Scroll page"
           aria-label="Scroll page"
+          aria-pressed={activeTool === "scroll"}
           onClick={() => { setActiveTool("scroll"); setShowPenSettings(false); }}
           style={{ width: 42, height: 40, padding: 0, display: "grid", placeItems: "center", background: activeTool === "scroll" ? COLORS.primaryLight : COLORS.surface, color: activeTool === "scroll" ? COLORS.primary : COLORS.text, border: activeTool === "scroll" ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`, borderRadius: 10, fontSize: 18, cursor: "pointer" }}
         >

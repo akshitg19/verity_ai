@@ -1211,8 +1211,9 @@ Until it has run once, "hints generate" is an untested claim.
       that row and downstream verdicts, while structure drawings remain one
       whole-page figure.
 - [x] The structure preview keeps the RDKit SVG trust-boundary comment and
-      requires an explicit RDKit-render marker before using
-      `dangerouslySetInnerHTML`, with focused source-invariant coverage.
+      requires an identity-based wrapper created only around RDKit endpoint
+      responses before using `dangerouslySetInnerHTML`; matching object fields
+      or copied SVG strings cannot forge that trust.
 
 ### 5. Not started at all
 

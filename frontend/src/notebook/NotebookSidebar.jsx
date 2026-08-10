@@ -31,8 +31,8 @@ function NoteRow({ note, active, onOpen, onRename, onDelete }) {
 
   return (
     <div
-      onClick={() => onOpen(note.id)}
-      onDoubleClick={() => setEditing(true)}
+      onClick={() => !editing && onOpen(note.id)}
+      onDoubleClick={() => !editing && setEditing(true)}
       style={{
         padding: "8px 10px",
         marginBottom: 3,
@@ -71,18 +71,39 @@ function NoteRow({ note, active, onOpen, onRename, onDelete }) {
             }}
           />
         ) : (
-          <div
+          <button
+            type="button"
+            aria-current={active ? "page" : undefined}
+            aria-label={`Open ${note.title}`}
+            title="Double-click or press F2 to rename"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen(note.id);
+            }}
+            onDoubleClick={(event) => {
+              event.stopPropagation();
+              setEditing(true);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "F2") setEditing(true);
+            }}
             style={{
+              width: "100%",
+              padding: 0,
+              border: "none",
+              background: "transparent",
+              textAlign: "left",
               fontSize: 12.5,
               fontWeight: active ? 700 : 500,
               color: COLORS.text,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
+              cursor: "pointer",
             }}
           >
             {note.title}
-          </div>
+          </button>
         )}
         <div style={{ fontSize: 10.5, color: COLORS.muted, marginTop: 1 }}>
           {note.pages.length} page{note.pages.length === 1 ? "" : "s"} ·{" "}
@@ -98,6 +119,7 @@ function NoteRow({ note, active, onOpen, onRename, onDelete }) {
       <button
         type="button"
         title="Delete note"
+        aria-label={`Delete ${note.title}`}
         onClick={(event) => {
           event.stopPropagation();
           onDelete(note.id);
@@ -134,6 +156,8 @@ function Folder({ subject, notes, activeNoteId, onOpen, onRename, onDelete, onCr
       >
         <button
           type="button"
+          aria-label={`${open ? "Collapse" : "Expand"} ${meta.label} notes`}
+          aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
           style={{
             border: "none",
@@ -163,6 +187,7 @@ function Folder({ subject, notes, activeNoteId, onOpen, onRename, onDelete, onCr
         <button
           type="button"
           title={`New ${meta.label.toLowerCase()} note`}
+          aria-label={`New ${meta.label.toLowerCase()} note`}
           onClick={() => onCreate(subject)}
           style={{
             border: "none",
@@ -323,6 +348,8 @@ export default function NotebookSidebar({ notebook, open, onClose, width = 250 }
                 <button
                   key={page.id}
                   type="button"
+                  aria-label={`Open page ${index + 1}`}
+                  aria-current={current ? "page" : undefined}
                   onClick={() => openPage(page.id)}
                   onDoubleClick={() => deletePage(page.id)}
                   title={
@@ -351,6 +378,7 @@ export default function NotebookSidebar({ notebook, open, onClose, width = 250 }
               type="button"
               onClick={addPage}
               title="Add a page"
+              aria-label="Add a page"
               style={{
                 width: 34,
                 height: 40,

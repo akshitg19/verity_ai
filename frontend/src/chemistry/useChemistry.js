@@ -4,10 +4,8 @@ import { renderLineToPng } from "../canvas/render";
 import {
   captureSample,
   getHint,
-  openSession,
   renderStructure,
   transcribeChemistryText,
-  transcribeStructure,
 } from "../api";
 import {
   buildChemistrySteps,
@@ -20,6 +18,7 @@ import {
   rowForChemistryLineNumber,
   upsertChemistryLine,
 } from "./lineModel";
+import { openCurrentSession, readStructureSnapshot } from "./requestModel";
 import { trustedStructurePreview } from "./structurePreview";
 import { TOPICS, describeProblem, inputModeFor, isProblemReady } from "./topics";
 
@@ -81,6 +80,7 @@ export default function useChemistry() {
   const [captureCount, setCaptureCount] = useState(null);
 
   const requestId = useRef(0);
+  const sessionRequestId = useRef(0);
   const hintRequestId = useRef(0);
   const previewRequestId = useRef(0);
   const lineRequestIds = useRef(new Map());
@@ -103,6 +103,7 @@ export default function useChemistry() {
 
   const clearVerdict = useCallback(() => {
     requestId.current += 1;
+    setPageReading(false);
     setChecking(false);
     setVerdict(null);
     setVerdictsByLine(new Map());
@@ -135,10 +136,12 @@ export default function useChemistry() {
     setReadingRows(new Set());
     setPageReading(false);
     setChecking(false);
+    setStatus(null);
     clearVerdict();
   }, [clearVerdict]);
 
   const resetProblem = useCallback(() => {
+    sessionRequestId.current += 1;
     setSession(null);
     setStatus(null);
     setCaptureNote("");
@@ -172,6 +175,7 @@ export default function useChemistry() {
     (name, value) => {
       setValues((current) => ({ ...current, [name]: value }));
       // The server-side vault belongs to the exact problem that was opened.
+      sessionRequestId.current += 1;
       setSession(null);
       clearVerdict();
     },
@@ -184,11 +188,17 @@ export default function useChemistry() {
     if (session) return session;
     const payload = topic.session?.(problemType, values, problemText);
     if (!payload) return null;
+    const id = ++sessionRequestId.current;
     try {
-      const created = await openSession(payload);
+      const created = await openCurrentSession(
+        payload,
+        () => id === sessionRequestId.current
+      );
+      if (!created) return null;
       setSession(created);
       return created;
     } catch {
+      if (id !== sessionRequestId.current) return null;
       setStatus({
         notice:
           "We couldn't solve this problem ahead of time, so hints will be the " +
@@ -201,8 +211,8 @@ export default function useChemistry() {
   // -- reading ------------------------------------------------------------
 
   const readWork = useCallback(
-    async (imageBase64) => {
-      if (!isDrawing) return;
+    async (strokes) => {
+      if (!isDrawing || !strokes?.length) return;
       const id = ++requestId.current;
       setPageReading(true);
       setStatus(null);
@@ -210,8 +220,11 @@ export default function useChemistry() {
       setVerdictsByLine(new Map());
       setFirstWrongRow(null);
       try {
-        const data = await transcribeStructure(imageBase64);
-        if (id !== requestId.current) return;
+        const data = await readStructureSnapshot(
+          strokes,
+          () => id === requestId.current
+        );
+        if (!data) return;
 
         setAnswer(data.smiles ?? "");
         setUnreadable(Boolean(data.unreadable));
@@ -323,6 +336,8 @@ export default function useChemistry() {
       lineVersions.current.set(row, (lineVersions.current.get(row) ?? 0) + 1);
       lineRequestIds.current.set(row, (lineRequestIds.current.get(row) ?? 0) + 1);
       requestId.current += 1;
+      setReadingRows((current) => removeReadingRow(current, row));
+      setChecking(false);
       const nextLines = removeChemistryLine(linesRef.current, row);
       linesRef.current = nextLines;
       setLines(nextLines);

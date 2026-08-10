@@ -18,7 +18,35 @@ const NOTEBOOK_HEIGHT = NOTEBOOK_ROWS * LINE_HEIGHT;
 const TOOLBAR_HEIGHT = 72;
 const FEEDBACK_PANEL_WIDTH = 360;
 const PAGE_GAP = 16;
+const COMPACT_BREAKPOINT = 700;
 const NOOP = () => {};
+
+export function shouldAcknowledgeProcessedRow(
+  activeRow,
+  processedRow,
+  currentVersion,
+  processedVersion
+) {
+  return activeRow === processedRow && currentVersion === processedVersion;
+}
+
+export function shouldInvalidateCommittedRow(startRow, committedRow) {
+  return startRow !== null && startRow !== committedRow;
+}
+
+export function completedRowAfterStroke(queuedRow, previousRow, committedRow) {
+  if (queuedRow !== null) return queuedRow;
+  return previousRow !== null && committedRow > previousRow ? previousRow : null;
+}
+
+export function getCanvasDisplaySize(viewportWidth, viewportHeight) {
+  const compact = viewportWidth <= COMPACT_BREAKPOINT;
+  const reservedWidth = compact ? 0 : FEEDBACK_PANEL_WIDTH + PAGE_GAP * 3;
+  return {
+    width: Math.max(compact ? 1 : 640, viewportWidth - reservedWidth),
+    height: Math.max(NOTEBOOK_HEIGHT, viewportHeight - TOOLBAR_HEIGHT),
+  };
+}
 
 function drawStroke(context, stroke) {
   const points = stroke.points;
@@ -79,6 +107,8 @@ export default function useCanvas({
   const activePointerId = useRef(null);
   const activeCanvasRectRef = useRef(null);
   const activeRowRef = useRef(null);
+  const strokeStartRowRef = useRef(null);
+  const strokePreviousRowRef = useRef(null);
   const rowToQueueAfterStrokeRef = useRef(null);
   const rowIdleTimerRef = useRef(null);
 
@@ -135,6 +165,21 @@ export default function useCanvas({
     );
   };
 
+  const acknowledgeProcessedRow = useCallback((row, version) => {
+    if (
+      !shouldAcknowledgeProcessedRow(
+        activeRowRef.current,
+        row,
+        rowVersionsRef.current.get(row) ?? 0,
+        version
+      )
+    ) {
+      return;
+    }
+    activeRowRef.current = null;
+    setActiveLineNumber(null);
+  }, []);
+
   const notifyRowReady = useCallback((row) => {
     if (row === null || row === undefined) return;
     const rowStrokes = inkIndexRef.current.rows.get(row);
@@ -147,8 +192,9 @@ export default function useCanvas({
       row,
       strokes: [...rowStrokes],
       version,
+      onProcessed: () => acknowledgeProcessedRow(row, version),
     });
-  }, []);
+  }, [acknowledgeProcessedRow]);
 
   const bumpRowVersion = (row) => {
     const nextVersion = (rowVersionsRef.current.get(row) ?? 0) + 1;
@@ -206,10 +252,14 @@ export default function useCanvas({
     }
 
     if (isStructure) {
+      strokeStartRowRef.current = null;
+      strokePreviousRowRef.current = null;
       onStructureStrokeStartedRef.current();
     } else {
       const newRow = Math.floor(firstPoint.y / LINE_HEIGHT);
+      strokeStartRowRef.current = newRow;
       const previousRow = activeRowRef.current;
+      strokePreviousRowRef.current = previousRow;
       if (previousRow !== null && newRow > previousRow) {
         rowToQueueAfterStrokeRef.current = previousRow;
       }
@@ -283,11 +333,19 @@ export default function useCanvas({
     strokesRef.current = updatedStrokes;
     const row = addStrokeToInkIndex(inkIndexRef.current, finished);
     bumpRowVersion(row);
+    const startRow = strokeStartRowRef.current;
+    strokeStartRowRef.current = null;
+    const previousRow = strokePreviousRowRef.current;
+    strokePreviousRowRef.current = null;
 
     if (isStructure) {
       startTransition(() => setStrokes(updatedStrokes));
       onStructureChangedRef.current();
       return;
+    }
+
+    if (shouldInvalidateCommittedRow(startRow, row)) {
+      onRowEditedRef.current(row, true);
     }
 
     activeRowRef.current = row;
@@ -296,7 +354,11 @@ export default function useCanvas({
       setStrokes(updatedStrokes);
     });
 
-    const completedRow = rowToQueueAfterStrokeRef.current;
+    const completedRow = completedRowAfterStroke(
+      rowToQueueAfterStrokeRef.current,
+      previousRow,
+      row
+    );
     rowToQueueAfterStrokeRef.current = null;
     if (completedRow !== null && completedRow !== row) {
       notifyRowReady(completedRow);
@@ -317,6 +379,8 @@ export default function useCanvas({
     activePointerId.current = null;
     activeCanvasRectRef.current = null;
     rowToQueueAfterStrokeRef.current = null;
+    strokeStartRowRef.current = null;
+    strokePreviousRowRef.current = null;
     clearActiveCanvas(canceledStroke);
   };
 
@@ -354,6 +418,8 @@ export default function useCanvas({
     activePointerId.current = null;
     activeCanvasRectRef.current = null;
     activeRowRef.current = null;
+    strokeStartRowRef.current = null;
+    strokePreviousRowRef.current = null;
     rowToQueueAfterStrokeRef.current = null;
     setStrokes([]);
     setActiveLineNumber(null);
@@ -365,14 +431,33 @@ export default function useCanvas({
 
   const loadStrokes = useCallback((storedStrokes) => {
     const nextStrokes = storedStrokes ?? [];
-    if (rowIdleTimerRef.current) clearTimeout(rowIdleTimerRef.current);
+    if (rowIdleTimerRef.current) {
+      clearTimeout(rowIdleTimerRef.current);
+      rowIdleTimerRef.current = null;
+    }
+    const pointerId = activePointerId.current;
+    if (
+      pointerId !== null &&
+      canvasRef.current?.hasPointerCapture?.(pointerId)
+    ) {
+      canvasRef.current.releasePointerCapture(pointerId);
+    }
     strokesRef.current = nextStrokes;
     inkIndexRef.current = buildInkIndex(nextStrokes);
     rowVersionsRef.current.clear();
     lastReadyVersionRef.current.clear();
+    currentStroke.current = null;
+    activeDrawnPointCountRef.current = 0;
+    activePointerId.current = null;
+    activeCanvasRectRef.current = null;
     activeRowRef.current = null;
+    strokeStartRowRef.current = null;
+    strokePreviousRowRef.current = null;
+    rowToQueueAfterStrokeRef.current = null;
     setStrokes(nextStrokes);
     setActiveLineNumber(null);
+    const { width, height } = canvasSizeRef.current;
+    canvasRef.current?.getContext("2d")?.clearRect(0, 0, width, height);
     drawStaticFrameRef.current();
     drawOverlayFrameRef.current();
   }, []);
@@ -537,13 +622,10 @@ export default function useCanvas({
     const activeCanvas = canvasRef.current;
 
     const resize = () => {
-      const width = Math.max(
-        640,
-        document.documentElement.clientWidth -
-          FEEDBACK_PANEL_WIDTH -
-          PAGE_GAP * 3
+      const { width, height } = getCanvasDisplaySize(
+        document.documentElement.clientWidth,
+        window.innerHeight
       );
-      const height = Math.max(NOTEBOOK_HEIGHT, window.innerHeight - TOOLBAR_HEIGHT);
       const backingSize = getCanvasBackingSize(
         width,
         height,

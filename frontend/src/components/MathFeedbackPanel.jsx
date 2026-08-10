@@ -1,18 +1,33 @@
 import { COLORS } from "../theme";
+import {
+  buildMathCheckInput,
+  orderedMathLines,
+} from "../math/lineModel";
 
 function verdictStatus(verdict) {
   if (!verdict) return null;
   return verdict.status ?? (verdict.valid ? "valid" : "invalid");
 }
 
-function lineStatus(line, isProblem, verdict) {
-  if (line.unreadable) {
+function lineStatus(line, isProblem, verdict, blocked) {
+  if (line.unreadable || !line.text.trim()) {
     return {
       label: "Needs review",
-      detail: "We could not confidently read this line.",
+      detail: line.unreadable
+        ? "We could not confidently read this line."
+        : "Enter the transcription for this line before checking.",
       color: "#a96b1f",
       background: "#fff7e8",
       symbol: "!",
+    };
+  }
+  if (blocked) {
+    return {
+      label: "Waiting for earlier line",
+      detail: "Correct the earlier unreadable line before checking this step.",
+      color: COLORS.muted,
+      background: "#f3f5f4",
+      symbol: "…",
     };
   }
   if (isProblem) {
@@ -79,11 +94,12 @@ export default function MathFeedbackPanel({ workflow }) {
     handleLineEditDone,
     handleGetHint,
   } = workflow;
-  const handwrittenProblemRow = !problem.trim()
-    ? [...lines]
-        .sort((left, right) => left.row - right.row)
-        .find((line) => line.text.trim() && !line.unreadable)?.row ?? null
-    : null;
+  const orderedLines = orderedMathLines(lines);
+  const { handwrittenProblemRow, readableLines } = buildMathCheckInput(
+    orderedLines,
+    problem
+  );
+  const readableRows = new Set(readableLines.map((line) => line.row));
 
   if (lines.length === 0) {
     return (
@@ -117,11 +133,16 @@ export default function MathFeedbackPanel({ workflow }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {lines.map((line, index) => {
+      {orderedLines.map((line, index) => {
+        const blocked =
+          Boolean(line.text.trim()) &&
+          !line.unreadable &&
+          !readableRows.has(line.row);
         const status = lineStatus(
           line,
           line.row === handwrittenProblemRow,
-          verdictsByLine.get(line.row)
+          verdictsByLine.get(line.row),
+          blocked
         );
         return (
           <div key={line.row} style={{ padding: 12, borderRadius: 12, border: `1px solid ${status.color}33`, background: status.background }}>
@@ -136,6 +157,7 @@ export default function MathFeedbackPanel({ workflow }) {
                 </div>
                 <div style={{ color: COLORS.muted, fontSize: 12, lineHeight: 1.35, marginBottom: 8 }}>{status.detail}</div>
                 <input
+                  aria-label={`Math line ${index + 1}`}
                   type="text"
                   value={line.text}
                   placeholder={line.unreadable ? "Type what you wrote" : ""}

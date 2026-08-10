@@ -49,6 +49,7 @@ function TopicPicker({ topicId, onChoose }) {
             key={topic.id}
             type="button"
             title={topic.blurb}
+            aria-pressed={selected}
             onClick={() => onChoose(topic.id)}
             style={{
               padding: "9px 6px",
@@ -136,7 +137,12 @@ const inputStyle = {
   outline: "none",
 };
 
-export default function ChemistryPanel({ chemistry, captureEnabled, onCapture }) {
+export default function ChemistryPanel({
+  chemistry,
+  captureEnabled,
+  onCapture,
+  onProblemChange,
+}) {
   const {
     topic,
     topicId,
@@ -191,11 +197,21 @@ export default function ChemistryPanel({ chemistry, captureEnabled, onCapture })
     inputMode === "drawing"
       ? verdict?.status === "invalid"
       : firstWrongRow !== null && verdictsByLine.get(firstWrongRow)?.status === "invalid";
+  const handleTopicChange = (nextTopicId) => {
+    if (nextTopicId === topicId) return;
+    onProblemChange();
+    chooseTopic(nextTopicId);
+  };
+  const handleTypeChange = (nextTypeId) => {
+    if (nextTypeId === problemType.id) return;
+    onProblemChange();
+    chooseType(nextTypeId);
+  };
 
   return (
     <div>
       <SectionLabel>Subject</SectionLabel>
-      <TopicPicker topicId={topicId} onChoose={chooseTopic} />
+      <TopicPicker topicId={topicId} onChoose={handleTopicChange} />
       <div
         style={{
           marginTop: 6,
@@ -209,8 +225,9 @@ export default function ChemistryPanel({ chemistry, captureEnabled, onCapture })
 
       <SectionLabel>Question</SectionLabel>
       <select
+        aria-label="Chemistry question type"
         value={problemType.id}
-        onChange={(event) => chooseType(event.target.value)}
+        onChange={(event) => handleTypeChange(event.target.value)}
         style={{ ...inputStyle, marginBottom: 8, fontWeight: 600 }}
       >
         {topic.types.map((type) => (
@@ -363,6 +380,7 @@ export default function ChemistryPanel({ chemistry, captureEnabled, onCapture })
         >
           <input
             ref={answerRef}
+            aria-label="Chemistry answer transcription"
             type="text"
             value={answer}
             placeholder={problemType.answerPlaceholder ?? topic.answerPlaceholder}
@@ -444,6 +462,7 @@ export default function ChemistryPanel({ chemistry, captureEnabled, onCapture })
             from you, not from what the model read back.
           </div>
           <input
+            aria-label="Corpus capture note"
             type="text"
             value={captureNote}
             placeholder="note, e.g. skeletal, crowded ring, fast handwriting"

@@ -29,6 +29,7 @@ export default function StructurePreviewCard({ preview }) {
         What we read, drawn back
       </div>
       <div
+        className="structure-preview"
         style={{ display: "grid", placeItems: "center" }}
         // The SVG comes from our application's RDKit rendering path, never
         // directly from a model or unchecked student output.

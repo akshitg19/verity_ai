@@ -2,12 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { checkSteps, getHint, transcribeLine } from "../api";
 import { renderLineToPng } from "../canvas/render";
-
-function readableLines(lines) {
-  return [...lines]
-    .sort((left, right) => left.row - right.row)
-    .filter((line) => line.text.trim() && !line.unreadable);
-}
+import { buildMathCheckInput } from "./lineModel";
 
 export default function useMathWorkflow() {
   const [problem, setProblem] = useState("");
@@ -67,24 +62,8 @@ export default function useMathWorkflow() {
       setFirstWrongLine(null);
       setLastResult(null);
 
-      const orderedLines = [...lineArr].sort((left, right) => left.row - right.row);
-      const readable = readableLines(orderedLines);
-      const typedProblem = problemText.trim();
-      const handwrittenProblem = typedProblem ? null : readable[0] ?? null;
-      const effectiveProblem = typedProblem || handwrittenProblem?.text.trim() || "";
-      const solutionLines = typedProblem ? readable : readable.slice(1);
-      const judgeLines = solutionLines.map((line, index) => ({
-        row: line.row,
-        line_number: index + 1,
-        latex: line.text,
-      }));
-      const stepList = judgeLines.map(({ line_number, latex }) => ({
-        line_number,
-        latex,
-      }));
-      const rowByLineNumber = new Map(
-        judgeLines.map((line) => [line.line_number, line.row])
-      );
+      const { effectiveProblem, stepList, rowByLineNumber } =
+        buildMathCheckInput(lineArr, problemText);
 
       if (!effectiveProblem || stepList.length === 0) return;
 
@@ -133,7 +112,7 @@ export default function useMathWorkflow() {
   );
 
   const processRow = useCallback(
-    async ({ row, strokes, version }) => {
+    async ({ row, strokes, version, onProcessed }) => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (!strokes?.length || rowVersionsRef.current.get(row) !== version) return;
 
@@ -172,6 +151,7 @@ export default function useMathWorkflow() {
         linesRef.current = nextLines;
         setLines(nextLines);
         dirtyRowsRef.current.delete(row);
+        onProcessed?.();
         await recheck(nextLines, problemRef.current, row);
       } catch (error) {
         if (requestId !== transcriptionRequestId.current) return;
@@ -202,7 +182,7 @@ export default function useMathWorkflow() {
   }, [processRow]);
 
   const queueRow = useCallback(
-    ({ row, strokes }) => {
+    ({ row, strokes, onProcessed }) => {
       if (row === null || row === undefined || !strokes?.length) return;
       const alreadyTranscribed = linesRef.current.some((line) => line.row === row);
       if (alreadyTranscribed && !dirtyRowsRef.current.has(row)) return;
@@ -212,6 +192,7 @@ export default function useMathWorkflow() {
         row,
         strokes: [...strokes],
         version: rowVersionsRef.current.get(row) ?? 0,
+        onProcessed,
       });
       setTranscribing(true);
       void runRowQueue();

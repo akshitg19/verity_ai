@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canvasToPngDataUrl,
   getRenderBounds,
+  MAX_RENDER_SCALE,
   RECOGNITION_INK_COLOR,
   renderLineToPng,
 } from "./render";
@@ -74,6 +76,36 @@ describe("renderLineToPng", () => {
     expect(translatedEnd[2]).toBeCloseTo(24.8);
   });
 
+  it("normalizes negative coordinates and ignores non-finite points", async () => {
+    const fake = fakeCanvasFactory();
+    const strokes = [
+      {
+        points: [
+          { x: Number.NaN, y: 1 },
+          { x: -12, y: -8 },
+          { x: 8, y: 2 },
+        ],
+      },
+    ];
+
+    expect(getRenderBounds(strokes, 2)).toMatchObject({
+      minX: -12,
+      maxX: 8,
+      minY: -8,
+      maxY: 2,
+      width: 24,
+      height: 14,
+    });
+    await renderLineToPng(strokes, {
+      padding: 2,
+      documentLike: renderDocument(fake.canvas),
+      FileReaderImpl: FakeFileReader,
+    });
+
+    expect(fake.calls).toContainEqual(["moveTo", 2, 2]);
+    expect(fake.calls).toContainEqual(["lineTo", 22, 12]);
+  });
+
   it("scales export pixels and ink together", async () => {
     const fake = fakeCanvasFactory();
     await renderLineToPng(
@@ -90,6 +122,34 @@ describe("renderLineToPng", () => {
     expect(fake.canvas.height).toBe(28);
     expect(fake.context.lineWidth).toBe(5);
     expect(fake.context.strokeStyle).toBe(RECOGNITION_INK_COLOR);
+  });
+
+  it("falls back for invalid scales and caps oversized exports", async () => {
+    const invalidScale = fakeCanvasFactory();
+    await renderLineToPng(
+      [{ points: [{ x: 0, y: 0 }, { x: 10, y: 10 }] }],
+      {
+        padding: 2,
+        scale: Number.NaN,
+        documentLike: renderDocument(invalidScale.canvas),
+        FileReaderImpl: FakeFileReader,
+      }
+    );
+    expect(invalidScale.canvas.width).toBe(14);
+    expect(invalidScale.context.lineWidth).toBe(2.5);
+
+    const oversizedScale = fakeCanvasFactory();
+    await renderLineToPng(
+      [{ points: [{ x: 0, y: 0 }, { x: 10, y: 10 }] }],
+      {
+        padding: 2,
+        scale: 100,
+        documentLike: renderDocument(oversizedScale.canvas),
+        FileReaderImpl: FakeFileReader,
+      }
+    );
+    expect(oversizedScale.canvas.width).toBe(14 * MAX_RENDER_SCALE);
+    expect(oversizedScale.context.lineWidth).toBe(2.5 * MAX_RENDER_SCALE);
   });
 
   it("waits for asynchronous PNG blob and file-reader completion", async () => {
@@ -110,5 +170,36 @@ describe("renderLineToPng", () => {
     await expect(result).resolves.toBe("data:image/png;base64,encoded");
     expect(settled).toBe(true);
     expect(fake.calls).toContainEqual(["toBlob", "image/png"]);
+  });
+
+  it("reports canvas, blob, and file-reader failures", async () => {
+    await expect(
+      renderLineToPng([{ points: [{ x: 1, y: 1 }] }], {
+        documentLike: renderDocument({
+          width: 0,
+          height: 0,
+          getContext: () => null,
+        }),
+        FileReaderImpl: FakeFileReader,
+      })
+    ).rejects.toThrow("handwriting canvas could not be created");
+
+    await expect(
+      canvasToPngDataUrl({ toBlob: (callback) => callback(null) }, {
+        FileReaderImpl: FakeFileReader,
+      })
+    ).rejects.toThrow("handwriting image could not be encoded");
+
+    class FailedFileReader {
+      readAsDataURL() {
+        queueMicrotask(() => this.onerror());
+      }
+    }
+    await expect(
+      canvasToPngDataUrl(
+        { toBlob: (callback) => callback({ type: "image/png" }) },
+        { FileReaderImpl: FailedFileReader }
+      )
+    ).rejects.toThrow("handwriting image could not be read");
   });
 });

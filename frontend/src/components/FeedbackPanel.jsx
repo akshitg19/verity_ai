@@ -8,6 +8,7 @@ export default function FeedbackPanel({
   chemistry,
   captureEnabled,
   onCapture,
+  onChemistryProblemChange,
   transcribing,
   status,
 }) {
@@ -15,6 +16,9 @@ export default function FeedbackPanel({
     <>
       {(status?.error || status?.warning || status?.notice) && (
         <div
+          className="feedback-status"
+          role={status.error ? "alert" : "status"}
+          aria-live="polite"
           style={{
             position: "fixed",
             bottom: 12,
@@ -33,6 +37,8 @@ export default function FeedbackPanel({
         </div>
       )}
       <aside
+        className="feedback-panel"
+        aria-label="Live feedback"
         style={{
           position: "fixed",
           top: 88,
@@ -69,6 +75,7 @@ export default function FeedbackPanel({
             chemistry={chemistry}
             captureEnabled={captureEnabled}
             onCapture={onCapture}
+            onProblemChange={onChemistryProblemChange}
           />
         ) : (
           <MathFeedbackPanel workflow={math} />

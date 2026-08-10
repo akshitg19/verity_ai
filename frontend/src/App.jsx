@@ -79,7 +79,7 @@ export default function App() {
 
   const handleModeChange = (nextMode) => {
     if (nextMode === mode) return;
-    handleClear();
+    notebook.saveStrokes(canvas.getStrokesSnapshot());
     chemistry.resetProblem();
     const existing = notebook.folders[nextMode]?.[0];
     if (existing) notebook.openNote(existing.id);
@@ -93,8 +93,7 @@ export default function App() {
       return;
     }
     try {
-      const dataUrl = await renderLineToPng(canvas.getStrokesSnapshot());
-      await chemistry.readWork(dataUrl.split(",")[1]);
+      await chemistry.readWork(canvas.getStrokesSnapshot());
     } catch (error) {
       chemistry.setStatus({ error: error.message });
     }
@@ -178,6 +177,7 @@ export default function App() {
         chemistry={chemistry}
         captureEnabled={captureEnabled}
         onCapture={handleCaptureSample}
+        onChemistryProblemChange={handleClear}
         transcribing={transcribing}
         status={status}
       />
