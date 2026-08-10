@@ -1965,6 +1965,103 @@ with "Try for free", and separate entries into math and chemistry.
 
 ---
 
+---
+
+# Measured, Aug 10: the first real numbers in this file
+
+Everything above was written against assumptions. This section is the first
+thing here backed by a measurement, taken by
+`backend/scripts/student_walkthrough.py` against the deployed service.
+
+Thirty questions, ten each for balancing, solutions and stoichiometry. Per
+question it does what a student does: open the problem, submit the correct
+working and expect `valid`, submit a plausible wrong line and expect
+`invalid`, then ask for hints 1, 2 and 3.
+
+## The headline
+
+| | First run | After the fixes |
+|---|---|---|
+| Level 1 generated | 27/30 (90%) | see below |
+| Level 2 generated | 24/30 (80%) | |
+| Level 3 generated | 29/30 (97%) | |
+| Em dashes in hints | 0 | |
+| **Fatal judging failures** | **3** | |
+
+Before this pass, level 2 generated on **zero** questions on every topic.
+
+## The fatal three, and why they matter more than the rest
+
+`strong acid pH`, `strong base pH` and `weak base pH` each accepted an answer
+that was wrong. That is the top row of this file's own failure taxonomy, the
+one with a stated target of zero, because being told you are right when you
+are not is what ends a classroom trial.
+
+The cause was not recognition and not the model. A pH answer group
+deliberately holds pH, pOH, `[H+]` and `[OH-]` so a student may state
+whichever form the question asked for. `WorkedSolution.match` used a label to
+disambiguate but never to reject, so when a known label disagreed on value it
+fell through to matching any step in the group. A student writing `pH = 12.00`
+on a problem whose pH is `2.00` matched the pOH, which is 12.00, and was told
+they were correct.
+
+**The suite did not catch this and could not have.** All 576 tests mock the
+model, and this bug lives in the judge, not the model. What found it was
+running the thing the way a person runs it. That is the argument for the
+harness, and the argument for the handwriting corpus that is still not built:
+the same class of bug is presumably sitting in the recognition stage, and
+nothing in CI will ever find it.
+
+## Standing gates
+
+- [ ] Run `student_walkthrough.py` before any demo, and after any change to
+      a judge, a vault, or a prompt
+- [ ] Fatal failures must be zero. Not low, zero
+- [ ] Level 2 generation above 80%. It is the rung students should live on
+- [ ] Extend to the other three chemistry topics: redox, structure, organic
+- [ ] Extend to math, which has no equivalent harness at all
+
+---
+
+# The withholding decision, Aug 10
+
+Recorded here because it contradicts this file and `CLAUDE.md`, and a
+contradiction that is not written down becomes a surprise later.
+
+**Decision: functionality first, withholding second.** Every question gets
+all three hint levels, and level 3 works the student's step through to the
+end, including on the last step of a problem.
+
+What that turned off, all behind one flag, `hints.WITHHOLD_ANSWER`:
+
+- the terminal-step gate (firewall mechanism 3)
+- the per-problem level-3 budget (firewall mechanism 4)
+- the answer check inside redaction, for level 3 only
+
+What is still on:
+
+- the answer vault is still built for every problem
+- redaction still runs on levels 1 and 2 in full
+- sessions still track their budget, they just do not enforce it
+- every test of every mechanism still exists and still passes, pinned to the
+  flag being on
+
+Re-arming is one line, or `VERITY_WITHHOLD_ANSWER=1` in the environment.
+
+The honest cost: **the guarantee at the top of this file is currently not in
+force.** "The answer is never stated" is not true of level 3 today. Anyone
+writing a deck slide, a README paragraph or a demo script should say what the
+product does now, not what this section used to promise. The reason the gate
+fired so often was itself a bug worth knowing about: a balancing session
+reports `total_steps: 1`, so every step was the terminal step and level 3 was
+unreachable on the topic most likely to be demoed.
+
+- [ ] Decide before any public claim whether withholding comes back on
+- [ ] If it does, give balancing real steps first, or the gate makes level 3
+      useless there again
+
+---
+
 ## Suggested order
 
 Not a schedule, just the order that gets the most value per hour.
