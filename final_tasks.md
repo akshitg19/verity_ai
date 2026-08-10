@@ -1980,15 +1980,25 @@ working and expect `valid`, submit a plausible wrong line and expect
 
 ## The headline
 
-| | First run | After the fixes |
+| | First run | After the fix |
 |---|---|---|
-| Level 1 generated | 27/30 (90%) | see below |
-| Level 2 generated | 24/30 (80%) | |
-| Level 3 generated | 29/30 (97%) | |
-| Em dashes in hints | 0 | |
-| **Fatal judging failures** | **3** | |
+| Level 1 generated | 27/30 (90%) | 27/30 (90%) |
+| Level 2 generated | 24/30 (80%) | 24/30 (80%) |
+| Level 3 generated | 29/30 (97%) | 27/30 (90%) |
+| Em dashes in hints | 0 | 0 |
+| **Fatal judging failures** | **3** | **0** |
 
 Before this pass, level 2 generated on **zero** questions on every topic.
+
+The second run is the one to quote: **thirty out of thirty correct answers
+accepted, thirty out of thirty wrong answers caught.** The level-3 dip from
+97% to 90% is generation variance on three stoichiometry questions, not a
+regression from the fix, which touched only the numeric matcher.
+
+Where the floor still shows: level 1 and level 2 both fall back on the three
+strong-acid and strong-base pH questions, in both runs, which is a pattern
+rather than variance and is worth chasing next. Level 2 also falls back on
+the buffer and on two others that differ between runs, which is variance.
 
 ## The fatal three, and why they matter more than the rest
 
