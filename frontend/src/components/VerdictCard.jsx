@@ -62,7 +62,7 @@ export default function VerdictCard({
       ? `Something here is a ${category}.`
       : "This doesn't follow."
     : status === "parse_error"
-    ? "We couldn't read this. Try again, or correct it below — this isn't a mistake on your part."
+    ? "We couldn't read this. Try again, or correct it below. This isn't a mistake on your part."
     : "This is outside what we can check yet. That's our limit, not your error.";
 
   return (
@@ -164,7 +164,7 @@ export default function VerdictCard({
                     cursor: "pointer",
                   }}
                 >
-                  It's written the way I meant — check again
+                  It's written the way I meant, check again
                 </button>
               )}
             </div>

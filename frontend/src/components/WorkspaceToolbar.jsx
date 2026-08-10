@@ -303,7 +303,7 @@ export default function WorkspaceToolbar({
           <div style={{ fontSize: 13, color: chemistry.ready ? COLORS.text : COLORS.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {chemistry.ready
               ? chemistry.problemText
-              : `${chemistry.problemType.label} — write the question, or type it in the panel`}
+              : `${chemistry.problemType.label}. Write the question, or type it in the panel`}
           </div>
         </div>
       )}
@@ -450,7 +450,7 @@ export default function WorkspaceToolbar({
 
         <button
           type="button"
-          title={`${themeLabel.title} — tap to change`}
+          title={`${themeLabel.title}. Tap to change`}
           aria-label={themeLabel.title}
           onClick={theme.cycle}
           style={{ width: 42, height: 40, padding: 0, display: "grid", placeItems: "center", background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, fontSize: 17, cursor: "pointer" }}

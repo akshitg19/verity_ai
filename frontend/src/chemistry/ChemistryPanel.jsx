@@ -365,7 +365,7 @@ export default function ChemistryPanel({
             style={{ maxWidth: 240, color: COLORS.muted, fontSize: 12, lineHeight: 1.5 }}
           >
             {inputMode === "drawing"
-              ? "Use the whole page for one structure, then press Read Page. R groups are fine — draw R, R', or Ar."
+              ? "Use the whole page for one structure, then press Read Page. R groups are fine. Draw R, R', or Ar."
               : "Write one row, then press Read Page. You can also type it below."}
           </div>
         </div>
@@ -377,7 +377,7 @@ export default function ChemistryPanel({
             unreadable
               ? "We couldn't read that confidently. Correct it below before checking."
               : confidence === "low"
-              ? "We're not sure we read this correctly — check it before we judge it."
+              ? "We're not sure we read this correctly, so check it before we judge it."
               : "Ready to check."
           }
           onConfirm={checkAnswer}

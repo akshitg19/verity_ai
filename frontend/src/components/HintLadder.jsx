@@ -160,7 +160,7 @@ export default function HintLadder({
               }}
             >
               {terminalStep
-                ? "Last step — you finish it"
+                ? "Last step, you finish it"
                 : `Hint ${level} of 3 · ${LEVEL_LABELS[level] ?? ""}`}
             </div>
             {source === "fallback" && !terminalStep && (
