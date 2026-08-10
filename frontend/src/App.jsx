@@ -17,11 +17,12 @@ const SIDEBAR_WIDTH = 250;
 const SWIPE_DISTANCE = 90;
 const SWIPE_SLOPE = 60;
 
-export default function App() {
+export default function App({ theme: themeFromRoute, subject }) {
   const notebook = useNotebook();
   const chemistry = useChemistry();
   const math = useMathWorkflow();
-  const theme = useTheme();
+  const ownTheme = useTheme();
+  const theme = themeFromRoute ?? ownTheme;
   const mode = notebook.activeNote.subject;
   const [showNotebook, setShowNotebook] = useState(false);
   const swipeStart = useRef(null);
@@ -75,6 +76,20 @@ export default function App() {
     if (verdictStatus) notebook.recordOutcome(verdictStatus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chemistry.verdict]);
+
+  // The route names the subject, so /chemistry opens a chemistry note even
+  // if the last one open was math. Runs once per subject change, not on
+  // every render, or it would fight the in-app subject toggle.
+  const routedSubjectRef = useRef(null);
+  useEffect(() => {
+    if (!subject || routedSubjectRef.current === subject) return;
+    routedSubjectRef.current = subject;
+    if (subject === mode) return;
+    const existing = notebook.folders[subject]?.[0];
+    if (existing) notebook.openNote(existing.id);
+    else notebook.createNote(subject);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject]);
 
   const handleClear = () => {
     canvas.clearPage();

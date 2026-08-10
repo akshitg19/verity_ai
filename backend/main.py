@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from answer_vault import VaultConstructionError, build_vault
@@ -595,3 +596,16 @@ if _STATIC_DIR.is_dir():
         StaticFiles(directory=_STATIC_DIR, html=True),
         name="frontend",
     )
+
+    # SPA fallback. The frontend routes /math and /chemistry client-side, and
+    # StaticFiles has no file at either path, so a deep link or a refresh on
+    # one of them would 404. Serving index.html lets the router take over.
+    # Registered as an exception handler rather than a catch-all route so it
+    # cannot shadow a real API path: an unknown /chemistry/* endpoint still
+    # 404s as JSON, because only navigations ask for HTML.
+    @app.exception_handler(404)
+    async def spa_fallback(request, exc):
+        accepts_html = "text/html" in request.headers.get("accept", "")
+        if request.method == "GET" and accepts_html:
+            return FileResponse(_STATIC_DIR / "index.html")
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
