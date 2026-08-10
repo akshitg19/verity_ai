@@ -455,3 +455,87 @@ def test_every_response_reports_the_remaining_budget(monkeypatch, ph_session):
     response = hints.generate_hint(request_for(ph_session, 1))
 
     assert response.level_3_remaining == 3
+
+
+# ---------------------------------------------------------------------------
+# The other half of the safeguard: a *correct* example must actually pass.
+#
+# The docstring at the top of this file says to test the rejection path harder
+# than the happy path, and that is right, but it was taken far enough that the
+# happy path was never tested at all. Both verifiers rejected every correct
+# example a model produced, so level 2 silently served the static floor on
+# every topic and no test noticed. These are the acceptance cases.
+# ---------------------------------------------------------------------------
+
+BALANCED = {"unbalanced": "Fe + O2 -> Fe2O3", "balanced": "4Fe + 3O2 -> 2Fe2O3"}
+
+
+@pytest.mark.parametrize(
+    "final_step",
+    [
+        "4Fe + 3O2 -> 2Fe2O3",
+        "The balanced equation is 4Fe + 3O2 -> 2Fe2O3",
+        "Step 3: 4Fe + 3O2 \u2192 2Fe2O3",
+        "So 4Fe + 3O2 -> 2Fe2O3.",
+        "Multiply through to get 4Fe + 3O2 => 2Fe2O3, which balances.",
+    ],
+)
+def test_a_correct_balancing_example_passes_however_the_line_is_worded(final_step):
+    # A model writes prose around the equation. Parsing the whole line as an
+    # equation is what used to fail, and it failed silently.
+    assert hints._verify_balancing(BALANCED, ["Count the atoms.", final_step])
+
+
+@pytest.mark.parametrize(
+    "steps",
+    [
+        ["Count the atoms.", "2Fe + O2 -> Fe2O3"],           # not the balanced form
+        ["Count the atoms.", "Balance it carefully."],        # no equation at all
+        ["Count the atoms.", "4Fe + 3O2 -> 2FeO"],           # different reaction
+    ],
+)
+def test_a_wrong_balancing_example_is_still_rejected(steps):
+    assert not hints._verify_balancing(BALANCED, steps)
+
+
+def test_wrong_coefficients_are_rejected_even_when_the_line_parses():
+    assert not hints._verify_balancing(
+        {"unbalanced": "Fe + O2 -> Fe2O3", "balanced": "2Fe + 3O2 -> 2Fe2O3"},
+        ["2Fe + 3O2 -> 2Fe2O3"],
+    )
+
+
+WEAK_ACID = {
+    "task": "weak_acid_ph",
+    "params": {"concentration_m": 0.250, "ka": 1.8e-5},
+    "answer": 2.68,
+}
+
+
+def test_algebraic_intermediates_do_not_reject_a_correct_example():
+    # x^2 = 4.5e-6 is a real step in the working and no solver enumerates it.
+    # Rejecting it threw away every correct numeric example.
+    assert hints._verify_solutions(
+        WEAK_ACID,
+        [
+            "Ka = x^2 / (0.250 - x).",
+            "Assume x is small: x^2 = 1.8e-5 * 0.250 = 4.5e-6.",
+            "x = 2.12e-3 M",
+            "pH = 2.68",
+        ],
+    )
+
+
+def test_a_wrong_final_answer_is_still_rejected():
+    assert not hints._verify_solutions(
+        {**WEAK_ACID, "answer": 3.9},
+        ["Ka = x^2 / (0.250 - x).", "x = 2.12e-3 M", "pH = 2.68"],
+    )
+
+
+def test_a_line_that_contradicts_a_quantity_we_computed_is_rejected():
+    # Naming pH and stating a different one is a contradiction, not an
+    # unknown intermediate, and must still throw the example away.
+    assert not hints._verify_solutions(
+        WEAK_ACID, ["Ka = x^2 / (0.250 - x).", "pH = 3.90"]
+    )

@@ -436,3 +436,50 @@ def test_a_leaking_generated_hint_is_replaced_by_the_static_floor(monkeypatch, p
     assert "2.88" not in response.hint
     assert response.source == "fallback"
     assert response.hint  # never empty
+
+
+# ---------------------------------------------------------------------------
+# The small-integer relaxation for level-2 worked examples.
+#
+# It exists because a balancing vault holds coefficients, so "3" is an answer
+# form and every worked example about every reaction contains one. It is a
+# real relaxation of mechanism 2 and it is bounded here: small bare integers
+# only, worked examples only, and nothing else about the gate moves.
+# ---------------------------------------------------------------------------
+
+def test_a_bare_coefficient_is_allowed_in_a_worked_example():
+    vault = vault_for_balance("Balance N2 + H2 -> NH3", "N2 + H2 -> NH3")
+
+    blocked, _ = check_outbound("Use 3 of them", vault)
+    allowed, violation = check_outbound(
+        "Use 3 of them", vault, ignore_small_integers=True
+    )
+
+    assert blocked is False
+    assert allowed is True, violation
+
+
+def test_the_relaxation_does_not_reach_the_balanced_equation_itself():
+    vault = vault_for_balance("Balance N2 + H2 -> NH3", "N2 + H2 -> NH3")
+
+    allowed, violation = check_outbound(
+        "N2 + 3H2 -> 2NH3", vault, ignore_small_integers=True
+    )
+
+    assert allowed is False
+    assert violation
+
+
+def test_the_relaxation_stops_at_ten():
+    # Only genuinely small integers are waived. A two-digit answer is still
+    # an answer, and a pH or a mass is untouched by any of this.
+    vault = vault_for_balance("Balance C4H10 + O2 -> CO2 + H2O", "C4H10 + O2 -> CO2 + H2O")
+    forms = {str(form) for form in vault.answer_forms}
+    assert "13" in forms
+
+    allowed, violation = check_outbound(
+        "the coefficient is 13", vault, ignore_small_integers=True
+    )
+
+    assert allowed is False
+    assert violation

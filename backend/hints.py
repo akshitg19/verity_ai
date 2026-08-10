@@ -356,7 +356,14 @@ def _finalise(
 
     if worked_example is not None:
         for line in [worked_example.problem, worked_example.technique, *worked_example.steps]:
-            _, line_violation = redact_or_fallback(line, vault, fallback)
+            # `ignore_small_integers` applies only here, to a solution of a
+            # different problem that our own engine verified. A balancing
+            # vault holds coefficients, so every example about every reaction
+            # tripped on a bare "2" or "3" and none ever rendered. See the
+            # note on check_outbound; nothing else about the gate changes.
+            _, line_violation = redact_or_fallback(
+                line, vault, fallback, ignore_small_integers=True
+            )
             if line_violation:
                 logger.warning("worked example redacted: %s", line_violation)
                 worked_example = None
@@ -563,24 +570,71 @@ def _verify_balancing(check: dict, steps: list[str]) -> bool:
     if written != correct_left + correct_right:
         return False
     # And the worked steps must actually end at it.
-    return any(_same_equation(step, balanced) for step in steps[-2:])
+    return any(_same_equation(step, balanced) for step in steps[-3:])
+
+
+_ARROWS = ("->", "→", "⟶", "⇒", "=>", "➔", "-->")
+
+
+def _candidate_equations(text: str):
+    """Every sub-span of a line that parses as a chemical equation.
+
+    A model asked for one step per line writes "The balanced equation is
+    4Fe + 3O2 -> 2Fe2O3", not the bare equation, and parsing the whole line
+    as an equation was rejecting essentially every correct example, which is
+    why level 2 always fell back to the static floor.
+
+    Every span is yielded rather than the first that parses, because the
+    formula parser is lenient enough to read leading prose as species (`The`
+    is a plausible `Th` + `e`). The caller decides which span is the one it
+    was looking for, so leniency cannot smuggle prose into a match.
+    """
+    from judge.chemistry_equations import EquationParseError, parse_equation
+
+    normalised = text
+    for arrow in _ARROWS:
+        normalised = normalised.replace(arrow, "->")
+    if "->" not in normalised:
+        return
+
+    lhs, _, rhs = normalised.partition("->")
+    left_tokens = lhs.split()
+    right_tokens = [token.strip(".,;:!?") for token in rhs.split()]
+    right_tokens = [token for token in right_tokens if token]
+
+    for start in range(len(left_tokens)):
+        for end in range(len(right_tokens), 0, -1):
+            candidate = (
+                f"{' '.join(left_tokens[start:])} -> {' '.join(right_tokens[:end])}"
+            )
+            try:
+                parse_equation(candidate)
+            except EquationParseError:
+                continue
+            yield candidate
+
+
+def _equation_tally(equation: str):
+    from judge.chemistry_equations import EquationParseError, parse_equation
+
+    try:
+        left, right = parse_equation(equation)
+    except EquationParseError:
+        return None
+    return (
+        tuple(sorted((f, c) for c, f in left)),
+        tuple(sorted((f, c) for c, f in right)),
+    )
 
 
 def _same_equation(text: str, reference: str) -> bool:
-    from judge.chemistry_equations import EquationParseError, parse_equation
-
-    def tally(equation: str):
-        try:
-            left, right = parse_equation(equation)
-        except EquationParseError:
-            return None
-        return (
-            tuple(sorted((f, c) for c, f in left)),
-            tuple(sorted((f, c) for c, f in right)),
-        )
-
-    written = tally(text)
-    return written is not None and written == tally(reference)
+    """Whether this line states the reference equation, prose and all."""
+    target = _equation_tally(reference)
+    if target is None:
+        return False
+    return any(
+        _equation_tally(candidate) == target for candidate in _candidate_equations(text)
+    )
 
 
 def _verify_numeric(solution, check: dict, steps: list[str]) -> bool:
@@ -598,15 +652,31 @@ def _verify_numeric(solution, check: dict, steps: list[str]) -> bool:
     ):
         return False
 
-    # Every numeric line of the generated working must be a quantity our own
-    # solver produced. One invented intermediate and the example is rejected.
+    # Every numeric line of the generated working is checked against our own
+    # solution. The rule used to be "reject anything we did not produce",
+    # which was too strict to ever pass: a model showing its algebra writes
+    # intermediates no solver enumerates -- x^2 = 4.5e-6 on the way to x --
+    # and one of those threw away the whole example. Every correct example
+    # was being discarded, which is why level 2 never rendered.
+    #
+    # So only a *contradiction* rejects: a line that names a quantity we did
+    # compute and states a different value for it. An unrecognised
+    # intermediate is not evidence of an error, and the answer itself is
+    # still checked exactly, above.
     for step in steps:
         try:
             written = parse_quantity(step)
         except QuantityParseError:
             continue  # prose lines are fine; only numeric claims are checked
-        if solution.match(written) is None:
-            logger.info("level 2 rejected: step %r is not in our solution", step)
+        if solution.match(written) is not None:
+            continue
+        contradicts = any(
+            written.name
+            and (written.name == candidate.name.lower() or written.name in candidate.aliases)
+            for candidate in solution.steps
+        )
+        if contradicts:
+            logger.info("level 2 rejected: step %r contradicts our solution", step)
             return False
     return True
 
