@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { renderLineToPng } from "./canvas/render";
 import useCanvas from "./canvas/useCanvas";
 import useChemistry from "./chemistry/useChemistry";
+import QuestionPrompt from "./chemistry/QuestionPrompt";
 import CanvasSurface from "./components/CanvasSurface";
+import useTheme from "./useTheme";
 import FeedbackPanel from "./components/FeedbackPanel";
 import WorkspaceToolbar from "./components/WorkspaceToolbar";
 import NotebookSidebar from "./notebook/NotebookSidebar";
@@ -19,6 +21,7 @@ export default function App() {
   const notebook = useNotebook();
   const chemistry = useChemistry();
   const math = useMathWorkflow();
+  const theme = useTheme();
   const mode = notebook.activeNote.subject;
   const [showNotebook, setShowNotebook] = useState(false);
   const swipeStart = useRef(null);
@@ -155,7 +158,24 @@ export default function App() {
         onClose={() => setShowNotebook(false)}
         width={SIDEBAR_WIDTH}
       />
-      <CanvasSurface canvas={canvas} />
+      <CanvasSurface canvas={canvas}>
+        {mode === "chemistry" && chemistry.questionCandidateRow !== null && (
+          <QuestionPrompt
+            bounds={canvas.getRowBounds(chemistry.questionCandidateRow)}
+            text={
+              chemistry.lines.find(
+                (line) => line.row === chemistry.questionCandidateRow
+              )?.text
+            }
+            onUseAsQuestion={() =>
+              chemistry.useRowAsQuestion(chemistry.questionCandidateRow)
+            }
+            onDismiss={() =>
+              chemistry.dismissQuestionCandidate(chemistry.questionCandidateRow)
+            }
+          />
+        )}
+      </CanvasSurface>
       <WorkspaceToolbar
         notebook={notebook}
         showNotebook={showNotebook}
@@ -167,6 +187,7 @@ export default function App() {
         onProblemChange={math.handleProblemChange}
         onProblemEditDone={math.handleProblemEditDone}
         canvas={canvas}
+        theme={theme}
         onFinishLine={canvas.finishActiveRow}
         onReadPage={handleReadPage}
         onClear={handleClear}

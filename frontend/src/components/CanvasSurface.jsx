@@ -1,6 +1,6 @@
-import { COLORS } from "../theme";
+import { COLORS, SURFACES } from "../theme";
 
-export default function CanvasSurface({ canvas }) {
+export default function CanvasSurface({ canvas, children }) {
   const {
     staticCanvasRef,
     overlayCanvasRef,
@@ -10,6 +10,7 @@ export default function CanvasSurface({ canvas }) {
     handlePointerMove,
     handlePointerUp,
     handlePointerCancel,
+    handlePointerLeave,
   } = canvas;
 
   return (
@@ -19,7 +20,7 @@ export default function CanvasSurface({ canvas }) {
         aria-hidden="true"
         style={{
           display: "block",
-          background: "#faf8f2",
+          background: SURFACES.paper,
           borderRight: `1px solid ${COLORS.border}`,
         }}
       />
@@ -41,17 +42,27 @@ export default function CanvasSurface({ canvas }) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
+        onPointerLeave={handlePointerLeave}
         style={{
           position: "absolute",
           inset: 0,
-          touchAction: activeTool === "scroll" ? "pan-y" : "none",
+          // Always scrollable by finger. Touch never draws -- useCanvas
+          // returns early for it -- so suppressing pan here only ever stopped
+          // students moving down the page, which is what forced a separate
+          // hand tool to exist. Stylus draws, finger scrolls, as in Samsung
+          // Notes and iPad Notes.
+          touchAction: "pan-y",
           userSelect: "none",
           WebkitUserSelect: "none",
           WebkitTouchCallout: "none",
           display: "block",
           background: "transparent",
+          cursor: activeTool === "eraser" ? "none" : "crosshair",
         }}
       />
+      {/* Anything anchored to ink -- the question prompt -- renders here so it
+          can use canvas coordinates directly. */}
+      {children}
     </div>
   );
 }

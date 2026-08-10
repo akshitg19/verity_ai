@@ -1,3 +1,124 @@
+/* The palette lives here, as custom properties, so there is exactly one place
+   a colour is defined and a theme switch is one attribute on <html>.
+   `theme.js` exports the same names as `var(--v-*)` strings, which means every
+   existing `COLORS.surface` call site keeps working untouched.
+
+   Canvas is the exception: a 2D context cannot take `var()`, so `theme.js`
+   reads these back with getComputedStyle for the paper, the ruling, and the
+   ink. That is why the canvas tokens are here rather than hardcoded there. */
+
+:root {
+  color-scheme: light;
+
+  --v-bg: #f7f6f2;
+  --v-surface: #ffffff;
+  --v-primary: #315e54;
+  --v-primary-light: #e4f0ed;
+  --v-text: #1f2926;
+  --v-muted: #6f7a76;
+  --v-border: #d9dfdc;
+  --v-danger: #c94b4b;
+
+  --v-paper: #faf8f2;
+  --v-sidebar: #f2f1ec;
+  --v-sidebar-active: #e6e9e5;
+  --v-overlay: rgba(31, 41, 38, 0.35);
+  --v-rule: rgba(120, 150, 190, 0.4);
+
+  --v-math: #315e54;
+  --v-math-light: #e4f0ed;
+  --v-chem: #3d5a80;
+  --v-chem-light: #e6edf5;
+
+  --v-valid: #267a55;
+  --v-valid-bg: #edf8f2;
+  --v-valid-border: #267a5533;
+  --v-invalid: #c94b4b;
+  --v-invalid-bg: #fff0f0;
+  --v-invalid-border: #c94b4b33;
+  --v-unsupported: #a96b1f;
+  --v-unsupported-bg: #fff7e8;
+  --v-unsupported-border: #a96b1f33;
+  --v-parse: #7a6ba9;
+  --v-parse-bg: #f2f0fb;
+  --v-parse-border: #7a6ba933;
+  --v-waiting: #6f7a76;
+  --v-waiting-bg: #f3f5f4;
+  --v-waiting-border: #d9dfdc;
+
+  /* Default pen colour. Ink stays dark in both themes -- see the note on
+     --v-paper under the dark block. */
+  --v-ink: #1f2926;
+
+  --v-shadow-card: 0 12px 30px rgba(31, 41, 38, 0.12);
+  --v-shadow-raised: 0 2px 10px rgba(0, 0, 0, 0.04);
+  --v-shadow-float: 0 8px 24px rgba(31, 41, 38, 0.16);
+
+  --v-focus: #4c8d7d;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --v-bg: #121614;
+  --v-surface: #1b2120;
+  --v-primary: #7fc3b1;
+  --v-primary-light: #24332f;
+  --v-text: #e8ecea;
+  --v-muted: #9aa5a1;
+  --v-border: #2e3735;
+  --v-danger: #ef8b8b;
+
+  /* The paper stays light in dark mode, dimmed rather than inverted.
+     A student picks a dark pen colour, and the recognition PNG is normalised
+     to dark ink on paper by canvas/render.js; inverting the page would make
+     the drawn ink invisible on screen while the exported image stayed dark,
+     so the two would disagree. A true dark page needs ink inversion as well,
+     which is a separate piece of work. */
+  --v-paper: #e7e3da;
+  --v-sidebar: #171d1b;
+  --v-sidebar-active: #232b29;
+  --v-overlay: rgba(0, 0, 0, 0.55);
+  --v-rule: rgba(90, 120, 160, 0.35);
+
+  --v-math: #7fc3b1;
+  --v-math-light: #24332f;
+  --v-chem: #8fb0d8;
+  --v-chem-light: #222d3a;
+
+  /* Re-picked rather than darkened. The four outcomes must stay tellable
+     apart -- that is a product rule, not a preference. */
+  --v-valid: #63c79b;
+  --v-valid-bg: #16281f;
+  --v-valid-border: #63c79b44;
+  --v-invalid: #f08a8a;
+  --v-invalid-bg: #2d1a1a;
+  --v-invalid-border: #f08a8a44;
+  --v-unsupported: #e0aa5f;
+  --v-unsupported-bg: #2c2213;
+  --v-unsupported-border: #e0aa5f44;
+  --v-parse: #b0a2df;
+  --v-parse-bg: #221f2f;
+  --v-parse-border: #b0a2df44;
+  --v-waiting: #9aa5a1;
+  --v-waiting-bg: #1f2624;
+  --v-waiting-border: #2e3735;
+
+  --v-ink: #1f2926;
+
+  --v-shadow-card: 0 12px 30px rgba(0, 0, 0, 0.45);
+  --v-shadow-raised: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --v-shadow-float: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  --v-focus: #7fc3b1;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--v-bg);
+}
+
 /* The notebook disables Safari's text-selection loupe while drawing. Keep
    selection available in editable transcription and problem fields. */
 input,
@@ -9,13 +130,21 @@ textarea,
 }
 
 :where(button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 3px solid #4c8d7d !important;
+  outline: 3px solid var(--v-focus) !important;
   outline-offset: 2px;
 }
 
 .structure-preview svg {
   max-width: 100%;
   height: auto;
+}
+
+/* RDKit returns SVG with black strokes, which vanishes on a dark card.
+   The markup is ours -- it comes from our own /chemistry/render endpoint and
+   never from the model -- so recolouring it here is safe. */
+:root[data-theme="dark"] .structure-preview svg path[stroke="#000000"],
+:root[data-theme="dark"] .structure-preview svg path[stroke="#000"] {
+  stroke: #14181a;
 }
 
 @media (max-width: 700px) {

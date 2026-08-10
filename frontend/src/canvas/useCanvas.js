@@ -1,9 +1,13 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  DEFAULT_ERASER_RADIUS,
   DEFAULT_LINE_HEIGHT as LINE_HEIGHT,
+  eraseFromStroke,
+  samplePath,
   strokeTouchesPoint,
 } from "./geometry";
+import { readCanvasPalette } from "../theme";
 import {
   addStrokeToInkIndex,
   buildInkIndex,
@@ -21,6 +25,14 @@ const FEEDBACK_PANEL_WIDTH = 360;
 const PAGE_GAP = 16;
 const COMPACT_BREAKPOINT = 700;
 const NOOP = () => {};
+
+// Deep enough that a student never hits the end of undo in one problem,
+// shallow enough that a page of snapshots cannot grow without bound.
+const MAX_HISTORY = 60;
+
+// How far apart erase samples may be along a drag before the band it rubs out
+// starts to show gaps.
+const ERASE_SAMPLE_STEP = 6;
 
 export function shouldAcknowledgeProcessedRow(
   activeRow,
@@ -101,7 +113,28 @@ export default function useCanvas({
   const [activeTool, setActiveTool] = useState("pen");
   const [penColor, setPenColor] = useState("#1f2926");
   const [penWidth, setPenWidth] = useState(4);
+  const [eraserRadius, setEraserRadius] = useState(DEFAULT_ERASER_RADIUS);
+  // "pixel" rubs out what the disc covers; "stroke" removes a whole stroke on
+  // touch, which is the old behaviour and still the quicker way to clear a
+  // whole character. Samsung Notes offers both, so this does too.
+  const [eraseMode, setEraseMode] = useState("pixel");
   const [activeLineNumber, setActiveLineNumber] = useState(null);
+
+  // Undo is a stack of whole-page snapshots rather than "drop the last
+  // stroke". A pixel eraser can split one stroke into two, or clear six at
+  // once, and a single drag has to undo as a single action; the old
+  // stroke-list model could not express either. Snapshots also make redo free.
+  const historyRef = useRef({ past: [], future: [] });
+  const [historyDepth, setHistoryDepth] = useState({ past: 0, future: 0 });
+  const eraserRadiusRef = useRef(DEFAULT_ERASER_RADIUS);
+  const erasingRef = useRef(false);
+  const erasedRowsRef = useRef(new Set());
+  const eraserCursorRef = useRef(null);
+  const lastErasePointRef = useRef(null);
+
+  useEffect(() => {
+    eraserRadiusRef.current = eraserRadius;
+  }, [eraserRadius]);
 
   const currentStroke = useRef(null);
   const activeDrawnPointCountRef = useRef(0);
@@ -209,8 +242,93 @@ export default function useCanvas({
     onRowEditedRef.current(row, inkIndexRef.current.rows.has(row));
   };
 
+  const syncHistoryDepth = () => {
+    setHistoryDepth({
+      past: historyRef.current.past.length,
+      future: historyRef.current.future.length,
+    });
+  };
+
+  // Snapshot the page *before* an edit. Called once per gesture, so a whole
+  // eraser drag undoes in one step rather than one step per split stroke.
+  const pushHistory = () => {
+    const history = historyRef.current;
+    history.past.push(strokesRef.current);
+    if (history.past.length > MAX_HISTORY) history.past.shift();
+    history.future = [];
+    syncHistoryDepth();
+  };
+
+  const applyStrokes = (nextStrokes) => {
+    strokesRef.current = nextStrokes;
+    inkIndexRef.current = buildInkIndex(nextStrokes);
+    startTransition(() => setStrokes(nextStrokes));
+    drawStaticFrameRef.current();
+    drawOverlayFrameRef.current();
+  };
+
+  // Rub out along a run of points in one pass, so a fast drag costs one React
+  // update and one redraw rather than one per sampled position.
+  const eraseAlong = (centres) => {
+    const radius = eraserRadiusRef.current;
+    let working = strokesRef.current;
+    let changed = false;
+
+    for (const centre of centres) {
+      // Rows the disc overlaps are the rows whose recognition is now stale.
+      for (const [row, bounds] of inkIndexRef.current.bounds) {
+        if (!bounds) continue;
+        if (
+          centre.x + radius >= bounds.minX &&
+          centre.x - radius <= bounds.maxX &&
+          centre.y + radius >= bounds.minY &&
+          centre.y - radius <= bounds.maxY
+        ) {
+          erasedRowsRef.current.add(row);
+        }
+      }
+
+      const next = [];
+      let touched = false;
+      for (const stroke of working) {
+        const pieces = eraseFromStroke(stroke, centre, radius);
+        // eraseFromStroke returns the original by identity when it misses.
+        if (pieces.length === 1 && pieces[0] === stroke) {
+          next.push(stroke);
+          continue;
+        }
+        touched = true;
+        next.push(...pieces);
+      }
+      if (touched) {
+        working = next;
+        changed = true;
+      }
+    }
+
+    if (changed) applyStrokes(working);
+    return changed;
+  };
+
+  const endEraseGesture = () => {
+    if (!erasingRef.current) return;
+    erasingRef.current = false;
+    lastErasePointRef.current = null;
+    eraserCursorRef.current = null;
+    activeCanvasRectRef.current = null;
+    const rows = [...erasedRowsRef.current];
+    erasedRowsRef.current.clear();
+    drawOverlayFrameRef.current();
+
+    if (isStructure) {
+      onStructureChangedRef.current();
+      return;
+    }
+    for (const row of rows) notifyRowEdited(row);
+    reconcileActiveRow(rows[rows.length - 1] ?? null);
+  };
+
   const handlePointerDown = (event) => {
-    if (activeTool === "scroll") return;
     if (event.pointerType === "touch") {
       event.preventDefault();
       return;
@@ -227,31 +345,34 @@ export default function useCanvas({
     const firstPoint = getPoint(event, canvasRect);
 
     if (activeTool === "eraser") {
-      const currentStrokes = strokesRef.current;
-      const strokeIndex = currentStrokes.findLastIndex((stroke) =>
-        strokeTouchesPoint(stroke, firstPoint)
-      );
-      if (strokeIndex === -1) return;
+      activePointerId.current = event.pointerId;
+      canvasRef.current.setPointerCapture(event.pointerId);
+      erasingRef.current = true;
+      erasedRowsRef.current.clear();
+      lastErasePointRef.current = firstPoint;
+      eraserCursorRef.current = firstPoint;
+      pushHistory();
 
-      const removedStroke = currentStrokes[strokeIndex];
-      // Read the row off the index that still holds this stroke. Recomputing
-      // it from the stroke alone would be wrong now that a stroke can join a
-      // row its own vertical centre does not name.
-      const row = findStrokeRow(inkIndexRef.current, removedStroke);
-      const updatedStrokes = currentStrokes.filter(
-        (_, index) => index !== strokeIndex
-      );
-      strokesRef.current = updatedStrokes;
-      inkIndexRef.current = buildInkIndex(updatedStrokes);
-      startTransition(() => setStrokes(updatedStrokes));
-      drawStaticFrameRef.current();
-      drawOverlayFrameRef.current();
-
-      if (isStructure) onStructureChangedRef.current();
-      else {
-        notifyRowEdited(row);
-        reconcileActiveRow(row);
+      if (eraseMode === "stroke") {
+        // The old behaviour, kept as a second mode: one tap takes a whole
+        // stroke, which is still the fastest way to remove a whole character.
+        const currentStrokes = strokesRef.current;
+        const strokeIndex = currentStrokes.findLastIndex((stroke) =>
+          strokeTouchesPoint(stroke, firstPoint, eraserRadiusRef.current)
+        );
+        if (strokeIndex !== -1) {
+          const removed = currentStrokes[strokeIndex];
+          // Read the row off the index that still holds this stroke.
+          // Recomputing it from the stroke alone would be wrong now that a
+          // stroke can join a row its own vertical centre does not name.
+          const row = findStrokeRow(inkIndexRef.current, removed);
+          if (row !== null) erasedRowsRef.current.add(row);
+          applyStrokes(currentStrokes.filter((_, index) => index !== strokeIndex));
+        }
+      } else {
+        eraseAlong([firstPoint]);
       }
+      drawOverlayFrameRef.current();
       return;
     }
 
@@ -294,10 +415,32 @@ export default function useCanvas({
   };
 
   const handlePointerMove = (event) => {
-    if (event.pointerType === "touch") {
+    // Touch never draws, so it must be left alone to scroll the page. The old
+    // preventDefault here fought native scrolling, which is why a separate
+    // hand tool had to exist at all.
+    if (event.pointerType === "touch") return;
+
+    if (erasingRef.current && event.pointerId === activePointerId.current) {
       event.preventDefault();
+      const point = getPoint(event);
+      eraserCursorRef.current = point;
+      if (eraseMode === "pixel") {
+        const from = lastErasePointRef.current ?? point;
+        eraseAlong(samplePath(from, point, ERASE_SAMPLE_STEP));
+      }
+      lastErasePointRef.current = point;
+      scheduleOverlayFrame();
       return;
     }
+
+    // Hover preview. The canvas hides the system cursor in eraser mode, so
+    // without this a mouse user sees nothing at all until they press.
+    if (activeTool === "eraser" && !erasingRef.current) {
+      eraserCursorRef.current = getPoint(event);
+      scheduleOverlayFrame();
+      return;
+    }
+
     if (event.pointerType === "pen") event.preventDefault();
     if (
       !currentStroke.current ||
@@ -317,6 +460,16 @@ export default function useCanvas({
 
   const handlePointerUp = (event) => {
     if (event.pointerType === "touch") return;
+
+    if (erasingRef.current && event.pointerId === activePointerId.current) {
+      if (canvasRef.current?.hasPointerCapture?.(event.pointerId)) {
+        canvasRef.current.releasePointerCapture(event.pointerId);
+      }
+      activePointerId.current = null;
+      endEraseGesture();
+      return;
+    }
+
     if (
       !currentStroke.current ||
       event.pointerId !== activePointerId.current
@@ -342,6 +495,7 @@ export default function useCanvas({
     activePointerId.current = null;
     activeCanvasRectRef.current = null;
 
+    pushHistory();
     const updatedStrokes = [...strokesRef.current, finished];
     strokesRef.current = updatedStrokes;
     const row = addStrokeToInkIndex(inkIndexRef.current, finished);
@@ -384,8 +538,20 @@ export default function useCanvas({
     }, 1500);
   };
 
+  // The eraser preview must not be left behind when the pointer leaves.
+  const handlePointerLeave = () => {
+    if (erasingRef.current || !eraserCursorRef.current) return;
+    eraserCursorRef.current = null;
+    scheduleOverlayFrame();
+  };
+
   const handlePointerCancel = (event) => {
     if (event.pointerId !== activePointerId.current) return;
+    if (erasingRef.current) {
+      activePointerId.current = null;
+      endEraseGesture();
+      return;
+    }
     const canceledStroke = currentStroke.current;
     currentStroke.current = null;
     activeDrawnPointCountRef.current = 0;
@@ -397,25 +563,34 @@ export default function useCanvas({
     clearActiveCanvas(canceledStroke);
   };
 
-  const handleUndo = () => {
-    const currentStrokes = strokesRef.current;
-    if (currentStrokes.length === 0) return;
+  // Undo and redo move whole-page snapshots between the two stacks. Which
+  // rows changed is not tracked, so every row that exists on either side of
+  // the move is invalidated -- recognition re-running once too often is
+  // cheap, and a stale verdict pinned to ink that is no longer there is not.
+  const restoreSnapshot = (from, to) => {
+    if (from.length === 0) return;
+    const rowsBefore = [...inkIndexRef.current.rows.keys()];
+    to.push(strokesRef.current);
+    applyStrokes(from.pop());
+    syncHistoryDepth();
 
-    const removedStroke = currentStrokes[currentStrokes.length - 1];
-    // As in the eraser path: ask the index that still holds it.
-    const affectedRow = findStrokeRow(inkIndexRef.current, removedStroke);
-    const updatedStrokes = currentStrokes.slice(0, -1);
-    strokesRef.current = updatedStrokes;
-    inkIndexRef.current = buildInkIndex(updatedStrokes);
-    startTransition(() => setStrokes(updatedStrokes));
-    drawStaticFrameRef.current();
-    drawOverlayFrameRef.current();
-
-    if (isStructure) onStructureChangedRef.current();
-    else {
-      notifyRowEdited(affectedRow);
-      reconcileActiveRow(affectedRow);
+    if (isStructure) {
+      onStructureChangedRef.current();
+      return;
     }
+    const affected = new Set([...rowsBefore, ...inkIndexRef.current.rows.keys()]);
+    for (const row of affected) notifyRowEdited(row);
+    reconcileActiveRow([...affected].sort((left, right) => left - right).pop() ?? null);
+  };
+
+  const handleUndo = () => {
+    const history = historyRef.current;
+    restoreSnapshot(history.past, history.future);
+  };
+
+  const handleRedo = () => {
+    const history = historyRef.current;
+    restoreSnapshot(history.future, history.past);
   };
 
   const clearPage = () => {
@@ -427,6 +602,12 @@ export default function useCanvas({
     inkIndexRef.current = buildInkIndex([]);
     rowVersionsRef.current.clear();
     lastReadyVersionRef.current.clear();
+    historyRef.current = { past: [], future: [] };
+    setHistoryDepth({ past: 0, future: 0 });
+    erasingRef.current = false;
+    erasedRowsRef.current.clear();
+    eraserCursorRef.current = null;
+    lastErasePointRef.current = null;
     currentStroke.current = null;
     activeDrawnPointCountRef.current = 0;
     activePointerId.current = null;
@@ -460,6 +641,12 @@ export default function useCanvas({
     inkIndexRef.current = buildInkIndex(nextStrokes);
     rowVersionsRef.current.clear();
     lastReadyVersionRef.current.clear();
+    historyRef.current = { past: [], future: [] };
+    setHistoryDepth({ past: 0, future: 0 });
+    erasingRef.current = false;
+    erasedRowsRef.current.clear();
+    eraserCursorRef.current = null;
+    lastErasePointRef.current = null;
     currentStroke.current = null;
     activeDrawnPointCountRef.current = 0;
     activePointerId.current = null;
@@ -545,8 +732,13 @@ export default function useCanvas({
     if (!canvas) return;
     const context = canvas.getContext("2d");
     const { width, height } = canvasSizeRef.current;
+    // A 2D context cannot resolve var(), so the palette is read back from the
+    // root element. index.css stays the one place a colour is defined.
+    const palette = readCanvasPalette();
     context.clearRect(0, 0, width, height);
-    context.strokeStyle = "rgba(120, 150, 190, 0.4)";
+    context.fillStyle = palette.paper;
+    context.fillRect(0, 0, width, height);
+    context.strokeStyle = palette.rule;
     context.lineWidth = 1;
     for (let y = LINE_HEIGHT; y < height; y += LINE_HEIGHT) {
       context.beginPath();
@@ -563,6 +755,20 @@ export default function useCanvas({
     const context = canvas.getContext("2d");
     const { width, height } = canvasSizeRef.current;
     context.clearRect(0, 0, width, height);
+
+    // The eraser is drawn at its true radius so it can be aimed. Drawn before
+    // the early return below, because a structure canvas is erased too.
+    const cursor = eraserCursorRef.current;
+    if (cursor) {
+      context.beginPath();
+      context.arc(cursor.x, cursor.y, eraserRadiusRef.current, 0, Math.PI * 2);
+      context.fillStyle = "rgba(120, 130, 128, 0.18)";
+      context.fill();
+      context.strokeStyle = "rgba(60, 70, 68, 0.75)";
+      context.lineWidth = 1.5;
+      context.stroke();
+    }
+
     if (isStructure) return;
 
     const { rows, bounds } = inkIndexRef.current;
@@ -630,6 +836,21 @@ export default function useCanvas({
     []
   );
 
+  // The canvas paints paper and ruling with resolved colours, so unlike every
+  // CSS surface it does not follow a theme change on its own. Watching the
+  // attribute the theme is stamped on keeps it in step without useCanvas
+  // needing to know that a theme hook exists.
+  useEffect(() => {
+    const root = globalThis.document?.documentElement;
+    if (!root || typeof MutationObserver === "undefined") return undefined;
+    const observer = new MutationObserver(() => {
+      drawStaticFrameRef.current();
+      drawOverlayFrameRef.current();
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     const staticCanvas = staticCanvasRef.current;
     const overlayCanvas = overlayCanvasRef.current;
@@ -677,15 +898,29 @@ export default function useCanvas({
     setPenColor,
     penWidth,
     setPenWidth,
+    eraserRadius,
+    setEraserRadius,
+    eraseMode,
+    setEraseMode,
     activeLineNumber,
     handlePointerDown,
     handlePointerMove,
     handlePointerUp,
     handlePointerCancel,
+    handlePointerLeave,
     handleUndo,
+    handleRedo,
+    canUndo: historyDepth.past > 0,
+    canRedo: historyDepth.future > 0,
     clearPage,
     loadStrokes,
     finishActiveRow,
     getStrokesSnapshot: () => strokesRef.current,
+    // Where a row's ink sits, so anything anchored to a line can be placed
+    // against it. Read through `strokes` so callers re-render when ink moves.
+    getRowBounds: (row) =>
+      row === null || row === undefined
+        ? null
+        : inkIndexRef.current.bounds.get(row) ?? null,
   };
 }

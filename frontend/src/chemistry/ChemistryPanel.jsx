@@ -157,6 +157,8 @@ export default function ChemistryPanel({
     editAnswer,
     lines,
     editLine,
+    questionRow,
+    releaseQuestionRow,
     read,
     unreadable,
     confidence,
@@ -312,8 +314,10 @@ export default function ChemistryPanel({
             inputMode={inputMode}
             ready={ready}
             checking={checking}
+            questionRow={questionRow}
             onEdit={editLine}
             onCheck={checkAnswer}
+            onReleaseQuestion={releaseQuestionRow}
           />
         )
       ) : !read && !answer ? (

@@ -3,8 +3,43 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>verity.ai — it knows the answer, and will never give it to you</title>
+    <meta
+      name="description"
+      content="Write your homework by hand. verity.ai reads each line as you finish it, marks the first line where the reasoning broke, and teaches up to the answer without ever handing it over."
+    />
+    <!-- Declared so Chrome and Samsung Internet stop applying their automatic
+         dark theming, which used to invert the whole light palette into
+         something nobody designed. Now that a real dark theme exists this says
+         "both are supported"; the script below picks which one. -->
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121614" media="(prefers-color-scheme: dark)" />
+    <script>
+      // Runs before first paint on purpose. Reading the stored preference in a
+      // useEffect instead would show the wrong theme for one frame on every
+      // load, which reads as a broken app on a tablet.
+      (function () {
+        try {
+          var stored = localStorage.getItem("verity.theme");
+          var preference =
+            stored === "light" || stored === "dark" || stored === "system"
+              ? stored
+              : "system";
+          var theme =
+            preference === "system"
+              ? window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light"
+              : preference;
+          document.documentElement.dataset.theme = theme;
+        } catch (error) {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -20,7 +20,13 @@ import {
 } from "./lineModel";
 import { openCurrentSession, readStructureSnapshot } from "./requestModel";
 import { trustedStructurePreview } from "./structurePreview";
-import { TOPICS, describeProblem, inputModeFor, isProblemReady } from "./topics";
+import {
+  TOPICS,
+  describeProblem,
+  inputModeFor,
+  isProblemReady,
+  questionFieldFor,
+} from "./topics";
 
 const emptyValues = (type) =>
   Object.fromEntries(
@@ -86,6 +92,12 @@ export default function useChemistry() {
   const lineRequestIds = useRef(new Map());
   const lineVersions = useRef(new Map());
 
+  // The row the student marked as the question, and the rows where they said
+  // "this is my working" so the offer stops coming back.
+  const [questionRow, setQuestionRow] = useState(null);
+  const questionRowRef = useRef(null);
+  const [dismissedRows, setDismissedRows] = useState(() => new Set());
+
   const inputMode = inputModeFor(topic, problemType);
   const isDrawing = isWholePageChemistryInput(inputMode);
   const ready = isProblemReady(problemType, values);
@@ -145,6 +157,9 @@ export default function useChemistry() {
     setSession(null);
     setStatus(null);
     setCaptureNote("");
+    questionRowRef.current = null;
+    setQuestionRow(null);
+    setDismissedRows(new Set());
     clearAnswer();
   }, [clearAnswer]);
 
@@ -181,6 +196,54 @@ export default function useChemistry() {
     },
     [clearVerdict]
   );
+
+  // -- the question, written rather than typed ------------------------------
+
+  const questionField = questionFieldFor(topic, problemType);
+
+  // Offer the first readable row as the question while the topic still has
+  // none. A question written on the page is the natural first thing a student
+  // does, and requiring it to be typed puts a seam down the middle of a
+  // handwriting app.
+  const questionCandidateRow = (() => {
+    if (isDrawing || !questionField || ready || questionRow !== null) return null;
+    const candidate = orderedChemistryLines(lines).find(
+      (line) => line.text.trim() && !line.unreadable && !dismissedRows.has(line.row)
+    );
+    return candidate?.row ?? null;
+  })();
+
+  const useRowAsQuestion = useCallback(
+    (row) => {
+      const line = linesRef.current.find((entry) => entry.row === row);
+      const field = questionFieldFor(topic, problemType);
+      const text = line?.text?.trim();
+      if (!text || !field) return;
+      questionRowRef.current = row;
+      setQuestionRow(row);
+      // setValue drops the session, so the vault is rebuilt from this
+      // question rather than a stale one. That matters for more than
+      // accuracy: the vault is what redaction and the terminal-step gate
+      // are guarding.
+      setValue(field, text);
+    },
+    [problemType, setValue, topic]
+  );
+
+  const dismissQuestionCandidate = useCallback((row) => {
+    setDismissedRows((current) => {
+      const next = new Set(current);
+      next.add(row);
+      return next;
+    });
+  }, []);
+
+  const releaseQuestionRow = useCallback(() => {
+    const field = questionFieldFor(topic, problemType);
+    questionRowRef.current = null;
+    setQuestionRow(null);
+    if (field) setValue(field, "");
+  }, [problemType, setValue, topic]);
 
   // -- session ------------------------------------------------------------
 
@@ -401,7 +464,12 @@ export default function useChemistry() {
 
   const checkAnswer = useCallback(async () => {
     const written = answer.trim();
-    const currentLines = orderedChemistryLines(linesRef.current);
+    // The row holding the question is not a step. Without this the student's
+    // own question is checked as though it were their first line of working,
+    // and is reported wrong for not being balanced.
+    const currentLines = orderedChemistryLines(linesRef.current).filter(
+      (line) => line.row !== questionRowRef.current
+    );
     const steps = isDrawing
       ? written
         ? [{ line_number: 1, smiles: written }]
@@ -559,6 +627,12 @@ export default function useChemistry() {
     editAnswer,
     lines,
     editLine,
+    questionField,
+    questionRow,
+    questionCandidateRow,
+    useRowAsQuestion,
+    dismissQuestionCandidate,
+    releaseQuestionRow,
     read,
     unreadable,
     confidence,

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   distanceToSegment,
+  eraseFromStroke,
   getStrokeRow,
+  samplePath,
   segmentIntoLines,
   strokeTouchesPoint,
 } from "./geometry";
@@ -43,6 +45,74 @@ describe("strokeTouchesPoint", () => {
     const dot = stroke({ x: 10, y: 10 });
 
     expect(strokeTouchesPoint(dot, { x: 13, y: 14 }, 5)).toBe(true);
+  });
+});
+
+describe("eraseFromStroke", () => {
+  const line = (count) => ({
+    color: "#123456",
+    width: 3,
+    points: Array.from({ length: count }, (_, index) => ({ x: index * 10, y: 0 })),
+  });
+
+  it("leaves a stroke it does not touch alone, by identity", () => {
+    const stroke = line(5);
+
+    expect(eraseFromStroke(stroke, { x: 0, y: 500 }, 18)).toEqual([stroke]);
+    expect(eraseFromStroke(stroke, { x: 0, y: 500 }, 18)[0]).toBe(stroke);
+  });
+
+  it("splits a stroke into two when the middle is rubbed out", () => {
+    const result = eraseFromStroke(line(7), { x: 30, y: 0 }, 12);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].points.map((p) => p.x)).toEqual([0, 10]);
+    expect(result[1].points.map((p) => p.x)).toEqual([50, 60]);
+  });
+
+  it("keeps colour and width on every surviving piece", () => {
+    const result = eraseFromStroke(line(7), { x: 30, y: 0 }, 12);
+
+    for (const piece of result) {
+      expect(piece.color).toBe("#123456");
+      expect(piece.width).toBe(3);
+    }
+  });
+
+  it("removes a stroke entirely when all of it is inside the disc", () => {
+    expect(eraseFromStroke(line(3), { x: 10, y: 0 }, 60)).toEqual([]);
+  });
+
+  it("drops a one-point remnant rather than leaving a stray dot", () => {
+    // Erasing at x=10 with a radius that also swallows x=0 leaves a single
+    // point at x=20, which is not something the student drew.
+    const result = eraseFromStroke(line(3), { x: 5, y: 0 }, 12);
+
+    expect(result).toEqual([]);
+  });
+
+  it("does not sweep up an untouched single-point dot", () => {
+    const dot = { points: [{ x: 100, y: 100 }] };
+
+    expect(eraseFromStroke(dot, { x: 0, y: 0 }, 18)).toEqual([dot]);
+  });
+});
+
+describe("samplePath", () => {
+  it("fills in the gap between two pointer samples", () => {
+    const points = samplePath({ x: 0, y: 0 }, { x: 30, y: 0 }, 10);
+
+    expect(points).toEqual([
+      { x: 10, y: 0 },
+      { x: 20, y: 0 },
+      { x: 30, y: 0 },
+    ]);
+  });
+
+  it("always emits the destination even when the pointer barely moved", () => {
+    expect(samplePath({ x: 0, y: 0 }, { x: 1, y: 0 }, 10)).toEqual([
+      { x: 1, y: 0 },
+    ]);
   });
 });
 
