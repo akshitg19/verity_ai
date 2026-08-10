@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { COLORS, FONT, RADIUS } from "../theme";
+import WorkedExampleStepper from "./WorkedExampleStepper";
 
 const HINTS_OPEN_KEY = "verity.hintsOpen";
 
@@ -42,86 +43,6 @@ const NEXT_LABELS = {
   1: "Show me a worked example",
   2: "Walk me through my step",
 };
-
-function WorkedExample({ example }) {
-  return (
-    <div
-      style={{
-        marginTop: 10,
-        padding: 12,
-        borderRadius: RADIUS.md,
-        background: COLORS.surface,
-        border: `1px solid ${COLORS.border}`,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: 0.6,
-          textTransform: "uppercase",
-          color: COLORS.muted,
-          marginBottom: 6,
-        }}
-      >
-        A different problem, worked in full
-      </div>
-      <div
-        style={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: COLORS.text,
-          lineHeight: 1.4,
-          marginBottom: 4,
-        }}
-      >
-        {example.problem}
-      </div>
-      <div
-        style={{
-          fontSize: 12,
-          color: COLORS.primary,
-          fontWeight: 600,
-          marginBottom: 10,
-        }}
-      >
-        {example.technique}
-      </div>
-
-      <ol style={{ margin: 0, paddingLeft: 18 }}>
-        {example.steps.map((step, index) => (
-          <li
-            key={index}
-            style={{
-              fontFamily: FONT.mono,
-              fontSize: 12.5,
-              lineHeight: 1.7,
-              color: COLORS.text,
-            }}
-          >
-            {step}
-          </li>
-        ))}
-      </ol>
-
-      {example.verified && (
-        // Only an example that passed our own deterministic judge, line by
-        // line, is ever rendered. Saying so is the point: it is the reason a
-        // generated worked example is safe to show at all.
-        <div
-          style={{
-            marginTop: 10,
-            fontSize: 11,
-            color: "#267a55",
-            fontWeight: 600,
-          }}
-        >
-          ✓ every line checked by the same engine that checks your work
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function HintLadder({
   level,
@@ -254,7 +175,12 @@ export default function HintLadder({
 
           {hint}
 
-          {workedExample && <WorkedExample example={workedExample} />}
+          {workedExample && (
+            <WorkedExampleStepper
+              key={workedExample.problem}
+              example={workedExample}
+            />
+          )}
 
           {resource && (
             <a
