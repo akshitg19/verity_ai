@@ -2,15 +2,16 @@ import { startTransition, useCallback, useEffect, useRef, useState } from "react
 
 import {
   DEFAULT_LINE_HEIGHT as LINE_HEIGHT,
-  getStrokeRow,
   strokeTouchesPoint,
 } from "./geometry";
 import {
   addStrokeToInkIndex,
   buildInkIndex,
   expandAndClampBounds,
+  findStrokeRow,
   getCanvasBackingSize,
   getStrokeBounds,
+  resolveRowForBounds,
 } from "./inkModel";
 
 const NOTEBOOK_ROWS = 24;
@@ -233,6 +234,10 @@ export default function useCanvas({
       if (strokeIndex === -1) return;
 
       const removedStroke = currentStrokes[strokeIndex];
+      // Read the row off the index that still holds this stroke. Recomputing
+      // it from the stroke alone would be wrong now that a stroke can join a
+      // row its own vertical centre does not name.
+      const row = findStrokeRow(inkIndexRef.current, removedStroke);
       const updatedStrokes = currentStrokes.filter(
         (_, index) => index !== strokeIndex
       );
@@ -242,7 +247,6 @@ export default function useCanvas({
       drawStaticFrameRef.current();
       drawOverlayFrameRef.current();
 
-      const row = getStrokeRow(removedStroke);
       if (isStructure) onStructureChangedRef.current();
       else {
         notifyRowEdited(row);
@@ -256,7 +260,16 @@ export default function useCanvas({
       strokePreviousRowRef.current = null;
       onStructureStrokeStartedRef.current();
     } else {
-      const newRow = Math.floor(firstPoint.y / LINE_HEIGHT);
+      // Provisional, so the active-line indicator is right the instant the
+      // pen lands. The authoritative assignment happens on pointer up, once
+      // the stroke has a real bounding box; resolving against the same ink
+      // here keeps the two from disagreeing about which line is being edited.
+      const newRow = resolveRowForBounds(inkIndexRef.current, {
+        minX: firstPoint.x,
+        maxX: firstPoint.x,
+        minY: firstPoint.y,
+        maxY: firstPoint.y,
+      });
       strokeStartRowRef.current = newRow;
       const previousRow = activeRowRef.current;
       strokePreviousRowRef.current = previousRow;
@@ -389,7 +402,8 @@ export default function useCanvas({
     if (currentStrokes.length === 0) return;
 
     const removedStroke = currentStrokes[currentStrokes.length - 1];
-    const affectedRow = getStrokeRow(removedStroke);
+    // As in the eraser path: ask the index that still holds it.
+    const affectedRow = findStrokeRow(inkIndexRef.current, removedStroke);
     const updatedStrokes = currentStrokes.slice(0, -1);
     strokesRef.current = updatedStrokes;
     inkIndexRef.current = buildInkIndex(updatedStrokes);
