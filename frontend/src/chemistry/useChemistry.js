@@ -1,22 +1,26 @@
 import { useCallback, useRef, useState } from "react";
 
+import { renderLineToPng } from "../canvas/render";
 import {
   captureSample,
   getHint,
-  openSession,
   renderStructure,
   transcribeChemistryText,
-  transcribeStructure,
 } from "../api";
+import {
+  buildChemistrySteps,
+  isStaleLineResponse,
+  isWholePageChemistryInput,
+  keepVerdictsBeforeRow,
+  mapChemistryVerdicts,
+  orderedChemistryLines,
+  removeChemistryLine,
+  rowForChemistryLineNumber,
+  upsertChemistryLine,
+} from "./lineModel";
+import { openCurrentSession, readStructureSnapshot } from "./requestModel";
+import { trustedStructurePreview } from "./structurePreview";
 import { TOPICS, describeProblem, inputModeFor, isProblemReady } from "./topics";
-
-// All chemistry state in one place, so App.jsx's toolbar and the chemistry
-// panel read from the same source instead of each keeping their own copy.
-//
-// The shape mirrors how a student actually works: pick a problem, write or
-// draw an answer, have it read back, check it, then climb the hint ladder.
-// Every one of those steps invalidates the ones after it, which is the bulk
-// of what this hook does.
 
 const emptyValues = (type) =>
   Object.fromEntries(
@@ -25,6 +29,18 @@ const emptyValues = (type) =>
       field.type === "select" ? field.options[0] : "",
     ])
   );
+
+function addReadingRow(current, row) {
+  const next = new Set(current);
+  next.add(row);
+  return next;
+}
+
+function removeReadingRow(current, row) {
+  const next = new Set(current);
+  next.delete(row);
+  return next;
+}
 
 export default function useChemistry() {
   const [topicId, setTopicId] = useState("structure");
@@ -36,14 +52,22 @@ export default function useChemistry() {
 
   const [session, setSession] = useState(null);
 
+  // Structures are one two-dimensional figure. Written chemistry uses one
+  // entry per segmented row so each claim can be corrected and checked on its
+  // own without pretending a page-wide transcription was one answer.
   const [answer, setAnswer] = useState("");
+  const [lines, setLines] = useState([]);
+  const linesRef = useRef([]);
   const [read, setRead] = useState(false);
   const [unreadable, setUnreadable] = useState(false);
   const [confidence, setConfidence] = useState("high");
-  const [preview, setPreview] = useState(null); // { svg, formula, generic }
-  const [reading, setReading] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [pageReading, setPageReading] = useState(false);
+  const [readingRows, setReadingRows] = useState(() => new Set());
 
   const [verdict, setVerdict] = useState(null);
+  const [verdictsByLine, setVerdictsByLine] = useState(new Map());
+  const [firstWrongRow, setFirstWrongRow] = useState(null);
   const [problemError, setProblemError] = useState(null);
   const [checking, setChecking] = useState(false);
 
@@ -56,22 +80,19 @@ export default function useChemistry() {
   const [captureCount, setCaptureCount] = useState(null);
 
   const requestId = useRef(0);
+  const sessionRequestId = useRef(0);
   const hintRequestId = useRef(0);
+  const previewRequestId = useRef(0);
+  const lineRequestIds = useRef(new Map());
+  const lineVersions = useRef(new Map());
 
   const inputMode = inputModeFor(topic, problemType);
+  const isDrawing = isWholePageChemistryInput(inputMode);
   const ready = isProblemReady(problemType, values);
   const problemText = describeProblem(topic, problemType, values);
+  const reading = pageReading || readingRows.size > 0;
 
-  // -- invalidation ---------------------------------------------------------
-
-  // Ref-only invalidation, no setState. Called on pen-down, where PR #11
-  // established that the ink path must stay pure: bumping a request id is
-  // free, while a React update on every stroke start is not. The matching
-  // state invalidation happens in clearAnswer when the stroke commits.
-  const invalidateRequests = useCallback(() => {
-    requestId.current += 1;
-    hintRequestId.current += 1;
-  }, []);
+  // -- invalidation -------------------------------------------------------
 
   const clearHints = useCallback(() => {
     hintRequestId.current += 1;
@@ -82,21 +103,45 @@ export default function useChemistry() {
 
   const clearVerdict = useCallback(() => {
     requestId.current += 1;
+    setPageReading(false);
+    setChecking(false);
     setVerdict(null);
+    setVerdictsByLine(new Map());
+    setFirstWrongRow(null);
     setProblemError(null);
     clearHints();
   }, [clearHints]);
 
+  const invalidateRequests = useCallback(() => {
+    requestId.current += 1;
+    previewRequestId.current += 1;
+    setPageReading(false);
+    setChecking(false);
+    setReadingRows(new Set());
+    clearHints();
+  }, [clearHints]);
+
   const clearAnswer = useCallback(() => {
+    requestId.current += 1;
+    previewRequestId.current += 1;
+    lineRequestIds.current.clear();
+    lineVersions.current.clear();
+    linesRef.current = [];
+    setLines([]);
     setAnswer("");
     setRead(false);
     setUnreadable(false);
     setConfidence("high");
     setPreview(null);
+    setReadingRows(new Set());
+    setPageReading(false);
+    setChecking(false);
+    setStatus(null);
     clearVerdict();
   }, [clearVerdict]);
 
   const resetProblem = useCallback(() => {
+    sessionRequestId.current += 1;
     setSession(null);
     setStatus(null);
     setCaptureNote("");
@@ -129,28 +174,31 @@ export default function useChemistry() {
   const setValue = useCallback(
     (name, value) => {
       setValues((current) => ({ ...current, [name]: value }));
-      // Changing the problem invalidates the session: the vault it holds was
-      // solved for the old one, and redacting against a stale answer is
-      // worse than not redacting at all.
+      // The server-side vault belongs to the exact problem that was opened.
+      sessionRequestId.current += 1;
       setSession(null);
       clearVerdict();
     },
     [clearVerdict]
   );
 
-  // -- session --------------------------------------------------------------
+  // -- session ------------------------------------------------------------
 
   const ensureSession = useCallback(async () => {
     if (session) return session;
     const payload = topic.session?.(problemType, values, problemText);
     if (!payload) return null;
+    const id = ++sessionRequestId.current;
     try {
-      const created = await openSession(payload);
+      const created = await openCurrentSession(
+        payload,
+        () => id === sessionRequestId.current
+      );
+      if (!created) return null;
       setSession(created);
       return created;
     } catch {
-      // A problem we cannot solve gets no vault, so hints fall back to the
-      // built-in ladder. Worth saying out loud rather than failing silently.
+      if (id !== sessionRequestId.current) return null;
       setStatus({
         notice:
           "We couldn't solve this problem ahead of time, so hints will be the " +
@@ -160,51 +208,181 @@ export default function useChemistry() {
     }
   }, [problemText, problemType, session, topic, values]);
 
-  // -- reading the page -----------------------------------------------------
+  // -- reading ------------------------------------------------------------
 
   const readWork = useCallback(
-    async (imageBase64) => {
+    async (strokes) => {
+      if (!isDrawing || !strokes?.length) return;
       const id = ++requestId.current;
-      setReading(true);
+      setPageReading(true);
       setStatus(null);
       setVerdict(null);
+      setVerdictsByLine(new Map());
+      setFirstWrongRow(null);
       try {
-        const isDrawing = inputMode === "drawing";
-        const data = isDrawing
-          ? await transcribeStructure(imageBase64)
-          : await transcribeChemistryText(imageBase64);
-        if (id !== requestId.current) return;
+        const data = await readStructureSnapshot(
+          strokes,
+          () => id === requestId.current
+        );
+        if (!data) return;
 
-        setAnswer(isDrawing ? data.smiles : data.text);
-        setUnreadable(data.unreadable);
+        setAnswer(data.smiles ?? "");
+        setUnreadable(Boolean(data.unreadable));
         setConfidence(data.confidence ?? "high");
         setRead(true);
-        setPreview(
-          isDrawing && data.svg
-            ? { svg: data.svg, formula: null, generic: data.generic }
-            : null
-        );
+        setPreview(trustedStructurePreview(data));
       } catch (error) {
         if (id !== requestId.current) return;
         setStatus({ error: error.message });
       } finally {
-        if (id === requestId.current) setReading(false);
+        if (id === requestId.current) setPageReading(false);
       }
     },
-    [inputMode]
+    [isDrawing]
   );
 
-  // Re-render the picture whenever the student corrects the SMILES by hand,
-  // so the drawing they are checking is always the one that will be judged.
+  const readLine = useCallback(
+    async ({ row, strokes }) => {
+      if (isDrawing || !strokes?.length) return;
+
+      const version = lineVersions.current.get(row) ?? 0;
+      const request = (lineRequestIds.current.get(row) ?? 0) + 1;
+      lineRequestIds.current.set(row, request);
+      setReadingRows((current) => addReadingRow(current, row));
+
+      try {
+        // Let the pointer event that queued the row return before PNG work.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (
+          isStaleLineResponse(
+            request,
+            lineRequestIds.current.get(row),
+            version,
+            lineVersions.current.get(row) ?? 0
+          )
+        ) {
+          return;
+        }
+
+        const dataUrl = await renderLineToPng([...strokes]);
+        if (
+          isStaleLineResponse(
+            request,
+            lineRequestIds.current.get(row),
+            version,
+            lineVersions.current.get(row) ?? 0
+          )
+        ) {
+          return;
+        }
+
+        const data = await transcribeChemistryText(dataUrl.split(",")[1]);
+        if (
+          isStaleLineResponse(
+            request,
+            lineRequestIds.current.get(row),
+            version,
+            lineVersions.current.get(row) ?? 0
+          )
+        ) {
+          return;
+        }
+
+        const nextLine = {
+          row,
+          text: data.unreadable ? "" : data.text ?? "",
+          unreadable: Boolean(data.unreadable),
+          confidence: data.confidence ?? "high",
+        };
+        const nextLines = upsertChemistryLine(linesRef.current, nextLine);
+        linesRef.current = nextLines;
+        setLines(nextLines);
+        setRead(true);
+        setStatus(null);
+      } catch (error) {
+        if (
+          isStaleLineResponse(
+            request,
+            lineRequestIds.current.get(row),
+            version,
+            lineVersions.current.get(row) ?? 0
+          )
+        ) {
+          return;
+        }
+        setStatus({ error: error.message });
+      } finally {
+        setReadingRows((current) => {
+          if (lineRequestIds.current.get(row) !== request) return current;
+          return removeReadingRow(current, row);
+        });
+      }
+    },
+    [isDrawing]
+  );
+
+  // The canvas invokes this after a row has been idle or explicitly finished.
+  // Keeping the snapshot at the boundary prevents a later stroke from
+  // changing the image that is already being recognized.
+  const queueRow = useCallback(
+    (rowSnapshot) => {
+      void readLine(rowSnapshot);
+    },
+    [readLine]
+  );
+
+  const invalidateLine = useCallback(
+    (row) => {
+      lineVersions.current.set(row, (lineVersions.current.get(row) ?? 0) + 1);
+      lineRequestIds.current.set(row, (lineRequestIds.current.get(row) ?? 0) + 1);
+      requestId.current += 1;
+      setReadingRows((current) => removeReadingRow(current, row));
+      setChecking(false);
+      const nextLines = removeChemistryLine(linesRef.current, row);
+      linesRef.current = nextLines;
+      setLines(nextLines);
+      setVerdictsByLine((current) => keepVerdictsBeforeRow(current, row));
+      setFirstWrongRow(null);
+      setVerdict(null);
+      setProblemError(null);
+      clearHints();
+      setStatus(null);
+    },
+    [clearHints]
+  );
+
+  const editLine = useCallback(
+    (row, value) => {
+      const existing = linesRef.current.find((line) => line.row === row);
+      invalidateLine(row);
+      const nextLine = {
+        row,
+        text: value,
+        unreadable: false,
+        confidence: existing?.confidence ?? "high",
+      };
+      const nextLines = upsertChemistryLine(linesRef.current, nextLine);
+      linesRef.current = nextLines;
+      setLines(nextLines);
+      setRead(true);
+    },
+    [invalidateLine]
+  );
+
+  // -- preview ------------------------------------------------------------
+
   const refreshPreview = useCallback(async (smiles) => {
+    const id = ++previewRequestId.current;
     if (!smiles.trim()) {
       setPreview(null);
       return;
     }
     try {
       const data = await renderStructure(smiles);
-      setPreview({ svg: data.svg, formula: data.formula, generic: data.generic });
+      if (id !== previewRequestId.current) return;
+      setPreview(trustedStructurePreview(data));
     } catch {
+      if (id !== previewRequestId.current) return;
       setPreview(null);
     }
   }, []);
@@ -214,16 +392,23 @@ export default function useChemistry() {
       setAnswer(value);
       setUnreadable(unreadable && !value.trim());
       clearVerdict();
-      if (inputMode === "drawing") refreshPreview(value);
+      if (isDrawing) refreshPreview(value);
     },
-    [clearVerdict, inputMode, refreshPreview, unreadable]
+    [clearVerdict, isDrawing, refreshPreview, unreadable]
   );
 
-  // -- checking -------------------------------------------------------------
+  // -- checking -----------------------------------------------------------
 
   const checkAnswer = useCallback(async () => {
     const written = answer.trim();
-    if (!written || !ready) return;
+    const currentLines = orderedChemistryLines(linesRef.current);
+    const steps = isDrawing
+      ? written
+        ? [{ line_number: 1, smiles: written }]
+        : []
+      : buildChemistrySteps(currentLines);
+
+    if (!ready || steps.length === 0) return;
 
     const id = ++requestId.current;
     setChecking(true);
@@ -231,9 +416,7 @@ export default function useChemistry() {
     clearHints();
 
     try {
-      const data = await topic.check(problemType, values, [
-        { line_number: 1, smiles: written },
-      ]);
+      const data = await topic.check(problemType, values, steps);
       if (id !== requestId.current) return;
 
       if (data.problem_error) {
@@ -241,26 +424,51 @@ export default function useChemistry() {
         setProblemError(data.problem_error);
         return;
       }
+
       setProblemError(null);
-      setVerdict(data.verdicts[0] ?? null);
-      // Only open a session once there is something to hint about. It costs
-      // a solve, and most checks are correct and never need one.
-      if (data.verdicts[0] && data.verdicts[0].status === "invalid") {
-        ensureSession();
+      if (isDrawing) {
+        setVerdict(data.verdicts[0] ?? null);
+        setVerdictsByLine(new Map());
+        setFirstWrongRow(null);
+      } else {
+        const nextVerdicts = mapChemistryVerdicts(data.verdicts, currentLines);
+        setVerdict(null);
+        setVerdictsByLine(nextVerdicts);
+        setFirstWrongRow(
+          data.first_wrong_line > 0
+            ? rowForChemistryLineNumber(currentLines, data.first_wrong_line)
+            : null
+        );
       }
+
+      // Only solve for the hint vault after an invalid verdict exists.
+      const hasInvalid = data.verdicts.some(
+        (item) => item.status === "invalid"
+      );
+      if (hasInvalid) ensureSession();
     } catch (error) {
       if (id !== requestId.current) return;
       setVerdict(null);
+      setVerdictsByLine(new Map());
+      setFirstWrongRow(null);
       setStatus({ error: `Check failed: ${error.message}` });
     } finally {
       if (id === requestId.current) setChecking(false);
     }
-  }, [answer, clearHints, ensureSession, problemType, ready, topic, values]);
+  }, [answer, clearHints, ensureSession, isDrawing, problemType, ready, topic, values]);
 
-  // -- hints ----------------------------------------------------------------
+  // -- hints --------------------------------------------------------------
 
   const requestHint = useCallback(async () => {
     if (hintLevel >= 3) return;
+
+    const currentLines = orderedChemistryLines(linesRef.current);
+    const lineIndex = currentLines.findIndex((line) => line.row === firstWrongRow);
+    const activeVerdict = isDrawing
+      ? verdict
+      : verdictsByLine.get(firstWrongRow);
+    if (!activeVerdict || lineIndex === -1 && !isDrawing) return;
+
     const nextLevel = hintLevel + 1;
     const id = ++hintRequestId.current;
     setHintLoading(true);
@@ -270,14 +478,16 @@ export default function useChemistry() {
 
     try {
       const data = await getHint({
-        line_number: 1,
-        error_type: verdict?.error_type ?? null,
+        line_number: isDrawing ? 1 : lineIndex + 1,
+        error_type: activeVerdict.error_type ?? null,
         level: nextLevel,
         subject: "chemistry",
         topic: topicId,
         session_id: active?.session_id ?? null,
         problem: problemText,
-        student_line: answer || null,
+        student_line: isDrawing
+          ? answer || null
+          : currentLines[lineIndex]?.text || null,
       });
       if (id !== hintRequestId.current) return;
       setHintLevel(data.level);
@@ -293,14 +503,14 @@ export default function useChemistry() {
     } finally {
       if (id === hintRequestId.current) setHintLoading(false);
     }
-  }, [answer, ensureSession, hintLevel, problemText, topicId, verdict]);
+  }, [answer, ensureSession, firstWrongRow, hintLevel, isDrawing, problemText, topicId, verdict, verdictsByLine]);
 
   const cancelHint = useCallback(() => {
     hintRequestId.current += 1;
     setHintLoading(false);
   }, []);
 
-  // -- corpus capture -------------------------------------------------------
+  // -- corpus capture -----------------------------------------------------
 
   const capture = useCallback(
     async (imageBase64, groundTruth) => {
@@ -310,7 +520,7 @@ export default function useChemistry() {
           topic:
             problemType.id === "functional_group"
               ? "functional_group"
-              : inputMode === "drawing"
+              : isDrawing
               ? "structure"
               : "balance",
           ground_truth: groundTruth,
@@ -322,17 +532,18 @@ export default function useChemistry() {
           note: captureNote,
         });
         setCaptureCount(data.total_samples);
-        setStatus({ notice: `Saved ${data.saved_as} (${data.total_samples} so far)` });
+        setStatus({
+          notice: `Saved ${data.saved_as} (${data.total_samples} so far)`,
+        });
         setCaptureNote("");
       } catch (error) {
         setStatus({ error: `Capture failed: ${error.message}` });
       }
     },
-    [captureNote, inputMode, problemType.id, values]
+    [captureNote, isDrawing, problemType.id, values]
   );
 
   return {
-    // problem
     topic,
     topicId,
     chooseTopic,
@@ -341,30 +552,33 @@ export default function useChemistry() {
     values,
     setValue,
     inputMode,
+    isDrawing,
     ready,
     problemText,
-    // answer
     answer,
     editAnswer,
+    lines,
+    editLine,
     read,
     unreadable,
     confidence,
     preview,
     reading,
     readWork,
-    // verdict
+    queueRow,
+    invalidateLine,
     verdict,
+    verdictsByLine,
+    firstWrongRow,
     problemError,
     checking,
     checkAnswer,
-    // hints
     hintLevel,
     hint,
     hintLoading,
     requestHint,
     cancelHint,
     session,
-    // misc
     status,
     setStatus,
     resetProblem,

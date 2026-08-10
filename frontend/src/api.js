@@ -14,11 +14,12 @@ export class ApiError extends Error {
   }
 }
 
-async function post(path, body) {
+async function post(path, body, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    ...options,
   });
 
   if (!response.ok) {
@@ -42,8 +43,8 @@ async function get(path) {
 // -- math, unchanged ---------------------------------------------------------
 
 export const checkSteps = (problem, steps) => post("/check", { problem, steps });
-export const transcribeLine = (imageBase64) =>
-  post("/transcribe", { image_base64: imageBase64 });
+export const transcribeLine = (imageBase64, options) =>
+  post("/transcribe", { image_base64: imageBase64 }, options);
 
 // -- chemistry ---------------------------------------------------------------
 

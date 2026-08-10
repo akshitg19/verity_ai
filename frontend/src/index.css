@@ -7,3 +7,33 @@ textarea,
   user-select: text;
   -webkit-touch-callout: default;
 }
+
+:where(button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #4c8d7d !important;
+  outline-offset: 2px;
+}
+
+.structure-preview svg {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 700px) {
+  .feedback-panel {
+    top: auto !important;
+    right: 12px !important;
+    bottom: 12px !important;
+    left: 12px !important;
+    width: auto !important;
+    max-height: 42vh !important;
+    padding: 14px !important;
+  }
+
+  .feedback-status {
+    top: 84px !important;
+    bottom: auto !important;
+    right: 12px;
+    max-width: calc(100vw - 24px) !important;
+    box-sizing: border-box;
+  }
+}
