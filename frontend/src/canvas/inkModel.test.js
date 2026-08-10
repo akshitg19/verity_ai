@@ -4,6 +4,7 @@ import {
   addStrokeToInkIndex,
   buildInkIndex,
   expandAndClampBounds,
+  findStrokeRow,
   getCanvasBackingSize,
   getStrokeBounds,
   mergeBounds,
@@ -71,5 +72,46 @@ describe("ink index", () => {
 
     expect([...index.rows.keys()]).toEqual([0, 1]);
     expect(index.rows.get(1)).toEqual([nextRow]);
+  });
+});
+
+// The reported failure: `N₂ + H₂ -> NH₃` written on one visual line came back
+// as `N2 + H -> NH` on line 1 and `2 3` on line 2, because each subscript's
+// vertical centre fell into the next ruled band.
+describe("subscripts stay on the line they belong to", () => {
+  const glyph = stroke({ x: 10, y: 30 }, { x: 30, y: 70 });
+  const subscript = stroke({ x: 32, y: 60 }, { x: 44, y: 85 });
+
+  it("keeps a subscript with its parent glyph", () => {
+    const index = buildInkIndex([glyph]);
+
+    // Its centre is 72.5, which the fixed grid alone would call row 1.
+    expect(addStrokeToInkIndex(index, subscript)).toBe(0);
+    expect(index.rows.get(0)).toEqual([glyph, subscript]);
+    expect([...index.rows.keys()]).toEqual([0]);
+  });
+
+  it("still starts a new row for ink written clear of the line above", () => {
+    const index = buildInkIndex([glyph, subscript]);
+    const nextLine = stroke({ x: 10, y: 140 }, { x: 30, y: 180 });
+
+    expect(addStrokeToInkIndex(index, nextLine)).toBe(2);
+    expect(index.rows.get(2)).toEqual([nextLine]);
+  });
+
+  it("refuses a join that would let one row swallow the page", () => {
+    const index = buildInkIndex([glyph, subscript]);
+    // Close enough to be a candidate on the gap test, but joining would make
+    // the row 110px tall against a 102.4px ceiling.
+    const tooTall = stroke({ x: 10, y: 88 }, { x: 30, y: 140 });
+
+    expect(addStrokeToInkIndex(index, tooTall)).not.toBe(0);
+  });
+
+  it("reports the row a joined stroke actually landed in", () => {
+    const index = buildInkIndex([glyph, subscript]);
+
+    expect(findStrokeRow(index, subscript)).toBe(0);
+    expect(findStrokeRow(index, stroke({ x: 0, y: 0 }))).toBeNull();
   });
 });
