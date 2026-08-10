@@ -198,14 +198,34 @@ def vault_for_functional_group(problem: str, target_group: str) -> AnswerVault:
 
 
 def vault_for_balance(problem: str, reference_equation: str) -> AnswerVault:
-    """Balancing: the answer is the coefficient vector."""
+    """Balancing: the answer is the coefficient vector.
+
+    The forms here are what redaction blocks, and getting them wrong in
+    either direction is expensive. Bare coefficients used to be listed, and
+    because a balancing answer is a vector of small integers that made "2"
+    and "3" unsayable. A hint about an equation cannot avoid small integers:
+    atom counts are small integers, and so are the coefficients the student
+    themselves wrote. Level 1 was blocked on almost every balancing problem.
+
+    What actually discloses the answer is a coefficient *attached to a
+    species*, "3H2", not the digit 3 on its own. So those pairs are the
+    forms, along with the balanced equation itself.
+    """
+    from judge.chemistry_equations import parse_equation
+
     vault = AnswerVault(
         topic="balancing", problem=problem, reference_equation=reference_equation
     )
-    left, right = balance_coefficients(reference_equation)
     balanced = balanced_equation(reference_equation)
     vault.answer_forms.append(balanced)
-    vault.answer_forms.extend(str(value) for value in left + right if value != 1)
+
+    # Coefficient-and-species pairs, in the spellings a hint might use.
+    for coefficient, formula in [*parse_equation(balanced)[0], *parse_equation(balanced)[1]]:
+        if coefficient == 1:
+            continue
+        vault.answer_forms.append(f"{coefficient}{formula}")
+        vault.answer_forms.append(f"{coefficient} {formula}")
+
     vault.near_answer_lines.append(balanced)
     return vault
 

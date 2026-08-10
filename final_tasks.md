@@ -1810,6 +1810,161 @@ front end.
 
 ---
 
+---
+
+# Walkthrough, session 2 (Aug 10, after the theme and eraser pass)
+
+## 7. Hints: where they live and what they do
+
+### 7.1 Level 2 is fixed. What was actually wrong.
+
+**Done.** Recorded because the shape of the failure matters more than the fix.
+
+Level 2 never rendered on any topic. Three independent bugs, each of which
+rejected a *correct* example:
+
+1. Balancing verification parsed the whole step line as an equation, so
+   "The balanced equation is 4Fe + 3O2 -> 2Fe2O3" failed to parse.
+2. Numeric verification demanded every numeric line be a quantity our solver
+   produced, so an algebraic intermediate like `x^2 = 4.5e-6` threw the
+   example away.
+3. Redaction blocked a bare "3", because a balancing vault holds
+   coefficients and every worked example about every reaction contains one.
+
+**All three shipped because the suite tested only the rejection path.** The
+instruction in this file, to test rejection harder than acceptance, was taken
+far enough that acceptance was never tested at all. The lesson generalises:
+for any filter, test that the good case survives it.
+
+Fix (3) relaxes firewall mechanism 2. It is narrow, it is flagged in
+`check_outbound`, and it has its own tests: bare integers below ten, worked
+examples only.
+
+### 7.2 The hint should come to the student, not the other way round
+
+**What happened.** "Once it highlights it red, it should pop up: stuck, get a
+hint." Right now a flagged line sits there and the hint control is somewhere
+else entirely.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Offer the hint at the flagged line | When a line goes red, surface the offer next to that line, the way the question popover already anchors to a row. `inkIndex.bounds` gives the anchor |
+| [ ] | Do not auto-open | Offer, never expand on its own. The complaint about the panel being distracting applies double to something that appears while writing |
+| [ ] | One offer at a time | With several wrong lines, offer at the first wrong one only. It is already the line the product is opinionated about |
+
+### 7.3 The right panel should be dismissible
+
+**What happened.** "I don't want this right panel visible all the time when
+I'm writing because it's distracting. It could be there if the user wants it,
+but there should be an option to put it in and out."
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Collapse and expand the feedback panel | A persistent edge control. Remember the state |
+| [ ] | Auto-reveal only on a verdict | A result is worth interrupting for; an empty panel is not |
+| [ ] | Give the canvas the space back | The canvas is sized from `getCanvasDisplaySize`, which reserves 360px for the panel unconditionally. Collapsing has to widen the page, not leave a gap |
+| [ ] | Hints open in the panel | Level 1, 2 and 3 render there rather than inline, so the writing surface stays clean |
+
+### 7.4 The button was cut in half on a Samsung tablet
+
+**What happened.** Half the "Stuck? Get a hint" button was off screen, and it
+could not be scrolled or zoomed to.
+
+**Not yet diagnosed.** Likely candidates, in order: the panel is
+`position: fixed` with a `max-height` and no internal scroll, so anything past
+the fold is unreachable; the mobile breakpoint is 700px and a tablet in
+landscape is wider than that, so it gets the desktop layout in a space that
+cannot hold it; and `user-select: none` plus `touch-action: none` on the
+shell suppress the zoom a student would otherwise use to escape.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Reproduce at the real viewport | Samsung Tab S9, both orientations, before changing anything |
+| [ ] | Make the panel scroll internally | `overflow-y: auto` on the panel body, so nothing inside it can be unreachable |
+| [ ] | Revisit the 700px breakpoint | A tablet is not a desktop. Probably wants its own layout rather than one of the two existing ones |
+| [ ] | Never trap the student | If content overflows and cannot scroll, that is a bug class, not one button. Worth a check that every panel has a scroll container |
+
+### 7.5 Level 2 should be shown, not just listed
+
+**What happened.** "Like Brainly or Chegg. Not a video, a simulation of the
+question. It reframes it, does the balancing, and shows the 2 moving from
+NH3 to N2, with arrows and animations."
+
+The content is now correct and verified. This is about rendering it.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Render the example as a sequence, not a list | One step at a time with a next control, so the student watches it happen rather than reading a paragraph of five lines |
+| [ ] | Show the coefficient changing | For balancing, animate the coefficient appearing on the species it belongs to, and highlight the atom count on each side as it comes into balance. This is the single most explanatory thing available and it is plain DOM or SVG, no new dependency |
+| [ ] | Atom tally beside the equation | A small left-vs-right count per element, updating per step. It is what a teacher writes in the margin |
+| [ ] | Respect reduced motion | `prefers-reduced-motion` turns animation into a static final state |
+| [ ] | Numeric topics get the same treatment | Highlight the quantity that changed per line rather than animating structure |
+
+### 7.6 Level 3 has to work the step
+
+**What happened.** "Level 3 should work through the problem step by step. It
+should work through the step, not the answer." And separately, "if it gives
+the answer at the end of the day, it's fine. We can think about not giving
+the answer afterwards."
+
+**This is a product decision, not an implementation detail, and the two
+sentences point in different directions. It is blocked on an answer, not on
+code.** See the question raised at the end of this section.
+
+What is true today: level 3 generates live and works on multi-step topics.
+On balancing it always refuses, because a balancing session reports
+`total_steps: 1`, so every step is the terminal step and the gate fires
+correctly. That is why level 3 looks broken when tested on balancing.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Decide the answer policy | Blocking. See below |
+| [ ] | Give balancing real steps | A balancing problem is one step to the vault and several to a student: balance this element, then that one. Until the vault models that, level 3 can never demonstrate on the topic most likely to be demoed |
+| [ ] | Then animate level 3 too | Same renderer as 7.5, applied to the student's own problem |
+
+### 7.7 Level 1 tone
+
+**What happened.** "Hint one was okay. It could be a bit less AI."
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Rewrite the level 1 prompt register | Shorter sentences, second person, no throat-clearing. "You balanced the hydrogens but the nitrogens no longer match" beats "The student attempted to balance the equation by adding coefficients, but..." |
+| [ ] | Never say "the student" | It is talking *to* them |
+| [ ] | No em dashes anywhere in generated text | A standing rule for this repo, and it applies to prompt text because the model copies the register it is given |
+
+---
+
+## 8. Notebook: folders and files
+
+**Decided:** math and chemistry stay separate spaces.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Real folders | Create, rename, delete, inside a subject. Not the two fixed buckets there are now |
+| [ ] | Real files | Explicit "new note", renameable, deletable, not created implicitly by switching subject |
+| [ ] | Pages inside a note | A thumbnail strip. "Page 1 of 1 +" is the thing that reads as unfinished |
+| [ ] | Follow the conventions of the apps students already use | Long press or right click for rename, duplicate, delete. Nothing invented |
+| [ ] | Keep local persistence | Strokes already serialise |
+| [ ] | Do not break row identity | The recognition queue and verdict map key off row integers per page. Moving or reordering pages must not silently repoint verdicts |
+
+---
+
+## 9. Landing page
+
+**What happened.** A public front page describing the product and the stack,
+with "Try for free", and separate entries into math and chemistry.
+
+| Done | Task | Detail |
+|------|---|---|
+| [ ] | Add routing | There is none today. `/`, `/math`, `/chemistry` |
+| [ ] | SPA fallback in both places it is served | A Vercel rewrite, and Cloud Run's `StaticFiles(html=True)` mount will not serve `/math` either. A deep link that 404s on one host and works on the other is worse than neither |
+| [ ] | The three product properties as the spine | Live on the page, precise about where, teaches up to the answer. This file already says to use those three in that order everywhere rather than inventing a framing per surface |
+| [ ] | Show it working | A short loop of real ink being read and marked beats any paragraph |
+| [ ] | Honest status | Do not claim corpus numbers we have not measured |
+| [ ] | Keep the entry fast | The landing page must not pull the canvas bundle. Route-level code splitting |
+
+---
+
 ## Suggested order
 
 Not a schedule, just the order that gets the most value per hour.

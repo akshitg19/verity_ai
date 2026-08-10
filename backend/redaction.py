@@ -103,26 +103,11 @@ def _numeric_tokens(text: str) -> list[float]:
     return values
 
 
-# A balancing answer is a vector of small integers, so "3" is one of its
-# answer forms. Every worked example about every reaction contains a 3, and
-# blocking on that rejected every level-2 example ever generated.
-SMALL_INTEGER_LIMIT = 10
-
-
-def _is_small_integer(text: str) -> bool:
-    try:
-        value = float(text)
-    except (TypeError, ValueError):
-        return False
-    return value.is_integer() and abs(value) < SMALL_INTEGER_LIMIT
-
-
 def check_outbound(
     text: str,
     vault: AnswerVault | None,
     *,
     allow_near_answer: bool = False,
-    ignore_small_integers: bool = False,
 ) -> tuple[bool, str | None]:
     """The single gate. Returns (allowed, violation).
 
@@ -130,16 +115,13 @@ def check_outbound(
     the student's own step and therefore to restate quantities they have
     already produced. It never relaxes the answer check itself.
 
-    `ignore_small_integers` is set only for a level-2 worked example, and it
-    is a deliberate, narrow relaxation. A balancing vault holds coefficients,
-    so `2` and `3` are answer forms; a worked example about a completely
-    different reaction inevitably contains them, and blocking on that meant
-    no level-2 example ever reached a student. A bare small integer in a
-    solution to a different problem does not disclose this student's answer,
-    because what makes a balancing answer an answer is which equation the
-    coefficients belong to, and that is still checked in full below. Every
-    other form -- the balanced equation string, a SMILES, a pH, a mass, any
-    value of ten or more -- is redacted exactly as before.
+    Note for anyone tempted to add a relaxation here: the reason level 2 and
+    level 1 were once blocked on every balancing problem was not this filter
+    being too strict. It was `vault_for_balance` listing bare coefficients as
+    answer forms, which made "2" and "3" unsayable in a subject where atom
+    counts are small integers. That was fixed at the vault instead, and the
+    relaxation this file briefly carried was removed again. Fix the forms,
+    not the gate.
     """
     if not text or not text.strip():
         return False, "empty hint"
@@ -156,8 +138,6 @@ def check_outbound(
         candidate = normalise(str(form))
         if not candidate:
             continue
-        if ignore_small_integers and _is_small_integer(candidate):
-            continue
         # Standalone token, not a substring: "4" inside "24" is not the
         # answer, and rejecting it would make every hint unwritable.
         if candidate in tokens:
@@ -166,8 +146,6 @@ def check_outbound(
             return False, f"contains the answer form {form!r}"
 
     for value in _numeric_tokens(normalised):
-        if ignore_small_integers and _is_small_integer(str(value)):
-            continue
         if vault.matches_number(value):
             return False, f"states a value within tolerance of the answer ({value})"
 
@@ -175,8 +153,6 @@ def check_outbound(
         try:
             value = float(match.group(1))
         except ValueError:
-            continue
-        if ignore_small_integers and _is_small_integer(str(value)):
             continue
         if vault.matches_number(value):
             return False, "states the answer in an assignment"
@@ -204,7 +180,6 @@ def redact_or_fallback(
     fallback: str,
     *,
     allow_near_answer: bool = False,
-    ignore_small_integers: bool = False,
 ) -> tuple[str, str | None]:
     """Return the text if it passes, otherwise the static fallback.
 
@@ -216,7 +191,6 @@ def redact_or_fallback(
         text,
         vault,
         allow_near_answer=allow_near_answer,
-        ignore_small_integers=ignore_small_integers,
     )
     if allowed:
         return text, None

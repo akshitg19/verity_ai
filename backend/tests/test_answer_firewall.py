@@ -439,47 +439,49 @@ def test_a_leaking_generated_hint_is_replaced_by_the_static_floor(monkeypatch, p
 
 
 # ---------------------------------------------------------------------------
-# The small-integer relaxation for level-2 worked examples.
+# What a balancing vault treats as the answer.
 #
-# It exists because a balancing vault holds coefficients, so "3" is an answer
-# form and every worked example about every reaction contains one. It is a
-# real relaxation of mechanism 2 and it is bounded here: small bare integers
-# only, worked examples only, and nothing else about the gate moves.
+# It used to list bare coefficients, so "2" and "3" were unsayable. In a
+# subject where atom counts are small integers that blocked level 1 on almost
+# every balancing problem and every level-2 worked example, because any
+# example about any reaction contains a small integer. What actually
+# discloses the answer is a coefficient attached to a species.
 # ---------------------------------------------------------------------------
 
-def test_a_bare_coefficient_is_allowed_in_a_worked_example():
+def test_a_bare_count_is_sayable_on_a_balancing_problem():
     vault = vault_for_balance("Balance N2 + H2 -> NH3", "N2 + H2 -> NH3")
 
-    blocked, _ = check_outbound("Use 3 of them", vault)
     allowed, violation = check_outbound(
-        "Use 3 of them", vault, ignore_small_integers=True
+        "There are 2 nitrogen atoms on the left and 2 on the right, so look "
+        "at the hydrogens next.",
+        vault,
     )
 
-    assert blocked is False
     assert allowed is True, violation
 
 
-def test_the_relaxation_does_not_reach_the_balanced_equation_itself():
+def test_a_coefficient_attached_to_a_species_is_still_blocked():
     vault = vault_for_balance("Balance N2 + H2 -> NH3", "N2 + H2 -> NH3")
 
-    allowed, violation = check_outbound(
-        "N2 + 3H2 -> 2NH3", vault, ignore_small_integers=True
-    )
+    for leak in ["You need 3H2 on the left.", "You need 3 H2 on the left."]:
+        allowed, violation = check_outbound(leak, vault)
+        assert allowed is False, leak
+        assert violation
+
+
+def test_the_balanced_equation_itself_is_still_blocked():
+    vault = vault_for_balance("Balance N2 + H2 -> NH3", "N2 + H2 -> NH3")
+
+    allowed, _ = check_outbound("The answer is N2 + 3H2 -> 2NH3", vault)
 
     assert allowed is False
-    assert violation
 
 
-def test_the_relaxation_stops_at_ten():
-    # Only genuinely small integers are waived. A two-digit answer is still
-    # an answer, and a pH or a mass is untouched by any of this.
-    vault = vault_for_balance("Balance C4H10 + O2 -> CO2 + H2O", "C4H10 + O2 -> CO2 + H2O")
-    forms = {str(form) for form in vault.answer_forms}
-    assert "13" in forms
-
-    allowed, violation = check_outbound(
-        "the coefficient is 13", vault, ignore_small_integers=True
+def test_larger_coefficients_are_covered_too():
+    vault = vault_for_balance(
+        "Balance C4H10 + O2 -> CO2 + H2O", "C4H10 + O2 -> CO2 + H2O"
     )
 
+    allowed, _ = check_outbound("Put 13O2 on the left.", vault)
+
     assert allowed is False
-    assert violation

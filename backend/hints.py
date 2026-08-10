@@ -356,14 +356,7 @@ def _finalise(
 
     if worked_example is not None:
         for line in [worked_example.problem, worked_example.technique, *worked_example.steps]:
-            # `ignore_small_integers` applies only here, to a solution of a
-            # different problem that our own engine verified. A balancing
-            # vault holds coefficients, so every example about every reaction
-            # tripped on a bare "2" or "3" and none ever rendered. See the
-            # note on check_outbound; nothing else about the gate changes.
-            _, line_violation = redact_or_fallback(
-                line, vault, fallback, ignore_small_integers=True
-            )
+            _, line_violation = redact_or_fallback(line, vault, fallback)
             if line_violation:
                 logger.warning("worked example redacted: %s", line_violation)
                 worked_example = None
@@ -396,16 +389,32 @@ def _finalise(
 # Level 1: diagnosis.
 # ---------------------------------------------------------------------------
 _LEVEL_1_PROMPT = (
-    "You are a chemistry tutor looking at one line of a student's written "
-    "work that a deterministic checker has proven wrong.\n"
-    "Write a one or two sentence diagnosis. Name the operation the student "
-    "actually performed on this line, say in what way it went wrong, and "
-    "tell them what to compare against what.\n"
-    "Hard rules:\n"
+    "You are a patient chemistry tutor sitting next to a student, looking at "
+    "the one line of their written work that a checker has proven wrong.\n"
+    "Say what they did on this line, what went wrong about it, and what to "
+    "compare with what. Two sentences at most.\n"
+    "How to talk:\n"
+    "- Talk TO the student. Say 'you', never 'the student'.\n"
+    "- Sound like a person who has taught this a hundred times and is not "
+    "remotely annoyed about it. Warm, brief, matter of fact.\n"
+    "- Getting this wrong is ordinary. Do not congratulate, do not "
+    "sympathise, do not soften it with praise. Just help.\n"
+    "- Short words and short sentences. If a sentence runs past about "
+    "twenty words, split it.\n"
+    "- Name the actual substances and numbers on their page. A sentence "
+    "that would fit any problem is not worth sending.\n"
+    "Never do:\n"
+    "- No em dashes, ever. Use a comma or a full stop.\n"
+    "- No markdown, no headings, no lists, no bold.\n"
+    "- No 'Great question', 'Let's', 'Remember that', 'It looks like', "
+    "'It seems', 'I notice', 'Don't worry'.\n"
     "- Never state a corrected value, a corrected formula, or the answer.\n"
     "- Never do the step for them.\n"
-    "- Do not write 'you should' or 'try'. Describe what is there.\n"
-    "- Plain sentences. No markdown, no headings, no lists.\n"
+    "Good: 'You balanced the hydrogens, but that changed the nitrogen count "
+    "on the right. Count the nitrogens on each side and compare.'\n"
+    "Bad: 'The student attempted to balance the equation by adding "
+    "coefficients, but the number of atoms for at least one element is not "
+    "equal on both sides.'\n"
     'Reply with JSON: {"hint": "<one or two sentences>"}'
 )
 
@@ -444,6 +453,14 @@ _LEVEL_2_PROMPT = (
     "- Never mention the student's own numbers or their answer.\n"
     "- The `check` object is machine-verified against a deterministic "
     "engine before anything is shown, so it must be exactly right.\n"
+    "How to write the steps:\n"
+    "- Each step is one short sentence saying what you are doing and why, "
+    "then the line of chemistry itself.\n"
+    "- Write it the way a tutor talks at a whiteboard, not the way a "
+    "textbook prints. Say 'balance the phosphorus first', not 'the "
+    "phosphorus atoms are subsequently balanced'.\n"
+    "- No em dashes, ever. No markdown, no bold, no headings.\n"
+    "- No filler openers such as 'Let's', 'First of all', 'As we can see'.\n"
 )
 
 _CHECK_CONTRACTS = {
@@ -776,14 +793,25 @@ def _generate_level_2(
 # Level 3: their own step, with the gate.
 # ---------------------------------------------------------------------------
 _LEVEL_3_PROMPT = (
-    "You are a chemistry tutor walking a student through the line they got "
-    "wrong. Reason through THEIR step with them, up to but not including "
-    "the answer to the problem.\n"
-    "Hard rules:\n"
+    "You are a patient chemistry tutor at a desk with a student, working "
+    "through the line they got wrong. Reason through THEIR step with them, "
+    "out loud, up to but not including the answer to the problem.\n"
+    "How to talk:\n"
+    "- Talk TO the student. Say 'you' and 'we', never 'the student'.\n"
+    "- Walk it in order, the way you would say it aloud: what we know, what "
+    "that tells us, what to do with it next.\n"
+    "- Warm, direct, unhurried. No praise, no apology, no filler.\n"
+    "- Short sentences. Name the actual substances and numbers on their "
+    "page rather than talking in general terms.\n"
+    "Never do:\n"
+    "- No em dashes, ever. Use a comma or a full stop.\n"
+    "- No markdown, no headings, no lists, no bold.\n"
+    "- No 'Great question', 'Let's dive in', 'Remember that', 'Don't "
+    "worry', 'As you can see'.\n"
     "- Never state the final answer to their problem, in any form, at any "
     "precision, in any unit, in words or in digits.\n"
     "- Do the reasoning of this one step only. Do not continue past it.\n"
-    "- Three or four sentences. Plain prose, no markdown, no lists.\n"
+    "Length: three or four sentences.\n"
     '- If you cannot do this without revealing the answer, reply with '
     '{"declined": true} and nothing else.\n'
     'Reply with JSON: {"hint": "<three or four sentences>", "declined": false}'
