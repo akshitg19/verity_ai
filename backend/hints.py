@@ -28,6 +28,7 @@ that and fails if a second construction site appears.
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 from model import ModelError, generate_json, is_configured
@@ -36,6 +37,23 @@ from schemas import HintRequest, HintResponse, WorkedExample
 from sessions import SESSIONS, ProblemSession
 
 logger = logging.getLogger(__name__)
+
+# Whether the three withholding mechanisms are armed: the terminal-step
+# refusal, the per-problem level-3 budget, and the answer check inside
+# redaction on level 3.
+#
+# Set to False on Aug 10 by an explicit product call: functionality first,
+# withholding second. Every question now gets all three levels and level 3
+# works the student's step through to the end, including on the last step.
+#
+# This contradicts the rules in CLAUDE.md and the answer-firewall section of
+# final_tasks.md, which call withholding non-negotiable. That conflict is
+# recorded rather than hidden, and the decision is the owner's to make.
+#
+# Nothing was deleted to do it. The vault is still built, redaction still
+# runs on levels 1 and 2, and every mechanism comes back by setting this to
+# True or exporting VERITY_WITHHOLD_ANSWER=1.
+WITHHOLD_ANSWER = os.getenv("VERITY_WITHHOLD_ANSWER", "0") == "1"
 
 # Deterministic, template-based hints. For math this is the whole product;
 # for chemistry it is the floor that catches every failure of the generated
@@ -335,7 +353,15 @@ def _finalise(
     vault = session.vault if session else None
     fallback = _template_hint(req)
 
-    if trusted and worked_example is None:
+    # Level 3 is the rung that works the student's own step, so with
+    # withholding off it is the one that must be allowed to reach the end of
+    # that step. Levels 1 and 2 are still redacted: level 1 is a diagnosis
+    # and has no business stating a value, and level 2 is a different
+    # problem, so neither needs the exemption and both are better for not
+    # having it.
+    level_3_unrestricted = not WITHHOLD_ANSWER and req.level == 3
+
+    if (trusted or level_3_unrestricted) and worked_example is None:
         # Text this module wrote itself -- a template, the terminal-step
         # message, the budget message -- has never been told an answer, so
         # it does not need checking against one. Running it through
@@ -817,10 +843,35 @@ _LEVEL_3_PROMPT = (
     'Reply with JSON: {"hint": "<three or four sentences>", "declined": false}'
 )
 
+# The same tutor, with withholding off. Level 3 is now allowed to finish the
+# step it is working, which is the whole point of the rung.
+_LEVEL_3_PROMPT_OPEN = (
+    "You are a patient chemistry tutor at a desk with a student, working "
+    "through the line they got wrong. Take THEIR step and reason it all the "
+    "way through with them, out loud, until that step is finished.\n"
+    "How to talk:\n"
+    "- Talk TO the student. Say 'you' and 'we', never 'the student'.\n"
+    "- Walk it in order, the way you would say it aloud: what we know, what "
+    "that tells us, what to do with it, what that gives us.\n"
+    "- Warm, direct, unhurried. No praise, no apology, no filler.\n"
+    "- Short sentences. Name the actual substances and numbers on their "
+    "page rather than talking in general terms.\n"
+    "- Finish the step. Show the value or the line it comes out at, and say "
+    "in one clause why that is the result.\n"
+    "Never do:\n"
+    "- No em dashes, ever. Use a comma or a full stop.\n"
+    "- No markdown, no headings, no lists, no bold.\n"
+    "- No 'Great question', 'Let's dive in', 'Remember that', 'Don't "
+    "worry', 'As you can see'.\n"
+    "- Do this one step. Do not solve the rest of the problem for them.\n"
+    "Length: three to five sentences.\n"
+    'Reply with JSON: {"hint": "<three to five sentences>", "declined": false}'
+)
+
 
 def _generate_level_3(req: HintRequest, session: ProblemSession) -> tuple[str, int] | None:
     prompt = (
-        _LEVEL_3_PROMPT
+        (_LEVEL_3_PROMPT if WITHHOLD_ANSWER else _LEVEL_3_PROMPT_OPEN)
         + f"\n\nTopic: {req.topic or session.topic}"
         + f"\nProblem: {req.problem or session.problem}"
         + f"\nThe line before: {req.previous_line or '(this is the first line)'}"
@@ -907,7 +958,7 @@ def generate_hint(req: HintRequest) -> HintResponse:
     if req.student_line and req.student_line not in student_lines:
         student_lines.append(req.student_line)
 
-    if session.vault.is_terminal(student_lines):
+    if WITHHOLD_ANSWER and session.vault.is_terminal(student_lines):
         return _finalise(
             req,
             TERMINAL_MESSAGE,
@@ -918,7 +969,7 @@ def generate_hint(req: HintRequest) -> HintResponse:
             trusted=True,
         )
 
-    if not SESSIONS.spend_level_3(req.session_id):
+    if WITHHOLD_ANSWER and not SESSIONS.spend_level_3(req.session_id):
         return _finalise(
             req,
             BUDGET_MESSAGE,

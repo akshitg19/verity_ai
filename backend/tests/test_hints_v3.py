@@ -379,7 +379,13 @@ def test_a_balancing_example_whose_steps_never_reach_the_answer_is_rejected(
 
 
 def test_level_3_declines_on_a_single_step_problem(monkeypatch):
-    """"Draw this molecule" has no step before the answer."""
+    """"Draw this molecule" has no step before the answer.
+
+    Pinned to WITHHOLD_ANSWER, which is off by default since Aug 10. The
+    mechanism is still here and still tested, so re-arming it is a one-line
+    change rather than an act of faith.
+    """
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", True)
     vault = vault_for_structure("Draw methyl ethanoate", "CC(=O)OC")
     session = SESSIONS.create("structure", vault.problem, vault)
     monkeypatch.setattr(hints, "is_configured", lambda: True)
@@ -407,6 +413,7 @@ def test_a_refused_terminal_step_costs_no_budget(monkeypatch):
 
 
 def test_level_3_walks_a_non_terminal_step(monkeypatch, ph_session):
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", True)
     monkeypatch.setattr(hints, "is_configured", lambda: True)
     monkeypatch.setattr(
         hints,
@@ -426,6 +433,7 @@ def test_level_3_walks_a_non_terminal_step(monkeypatch, ph_session):
 
 
 def test_the_budget_runs_out_and_says_so(monkeypatch, ph_session):
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", True)
     monkeypatch.setattr(hints, "is_configured", lambda: True)
     monkeypatch.setattr(
         hints, "_generate_level_3", lambda req, session: ("Walking your step.", 100)
@@ -539,3 +547,55 @@ def test_a_line_that_contradicts_a_quantity_we_computed_is_rejected():
     assert not hints._verify_solutions(
         WEAK_ACID, ["Ka = x^2 / (0.250 - x).", "pH = 3.90"]
     )
+
+
+# ---------------------------------------------------------------------------
+# Withholding off, which is the shipping default since Aug 10.
+# ---------------------------------------------------------------------------
+
+def test_level_3_answers_the_terminal_step_when_withholding_is_off(monkeypatch):
+    vault = vault_for_structure("Draw methyl ethanoate", "CC(=O)OC")
+    session = SESSIONS.create("structure", vault.problem, vault)
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", False)
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints, "_generate_level_3", lambda req, session: ("Here is the step.", 100)
+    )
+
+    response = hints.generate_hint(request_for(session, 3, student_line="CC(=O)OC"))
+
+    assert response.terminal_step is False
+    assert response.source == "model"
+    assert response.hint == "Here is the step."
+
+
+def test_the_budget_never_blocks_when_withholding_is_off(monkeypatch, ph_session):
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", False)
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints, "_generate_level_3", lambda req, session: ("Walking your step.", 100)
+    )
+
+    for _ in range(6):
+        response = hints.generate_hint(
+            request_for(ph_session, 3, student_line="pH = 1.0")
+        )
+        assert response.source == "model"
+
+
+def test_levels_1_and_2_are_still_redacted_when_withholding_is_off(monkeypatch):
+    # Turning off the level-3 gate must not open the other two rungs.
+    vault = vault_for_balance("Balance N2 + H2 -> NH3", "N2 + H2 -> NH3")
+    session = SESSIONS.create("balancing", vault.problem, vault)
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", False)
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints,
+        "_generate_level_1",
+        lambda req, session: ("The answer is N2 + 3H2 -> 2NH3", 100),
+    )
+
+    response = hints.generate_hint(request_for(session, 1, student_line="N2 + H2 -> NH3"))
+
+    assert response.source == "fallback"
+    assert "3H2" not in response.hint
