@@ -140,7 +140,68 @@ function NoteRow({ note, active, onOpen, onRename, onDelete }) {
   );
 }
 
-function Folder({ subject, notes, activeNoteId, onOpen, onRename, onDelete, onCreate }) {
+// One user-created folder inside a subject: its notes, and rename or delete
+// on the folder itself. Deleting keeps the notes and drops them back to the
+// subject's top level.
+function UserFolder({ folder, activeNoteId, onOpen, onRename, onDelete, onCreateIn, onRenameFolder, onDeleteFolder, accent }) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 6px 3px 20px" }}>
+        <button
+          type="button"
+          aria-label={`${open ? "Collapse" : "Expand"} ${folder.name}`}
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          style={{ border: "none", background: "transparent", color: COLORS.muted, cursor: "pointer", fontSize: 10, padding: 0, width: 12 }}
+        >
+          {open ? "▾" : "▸"}
+        </button>
+        <span style={{ fontSize: 12 }}>🗀</span>
+        <button
+          type="button"
+          title="Rename this folder"
+          onClick={() => {
+            const name = window.prompt("Folder name", folder.name);
+            if (name?.trim()) onRenameFolder(folder.id, name.trim());
+          }}
+          style={{ flex: 1, textAlign: "left", border: "none", background: "transparent", color: COLORS.text, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        >
+          {folder.name}
+        </button>
+        <button
+          type="button"
+          title="New note in this folder"
+          aria-label={`New note in ${folder.name}`}
+          onClick={() => onCreateIn(folder.id)}
+          style={{ border: "none", background: "transparent", color: accent, fontSize: 14, cursor: "pointer", padding: 0, lineHeight: 1 }}
+        >
+          +
+        </button>
+        <button
+          type="button"
+          title="Delete this folder, keeping its notes"
+          aria-label={`Delete folder ${folder.name}`}
+          onClick={() => onDeleteFolder(folder.id)}
+          style={{ border: "none", background: "transparent", color: COLORS.muted, fontSize: 13, cursor: "pointer", padding: 0, lineHeight: 1 }}
+        >
+          ×
+        </button>
+      </div>
+      {open &&
+        (folder.notes.length ? (
+          folder.notes.map((note) => (
+            <NoteRow key={note.id} note={note} active={note.id === activeNoteId} onOpen={onOpen} onRename={onRename} onDelete={onDelete} />
+          ))
+        ) : (
+          <div style={{ padding: "4px 10px 4px 40px", fontSize: 11, color: COLORS.muted }}>Empty</div>
+        ))}
+    </div>
+  );
+}
+
+function Folder({ subject, tree, activeNoteId, onOpen, onRename, onDelete, onCreate, onCreateFolder, onRenameFolder, onDeleteFolder }) {
   const [open, setOpen] = useState(true);
   const meta = SUBJECTS[subject];
 
@@ -186,6 +247,26 @@ function Folder({ subject, notes, activeNoteId, onOpen, onRename, onDelete, onCr
         </span>
         <button
           type="button"
+          title={`New folder in ${meta.label.toLowerCase()}`}
+          aria-label={`New folder in ${meta.label.toLowerCase()}`}
+          onClick={() => {
+            const name = window.prompt("Folder name", "New folder");
+            if (name?.trim()) onCreateFolder(subject, name.trim());
+          }}
+          style={{
+            border: "none",
+            background: "transparent",
+            color: COLORS.muted,
+            fontSize: 13,
+            cursor: "pointer",
+            padding: 0,
+            lineHeight: 1,
+          }}
+        >
+          🗀
+        </button>
+        <button
+          type="button"
           title={`New ${meta.label.toLowerCase()} note`}
           aria-label={`New ${meta.label.toLowerCase()} note`}
           onClick={() => onCreate(subject)}
@@ -203,9 +284,23 @@ function Folder({ subject, notes, activeNoteId, onOpen, onRename, onDelete, onCr
         </button>
       </div>
 
-      {open &&
-        (notes.length ? (
-          notes.map((note) => (
+      {open && (
+        <>
+          {tree.folders.map((folder) => (
+            <UserFolder
+              key={folder.id}
+              folder={folder}
+              activeNoteId={activeNoteId}
+              accent={meta.accent}
+              onOpen={onOpen}
+              onRename={onRename}
+              onDelete={onDelete}
+              onCreateIn={(folderId) => onCreate(subject, undefined, folderId)}
+              onRenameFolder={onRenameFolder}
+              onDeleteFolder={onDeleteFolder}
+            />
+          ))}
+          {tree.loose.map((note) => (
             <NoteRow
               key={note.id}
               note={note}
@@ -214,25 +309,24 @@ function Folder({ subject, notes, activeNoteId, onOpen, onRename, onDelete, onCr
               onRename={onRename}
               onDelete={onDelete}
             />
-          ))
-        ) : (
-          <div
-            style={{
-              padding: "6px 10px 6px 28px",
-              fontSize: 11,
-              color: COLORS.muted,
-            }}
-          >
-            Nothing here yet.
-          </div>
-        ))}
+          ))}
+          {!tree.folders.length && !tree.loose.length && (
+            <div style={{ padding: "6px 10px 6px 28px", fontSize: 11, color: COLORS.muted }}>
+              Nothing here yet.
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
 export default function NotebookSidebar({ notebook, open, onClose, width = 250 }) {
   const {
-    folders,
+    treeFor,
+    createFolder,
+    renameFolder,
+    deleteFolder,
     activeNote,
     activePage,
     createNote,
@@ -313,12 +407,15 @@ export default function NotebookSidebar({ notebook, open, onClose, width = 250 }
           <Folder
             key={subject}
             subject={subject}
-            notes={folders[subject] ?? []}
+            tree={treeFor(subject)}
             activeNoteId={activeNote.id}
             onOpen={openNote}
             onRename={renameNote}
             onDelete={deleteNote}
             onCreate={createNote}
+            onCreateFolder={createFolder}
+            onRenameFolder={renameFolder}
+            onDeleteFolder={deleteFolder}
           />
         ))}
 
