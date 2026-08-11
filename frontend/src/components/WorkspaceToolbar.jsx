@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { COLORS, RADIUS, SHADOW, SUBJECTS } from "../theme";
+import { MATH_TOPICS } from "../math/topics";
 import Logo from "./Logo";
 import PageStrip from "../notebook/PageStrip";
 import { navigate } from "../router";
+
 
 const PEN_WIDTHS = [
   { label: "Extra thin", value: 1.5 },
@@ -183,6 +185,9 @@ export default function WorkspaceToolbar({
   mode,
   onModeChange,
   chemistry,
+  mathTopic,
+  mathTopicId,
+  onMathTopicChange,
   problem,
   onProblemChange,
   onProblemEditDone,
@@ -357,16 +362,69 @@ export default function WorkspaceToolbar({
       </div>
 
       {mode === "math" ? (
-        <input
-          aria-label="Optional typed math problem"
-          type="text"
-          value={problem}
-          onChange={onProblemChange}
-          onBlur={onProblemEditDone}
-          onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-          placeholder="Optional: type the problem instead"
-          style={{ flex: 1, minWidth: 180, maxWidth: 460, padding: "10px 14px", border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: COLORS.background, color: COLORS.text, fontFamily: "inherit", fontSize: 14, outline: "none" }}
-        />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flex: 1,
+            minWidth: 260,
+            maxWidth: 620,
+          }}
+        >
+          <select
+            aria-label="Math topic"
+            value={mathTopicId}
+            onChange={(event) => onMathTopicChange(event.target.value)}
+            title={mathTopic?.blurb}
+            style={{
+              minWidth: 145,
+              padding: "10px 12px",
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: RADIUS.md,
+              background: COLORS.background,
+              color: COLORS.text,
+              fontFamily: "inherit",
+              fontSize: 13,
+              outline: "none",
+            }}
+          >
+            {MATH_TOPICS.map((topic) => (
+              <option
+                key={topic.id}
+                value={topic.id}
+                disabled={!topic.implemented}
+              >
+                {topic.label}
+                {topic.implemented ? "" : " — coming next"}
+              </option>
+            ))}
+          </select>
+
+          <input
+            aria-label="Optional typed math problem"
+            type="text"
+            value={problem}
+            onChange={onProblemChange}
+            onBlur={onProblemEditDone}
+            onKeyDown={(event) =>
+              event.key === "Enter" && event.currentTarget.blur()
+            }
+            placeholder="Optional: type the problem instead"
+            style={{
+              flex: 1,
+              minWidth: 180,
+              padding: "10px 14px",
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: RADIUS.md,
+              background: COLORS.background,
+              color: COLORS.text,
+              fontFamily: "inherit",
+              fontSize: 14,
+              outline: "none",
+            }}
+          />
+        </div>
       ) : (
         // One line, not two. The topic was printed here in full and again as
         // a heading in the panel, which read as a second tab bar for

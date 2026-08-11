@@ -4,15 +4,15 @@ import { checkSteps, getHint, transcribeLine } from "../api";
 import { renderLineToPng } from "../canvas/render";
 import { buildMathCheckInput } from "./lineModel";
 import useMathSession from "./useMathSession";
+import { MATH_TOPIC_BY_ID } from "./topics";
 import {
   deserializeWorkflowSnapshot,
   serializeWorkflowSnapshot,
   workflowProblemFingerprint,
 } from "../notebook/workflowSnapshot";
 
-const MATH_TOPIC = "algebra";
-
 export default function useMathWorkflow({ pageId = null } = {}) {
+  const [topicId, setTopicId] = useState("algebra");
   const [problem, setProblem] = useState("");
   const problemRef = useRef("");
   const [lines, setLines] = useState([]);
@@ -49,7 +49,7 @@ export default function useMathWorkflow({ pageId = null } = {}) {
     ensureSession,
     cancelSession,
   } = useMathSession({
-    topic: MATH_TOPIC,
+    topic: topicId,
     problemText: problem,
     pageScopeRef,
     onFailure: handleSessionFailure,
@@ -78,6 +78,29 @@ export default function useMathWorkflow({ pageId = null } = {}) {
     hintAbortRef.current = null;
     setHintLoading(false);
   }, []);
+
+  const handleTopicChange = useCallback(
+    (nextTopicId) => {
+      const nextTopic = MATH_TOPIC_BY_ID[nextTopicId];
+
+      if (!nextTopic?.implemented || nextTopicId === topicId) {
+        return;
+      }
+
+      cancelSession();
+      clearHints();
+
+      ++checkRequestId.current;
+      checkAbortRef.current?.abort();
+      checkAbortRef.current = null;
+
+      setTopicId(nextTopicId);
+      setVerdictsByLine(new Map());
+      setFirstWrongLine(null);
+      setLastResult(null);
+    },
+    [cancelSession, clearHints, topicId]
+  );
 
   const cancelTranscriptionForRow = useCallback((row) => {
     if (transcriptionRowRef.current !== row) return;
@@ -384,7 +407,7 @@ export default function useMathWorkflow({ pageId = null } = {}) {
           error_type: activeVerdict.error_type ?? null,
           level: nextLevel,
           subject: "math",
-          topic: MATH_TOPIC,
+          topic: topicId,
           session_id: activeSession?.session_id ?? null,
           problem: effectiveProblem,
           student_line: activeLine?.text ?? null,
@@ -429,6 +452,7 @@ export default function useMathWorkflow({ pageId = null } = {}) {
     ensureSession,
     firstWrongLine,
     hintLevel,
+    topicId,
     verdictsByLine,
   ]);
 
@@ -524,6 +548,9 @@ export default function useMathWorkflow({ pageId = null } = {}) {
   }, []);
 
   return {
+    topicId,
+    topic: MATH_TOPIC_BY_ID[topicId],
+    handleTopicChange,
     problem,
     lines,
     verdictsByLine,

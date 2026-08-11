@@ -209,6 +209,9 @@ export default function App({ theme: themeFromRoute, subject }) {
         mode={mode}
         onModeChange={workspace.handleModeChange}
         chemistry={chemistry}
+        mathTopic={math.topic}
+        mathTopicId={math.topicId}
+        onMathTopicChange={math.handleTopicChange}
         problem={math.problem}
         onProblemChange={math.handleProblemChange}
         onProblemEditDone={math.handleProblemEditDone}
