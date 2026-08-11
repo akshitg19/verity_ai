@@ -101,8 +101,21 @@ export function verdictStyle(status) {
 
 // --- theme ------------------------------------------------------------------
 
-export const THEME_STORAGE_KEY = "verity.theme";
+// v2, and the bump is the point: every device that had already stored
+// "system" re-defaults to light once. See DEFAULT_PREFERENCE below.
+export const THEME_STORAGE_KEY = "verity.theme.v2";
 export const THEME_PREFERENCES = ["system", "light", "dark"];
+
+// Light, not system.
+//
+// Dark mode is half a theme: the paper deliberately stays light because the
+// ink does not invert with it, so a dark-mode tablet showed a light ruled page
+// inside black chrome, with a black feedback panel hanging off the side of it.
+// That is not a look anyone chose, and a student on a device set to dark got
+// it without asking. Dark stays one tap away for anyone who wants it, and it
+// becomes the sensible default again the day the paper and the ink invert
+// together.
+export const DEFAULT_PREFERENCE = "light";
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
@@ -119,10 +132,10 @@ export function resolveTheme(preference) {
 export function readStoredPreference() {
   try {
     const stored = globalThis.localStorage?.getItem(THEME_STORAGE_KEY);
-    return THEME_PREFERENCES.includes(stored) ? stored : "system";
+    return THEME_PREFERENCES.includes(stored) ? stored : DEFAULT_PREFERENCE;
   } catch {
     // Private browsing can throw on access rather than return null.
-    return "system";
+    return DEFAULT_PREFERENCE;
   }
 }
 

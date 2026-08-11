@@ -7,6 +7,44 @@
 
 const ARROWS = ["->", "→", "⟶", "=>", "⇒", "-->"];
 
+// Real symbols, so a word cannot be tallied as an element. Without this,
+// "Balance the oxygens: C3H8 + 5O2 -> ..." counted "Balance" as an element
+// and put a row for it next to the real ones. Every step the model writes is
+// a sentence followed by the chemistry, so prose reaching this parser is the
+// normal case and not an edge case.
+const ELEMENTS = new Set(
+  `H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni
+   Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I
+   Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt
+   Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr
+   Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og`.split(/\s+/)
+);
+
+// A formula is a run of element symbols, digits and brackets, optionally with
+// a charge. Anything with a space, a comma, or a word in it is prose.
+const FORMULA_SHAPE = /^[A-Za-z0-9()[\]]+(\^?\d*[+-])?$/;
+
+export function isFormula(text) {
+  const body = text.replace(/\^?\d*[+-]$/, "");
+  if (!body || !FORMULA_SHAPE.test(text)) return false;
+  // An electron is a term in every half-reaction and contributes no atoms.
+  if (body === "e" && body !== text) return true;
+  const symbols = body.match(/[A-Z][a-z]*/g) ?? [];
+  if (!symbols.length) return false;
+  return symbols.every((symbol) => ELEMENTS.has(symbol));
+}
+
+// "Balance the oxygens: C3H8" -> "C3H8". A step is a sentence and then the
+// chemistry, so the formula is the last word of whatever precedes the "+".
+function salvageFormula(formula) {
+  const candidate = formula
+    .split(/\s+/)
+    .pop()
+    .replace(/^[.,;:!?(]+/, "")
+    .replace(/[.,;:!?]+$/, "");
+  return isFormula(candidate) ? candidate : null;
+}
+
 // "Fe2O3" -> { Fe: 2, O: 3 }, including nested groups like Ca3(PO4)2.
 export function countFormula(formula, multiplier = 1) {
   let index = 0;
@@ -62,9 +100,27 @@ export function splitTerm(term) {
   return { coefficient: Number(match[1]), formula: match[2].trim() };
 }
 
+// Split on "+", except where the "+" is a charge rather than a separator.
+// "MnO4^- + 8H^+ + 5e-" is three terms, and a plain split makes it four, one
+// of which is the fragment "8H^". The backend parser draws the same
+// distinction the same way: a "+" directly after the caret marker belongs to
+// the ion on its left.
+const CHARGE_SIGN_CONTEXT = /\^\d*$/;
+
 export function parseSide(side) {
-  return side
-    .split("+")
+  const terms = [];
+  let current = "";
+  for (const character of side) {
+    if (character === "+" && !CHARGE_SIGN_CONTEXT.test(current)) {
+      terms.push(current);
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  terms.push(current);
+
+  return terms
     .map((term) => term.trim())
     .filter(Boolean)
     .map(splitTerm);
@@ -78,15 +134,31 @@ export function parseEquation(text) {
   if (!normalised.includes("->")) return null;
 
   const [rawLeft, rawRight] = normalised.split("->");
-  // Trim the prose a model writes around the equation: keep only the trailing
-  // run of terms on the left that look like formulas, and the leading run on
-  // the right.
-  const left = parseSide(rawLeft).filter((term) => /^[A-Z]/.test(term.formula));
-  const right = parseSide(rawRight)
-    .map((term) => ({ ...term, formula: term.formula.replace(/[.,;:!?]+$/, "") }))
-    .filter((term) => /^[A-Z]/.test(term.formula));
 
-  if (!left.length || !right.length) return null;
+  // Trim the prose a model writes around the equation. This used to keep any
+  // term starting with a capital, which let a whole sentence through as a
+  // formula. Now every term has to be one, after a chance to salvage the
+  // formula from the end of a sentence, and a term that still is not one
+  // means this text is prose that happens to contain an arrow.
+  //
+  // Failing to null rather than tallying what survives is deliberate: a wrong
+  // atom count beside a worked example teaches the wrong thing, which is worse
+  // than showing the step as plain text.
+  const clean = (side) => {
+    const terms = [];
+    for (const term of parseSide(side)) {
+      const formula = isFormula(term.formula)
+        ? term.formula
+        : salvageFormula(term.formula);
+      if (!formula) return null;
+      terms.push({ ...term, formula });
+    }
+    return terms.length ? terms : null;
+  };
+
+  const left = clean(rawLeft);
+  const right = clean(rawRight);
+  if (!left || !right) return null;
   return { left, right };
 }
 

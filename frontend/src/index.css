@@ -158,14 +158,21 @@ textarea,
    plus a usable canvas no longer fit side by side, so the panel becomes a
    sheet along the bottom. It keeps its own scroll container either way, so
    nothing inside it can be unreachable. */
+/* dvh, not vh, and it is load-bearing rather than tidiness. A tablet browser
+   counts its collapsible toolbars as part of vh, so `bottom: 12px` with a vh
+   height put the foot of the panel behind the toolbar: the panel scrolled to
+   its end and the last thing in it, which is the hint, stayed off screen with
+   no way to reach it. dvh is the viewport actually being shown. The vh line
+   above each dvh line is the fallback for browsers without it. */
 @media (max-width: 1100px) {
   .feedback-panel {
     top: auto !important;
     right: 12px !important;
-    bottom: 12px !important;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
     left: auto !important;
     width: 340px !important;
-    max-height: 52vh !important;
+    max-height: 60vh !important;
+    max-height: 60dvh !important;
   }
 }
 
@@ -173,10 +180,11 @@ textarea,
   .feedback-panel {
     top: auto !important;
     right: 12px !important;
-    bottom: 12px !important;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
     left: 12px !important;
     width: auto !important;
-    max-height: 46vh !important;
+    max-height: 54vh !important;
+    max-height: 54dvh !important;
   }
 
   .feedback-status {
