@@ -5,6 +5,7 @@ import useCanvas from "./canvas/useCanvas";
 import useChemistry from "./chemistry/useChemistry";
 import QuestionPrompt from "./chemistry/QuestionPrompt";
 import CanvasSurface from "./components/CanvasSurface";
+import useKeyboardShortcuts from "./useKeyboardShortcuts";
 import useTheme from "./useTheme";
 import FeedbackPanel from "./components/FeedbackPanel";
 import PageActions from "./components/PageActions";
@@ -45,6 +46,12 @@ export default function App({ theme: themeFromRoute, subject }) {
       math.clear();
       chemistry.clearAnswer();
     },
+  });
+
+  useKeyboardShortcuts({
+    onUndo: canvas.handleUndo,
+    onRedo: canvas.handleRedo,
+    onToggleNotebook: () => setShowNotebook((value) => !value),
   });
 
   const transcribing = mode === "chemistry" ? chemistry.reading : math.transcribing;
@@ -101,33 +108,6 @@ export default function App({ theme: themeFromRoute, subject }) {
     else notebook.createNote(subject);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subject]);
-
-  // The four shortcuts a laptop user tries without being told. Teachers will
-  // look at this on a laptop even though it is built for a tablet, and undo
-  // that does nothing on ctrl+Z reads as broken rather than as unsupported.
-  useEffect(() => {
-    const onKey = (event) => {
-      const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(
-        event.target?.tagName
-      );
-      const chord = event.metaKey || event.ctrlKey;
-      if (!chord || typing) return;
-
-      const key = event.key.toLowerCase();
-      if (key === "z" && !event.shiftKey) {
-        event.preventDefault();
-        canvas.handleUndo();
-      } else if ((key === "z" && event.shiftKey) || key === "y") {
-        event.preventDefault();
-        canvas.handleRedo();
-      } else if (key === "b") {
-        event.preventDefault();
-        setShowNotebook((value) => !value);
-      }
-    };
-    globalThis.addEventListener("keydown", onKey);
-    return () => globalThis.removeEventListener("keydown", onKey);
-  }, [canvas]);
 
   const handleClear = () => {
     canvas.clearPage();
