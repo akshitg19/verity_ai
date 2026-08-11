@@ -21,6 +21,7 @@ import {
   checkStoichiometry,
   checkStructure,
 } from "../api";
+import { SLOT_KINDS, slotKindFor } from "./problemSlots";
 
 export const FUNCTIONAL_GROUPS = [
   "ester",
@@ -176,7 +177,7 @@ export const TOPICS = [
           inkField("equation", "Equation", "equation", { placeholder: "N2 + H2 -> NH3" }),
           inkField("amounts", "Amounts (g)", "amounts", { placeholder: "N2: 28.0, H2: 6.0" }),
           inkField("product", "Product", "product", { placeholder: "NH3" }),
-          inkField("actual_yield_g", "Actual yield (g)", "actual yield", {
+          inkField("actual_yield_g", "Mass you collected (g)", "mass collected", {
             placeholder: "25.0",
           }),
         ],
@@ -668,8 +669,17 @@ export function questionFieldFor(topic, type, values = {}) {
     );
     return match?.name ?? null;
   }
+  // Only a field a student would write out whole is offered. That is the
+  // correction to what this did before: it walked every ink field in turn,
+  // which assumed somebody writes `Al: 25.0` on a line by itself, and asked
+  // them to re-label rows they had already written with no way to reach back
+  // and do it. A list of amounts is a list, so it gets a table in the slots
+  // above the working instead. See `problemSlots.js`.
   const next = type.fields.find(
-    (entry) => entry.ink && !String(values[entry.name] ?? "").trim()
+    (entry) =>
+      entry.ink &&
+      slotKindFor(entry) === SLOT_KINDS.LINE &&
+      !String(values[entry.name] ?? "").trim()
   );
   return next?.name ?? null;
 }

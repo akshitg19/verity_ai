@@ -11,6 +11,7 @@ import {
   questionFieldFor,
   questionVerbFor,
 } from "./topics";
+import { SLOT_KINDS, slotKindFor } from "./problemSlots";
 import { categoryLabel } from "../components/verdictLabels";
 
 // The pure parts of the topic table. Each of these is a place a silent bug
@@ -203,23 +204,25 @@ describe("filling the question from ink", () => {
     expect(questionFieldFor(stoichiometry, molarMass, { formula: "H2SO4" })).toBe(null);
   });
 
-  it("walks a multi-field type in order rather than always offering the first", () => {
-    // A student writes the equation on one line and the amounts on the next.
-    // Offering "equation" again for the second line would overwrite the first.
-    let values = {};
-    expect(questionFieldFor(stoichiometry, percentYield, values)).toBe("equation");
+  it("offers only the equation on a multi-field type, and then stops", () => {
+    // The correction. This used to walk every field in turn, which assumed a
+    // student writes `Al: 25.0` on a line by itself and can reach back to
+    // re-label a row they already wrote. Neither is true. The equation is the
+    // one thing anyone writes out whole; the amounts, the product and the
+    // collected mass go in the slots above the working instead.
+    expect(questionFieldFor(stoichiometry, percentYield, {})).toBe("equation");
 
-    values = { ...values, equation: "N2 + 3H2 -> 2NH3" };
-    expect(questionFieldFor(stoichiometry, percentYield, values)).toBe("amounts");
+    const withEquation = { equation: "N2 + 3H2 -> 2NH3" };
+    expect(questionFieldFor(stoichiometry, percentYield, withEquation)).toBe(null);
+  });
 
-    values = { ...values, amounts: "N2: 28.0, H2: 6.0" };
-    expect(questionFieldFor(stoichiometry, percentYield, values)).toBe("product");
+  it("never offers a list of amounts as something to write on one line", () => {
+    const amounts = percentYield.fields.find((f) => f.name === "amounts");
 
-    values = { ...values, product: "NH3" };
-    expect(questionFieldFor(stoichiometry, percentYield, values)).toBe("actual_yield_g");
-
-    values = { ...values, actual_yield_g: "30.0" };
-    expect(questionFieldFor(stoichiometry, percentYield, values)).toBe(null);
+    expect(slotKindFor(amounts)).toBe(SLOT_KINDS.PAIRS);
+    expect(questionFieldFor(stoichiometry, percentYield, { equation: "x" })).not.toBe(
+      "amounts"
+    );
   });
 
   it("treats whitespace as unfilled", () => {
