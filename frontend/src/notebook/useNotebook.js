@@ -57,6 +57,18 @@ function load() {
   }
 }
 
+// The two names the app used to seed a new notebook with. They were only ever
+// generated, never typed by a student, so renaming them is safe. Without this
+// the new naming only reached people who had never opened the app: everyone
+// else kept looking at a note called "First structure", which is exactly the
+// name the change existed to get rid of.
+const SEEDED_TITLES = { "First problem": "Math 1", "First structure": "Chemistry 1" };
+
+function migrateTitle(note) {
+  const renamed = SEEDED_TITLES[note.title];
+  return renamed ? { ...note, title: renamed } : note;
+}
+
 function initial() {
   const stored = load();
   if (stored) {
@@ -65,7 +77,7 @@ function initial() {
     return {
       folders: [],
       ...stored,
-      notes: stored.notes.map((note) => ({ folderId: null, ...note })),
+      notes: stored.notes.map((note) => migrateTitle({ folderId: null, ...note })),
     };
   }
   const math = blankNote("math", "Math 1");

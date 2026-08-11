@@ -58,6 +58,40 @@ describe("notebook tree", () => {
   });
 });
 
+// Renaming the two seeded titles on load. Changing the defaults only reached
+// people who had never opened the app; everyone else kept the old name.
+const SEEDED_TITLES = { "First problem": "Math 1", "First structure": "Chemistry 1" };
+const migrateTitle = (note) =>
+  SEEDED_TITLES[note.title] ? { ...note, title: SEEDED_TITLES[note.title] } : note;
+
+describe("migrating a stored notebook", () => {
+  it("renames the seeded chemistry note", () => {
+    expect(migrateTitle({ title: "First structure" }).title).toBe("Chemistry 1");
+  });
+
+  it("renames the seeded math note", () => {
+    expect(migrateTitle({ title: "First problem" }).title).toBe("Math 1");
+  });
+
+  it("leaves a name the student chose alone", () => {
+    expect(migrateTitle({ title: "Friday homework" }).title).toBe("Friday homework");
+  });
+
+  it("leaves an already-migrated name alone", () => {
+    expect(migrateTitle({ title: "Chemistry 1" }).title).toBe("Chemistry 1");
+  });
+
+  it("keeps everything else on the note", () => {
+    const note = { title: "First structure", id: "n1", pages: [{ id: "p1" }] };
+
+    expect(migrateTitle(note)).toEqual({
+      title: "Chemistry 1",
+      id: "n1",
+      pages: [{ id: "p1" }],
+    });
+  });
+});
+
 // The sort the sidebar shows: pinned first, then most recently touched.
 // Extracted the same way as treeFor, as a pure function over the note list.
 function ordered(notes) {
