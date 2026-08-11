@@ -130,11 +130,27 @@ export default function useNotebook() {
     };
   }, [commitState]);
 
-  const notes = useMemo(() => state.notes ?? [], [state.notes]);
+  // `activeNote` and `activePage` are never undefined, and that is a contract
+  // rather than a convenience. App reads `notebook.activeNote.subject` and
+  // `notebook.activePage.id` during render, so a moment with no notes threw
+  // and, with no error boundary above it, took the entire page to white. The
+  // optional chaining that used to be here admitted the gap existed and left
+  // every caller to remember it.
+  //
+  // A stored notebook can legitimately arrive empty: hydration replaces state
+  // wholesale with whatever came out of IndexedDB, and a browser that clears
+  // site data, runs out of quota, or blocks storage in a private window can
+  // hand back a root with no notes. Seeding a blank one is what a notes app
+  // does in that situation anyway.
+  const notes = useMemo(() => {
+    const stored = state.notes ?? [];
+    return stored.length ? stored : [createBlankNote("math", "Math 1")];
+  }, [state.notes]);
   const activeNote = notes.find((note) => note.id === state.activeNoteId) ?? notes[0];
   const activePage =
-    activeNote?.pages.find((page) => page.id === activeNote.activePageId) ??
-    activeNote?.pages[0];
+    activeNote.pages?.find((page) => page.id === activeNote.activePageId) ??
+    activeNote.pages?.[0] ??
+    createBlankPage(activeNote.subject);
 
   const folders = useMemo(() => {
     const grouped = { math: [], chemistry: [] };
