@@ -1,28 +1,25 @@
-"""The hint ladder.
+"""The shared hint ladder.
 
-Two paths live here, deliberately.
+Both math and chemistry use the same three-level tutoring pipeline:
 
-**Math** keeps the original template lookup, unchanged. The templates below
-are still exactly what a math hint returns, and nothing in the chemistry
-work touches that path.
+Level 1:
+    Diagnose the student's actual incorrect step.
 
-**Chemistry** runs the v3 ladder from `final_tasks.md`:
+Level 2:
+    Generate a different problem using the same technique, then verify the
+    worked example with the subject's deterministic engine before showing it.
 
-| Level | Student asks | What they get |
-|---|---|---|
-| 1 | "Where did I go wrong?" | Diagnosis of the step they actually wrote |
-| 2 | "Show me how this works" | A different problem, worked and verified |
-| 3 | "Walk me through mine" | Their own step, refused on the terminal step |
+Level 3:
+    Walk through the student's own step, subject to the answer-vault and
+    per-problem escalation rules.
 
-All three are generated live. The templates survive as the fallback floor:
-when generation fails, when verification fails, or when redaction rejects
-what came back, a student gets the old static hint rather than nothing.
+Subject-specific prompts and verification engines remain separate, but every
+response passes through `_finalise`, which is the single outbound redaction
+chokepoint.
 
-The single most important structural fact about this file: **every string
-that reaches a student leaves through `_finalise`**, which is the only
-place `redaction.check_outbound` is called and the only place a
-`HintResponse` is constructed. `tests/test_answer_firewall.py` greps for
-that and fails if a second construction site appears.
+The old deterministic templates remain the fallback floor whenever a session
+cannot be constructed, model generation fails, verification fails, or
+redaction rejects generated content.
 """
 
 from __future__ import annotations
@@ -301,12 +298,22 @@ _LEVEL_3_FALLBACK = (
 # because they are free, stable, and the kind of source a teacher is happy
 # to see a student sent to.
 RESOURCES: dict[str, str] = {
+
+    # Chemistry Resources
     "stoichiometry": "https://chem.libretexts.org/Bookshelves/General_Chemistry",
     "balancing": "https://www.khanacademy.org/science/chemistry/chemical-reactions-stoichiome",
     "redox": "https://chem.libretexts.org/Bookshelves/Analytical_Chemistry",
     "solutions": "https://www.khanacademy.org/science/chemistry/acids-and-bases-topic",
     "structure": "https://chem.libretexts.org/Bookshelves/Organic_Chemistry",
     "organic": "https://chem.libretexts.org/Bookshelves/Organic_Chemistry",
+
+    # Math Resources
+    "pre_algebra": "https://www.khanacademy.org/math/pre-algebra",
+    "algebra": "https://www.khanacademy.org/math/algebra",
+    "geometry": "https://www.khanacademy.org/math/geometry",
+    "trigonometry": "https://www.khanacademy.org/math/trigonometry",
+    "statistics": "https://www.khanacademy.org/math/statistics-probability",
+    "calculus": "https://www.khanacademy.org/math/calculus-1",
 }
 
 TERMINAL_MESSAGE = (
@@ -422,7 +429,7 @@ def _finalise(
 # ---------------------------------------------------------------------------
 # Level 1: diagnosis.
 # ---------------------------------------------------------------------------
-_LEVEL_1_PROMPT = (
+_CHEMISTRY_LEVEL_1_PROMPT = (
     "You are a patient chemistry tutor sitting next to a student, looking at "
     "the one line of their written work that a checker has proven wrong.\n"
     "Say what they did on this line, what went wrong about it, and what to "
@@ -453,20 +460,59 @@ _LEVEL_1_PROMPT = (
 )
 
 
-def _generate_level_1(req: HintRequest, session: ProblemSession) -> tuple[str, int] | None:
+_MATH_LEVEL_1_PROMPT = (
+    "You are a patient math tutor sitting next to a student, looking at "
+    "the one line of their written work that a deterministic checker has "
+    "proven wrong.\n"
+    "Say what they did on this line, what went wrong, and what they should "
+    "compare with the previous line. Two sentences at most.\n"
+    "How to talk:\n"
+    "- Talk TO the student. Say 'you', never 'the student'.\n"
+    "- Be warm, brief, and matter of fact.\n"
+    "- Name the actual expressions, operations, signs, or numbers on their page.\n"
+    "- Explain the mistake they made, not the entire solution method.\n"
+    "Never do:\n"
+    "- No markdown, headings, lists, or bold.\n"
+    "- No filler such as 'Great question', 'Let's', 'Don't worry', or "
+    "'Remember that'.\n"
+    "- Never state the corrected line or the final answer.\n"
+    "- Never perform the step for them.\n"
+    "Good: 'You subtracted 12 from the left, but the right side changed by "
+    "a different amount. Compare what operation you applied to each side.'\n"
+    "Bad: 'Subtract 12 from both sides to get x = 17.'\n"
+    'Reply with JSON: {"hint": "<one or two sentences>"}'
+)
+
+
+def _generate_level_1(
+    req: HintRequest,
+    session: ProblemSession,
+) -> tuple[str, int] | None:
+    base_prompt = (
+        _CHEMISTRY_LEVEL_1_PROMPT
+        if req.subject == "chemistry"
+        else _MATH_LEVEL_1_PROMPT
+    )
+
     prompt = (
-        _LEVEL_1_PROMPT
+        base_prompt
         + f"\n\nTopic: {req.topic or session.topic}"
         + f"\nProblem: {req.problem or session.problem}"
         + f"\nThe line before: {req.previous_line or '(this is the first line)'}"
         + f"\nThe flagged line (line {req.line_number}): {req.student_line}"
         + f"\nWhat the checker proved: {req.error_type}"
     )
+
     try:
-        payload, latency = generate_json([prompt], job="hint", temperature=0.2)
+        payload, latency = generate_json(
+            [prompt],
+            job="hint",
+            temperature=0.2,
+        )
     except ModelError as exc:
         logger.warning("level 1 generation failed: %s", exc)
         return None
+
     hint = str(payload.get("hint", "")).strip()
     return (hint, latency) if hint else None
 
@@ -474,7 +520,7 @@ def _generate_level_1(req: HintRequest, session: ProblemSession) -> tuple[str, i
 # ---------------------------------------------------------------------------
 # Level 2: a generated parallel problem, verified before it is shown.
 # ---------------------------------------------------------------------------
-_LEVEL_2_PROMPT = (
+_CHEMISTRY_LEVEL_2_PROMPT = (
     "You are a chemistry tutor at a whiteboard. A student is stuck on a "
     "problem. Write a DIFFERENT problem that uses the same technique and "
     "contains the same trap, with different substances and different "
@@ -497,7 +543,28 @@ _LEVEL_2_PROMPT = (
     "- No filler openers such as 'Let's', 'First of all', 'As we can see'.\n"
 )
 
-_CHECK_CONTRACTS = {
+
+_MATH_LEVEL_2_PROMPT = (
+    "You are a math tutor at a whiteboard. A student is stuck on an algebra "
+    "problem. Create a DIFFERENT one-variable algebra problem that uses the "
+    "same technique and contains the same kind of mistake, but uses different "
+    "numbers from the student's problem.\n"
+    "Then work the new problem correctly.\n"
+    "Rules:\n"
+    "- The new problem must be a one-variable algebra equation supported by "
+    "a basic algebra checker.\n"
+    "- Do not reuse the student's numbers.\n"
+    "- `problem` must contain only the mathematical equation.\n"
+    "- Every item in `steps` must contain only a complete mathematical "
+    "equation, with no explanatory prose.\n"
+    "- Every step must be mathematically equivalent to the step before it.\n"
+    "- The last step should solve the new problem.\n"
+    "- `technique` should name the general technique in one short sentence.\n"
+    "Reply with one JSON object and nothing else."
+)
+
+
+_CHEMISTRY_CHECK_CONTRACTS = {
     "balancing": (
         '"check": {"unbalanced": "<your equation, coefficients omitted>", '
         '"balanced": "<the same equation, fully balanced>"}'
@@ -537,10 +604,32 @@ _CHECK_CONTRACTS = {
 }
 
 
-def _level_2_prompt(topic: str, problem: str, error_type: str | None) -> str:
-    contract = _CHECK_CONTRACTS.get(topic, _CHECK_CONTRACTS["structure"])
+def _level_2_prompt(
+    subject: str,
+    topic: str,
+    problem: str,
+    error_type: str | None,
+) -> str:
+    if subject == "math":
+        return (
+            _MATH_LEVEL_2_PROMPT
+            + f"\n\nTopic: {topic}"
+            + f"\nThe student's problem, which must NOT be reused: {problem}"
+            + f"\nThe mistake they made: {error_type}\n\n"
+            + "Reply with exactly this JSON shape:\n"
+            + '{"problem": "<new equation>", '
+            + '"technique": "<technique in one sentence>", '
+            + '"steps": ["<equation 1>", "<equation 2>", "..."], '
+            + '"check": {}}'
+        )
+
+    contract = _CHEMISTRY_CHECK_CONTRACTS.get(
+        topic,
+        _CHEMISTRY_CHECK_CONTRACTS["structure"],
+    )
+
     return (
-        _LEVEL_2_PROMPT
+        _CHEMISTRY_LEVEL_2_PROMPT
         + f"\nTopic: {topic}"
         + f"\nThe student's problem (for structure only, do not reuse it): {problem}"
         + f"\nThe mistake they made: {error_type}\n\n"
@@ -553,7 +642,7 @@ def _level_2_prompt(topic: str, problem: str, error_type: str | None) -> str:
     )
 
 
-def _verify_example(topic: str, payload: dict, student_problem: str) -> WorkedExample | None:
+def _verify_example(subject: str,topic: str, payload: dict, student_problem: str) -> WorkedExample | None:
     """Run the generated example through our own engines, line by line.
 
     This is the safeguard `final_tasks.md` calls non-negotiable: the
@@ -579,15 +668,31 @@ def _verify_example(topic: str, payload: dict, student_problem: str) -> WorkedEx
         logger.info("level 2 rejected: analogue reuses the student's numbers")
         return None
 
-    if not _check_is_correct(topic, check, steps):
-        return None
+    if subject == "math":
+        if topic != "algebra":
+            logger.info(
+                "level 2 rejected: no deterministic math verifier for topic %s",
+                topic,
+            )
+            return None
+
+        if not _verify_math_example(problem, steps):
+            return None
+
+    else:
+        if not _check_is_correct(topic, check, steps):
+            return None
 
     return WorkedExample(
         problem=problem,
         technique=technique,
         steps=steps,
         verified=True,
-        equations=[_step_equation(step) for step in steps],
+        equations=(
+            [_step_equation(step) for step in steps]
+            if subject == "chemistry"
+            else []
+        ),
     )
 
 
@@ -678,6 +783,36 @@ def _split_on_term_plus(side: str) -> list[str]:
         current.append(character)
     terms.append("".join(current))
     return terms
+
+
+def _verify_math_example(problem: str, steps: list[str]) -> bool:
+    """Verify a generated math example with the same judge used on students."""
+    from judge.algebra import AlgebraJudge
+    from schemas import Step
+
+    if not problem or not steps:
+        return False
+
+    judge = AlgebraJudge()
+
+    check_steps = [
+        Step(
+            line_number=index + 1,
+            latex=text,
+        )
+        for index, text in enumerate(steps)
+    ]
+
+    verdicts = judge.check(problem, check_steps)
+
+    if not verdicts:
+        return False
+
+    # line 0 means the generated problem itself could not be safely judged.
+    if verdicts[0].line_number == 0:
+        return False
+
+    return all(verdict.valid for verdict in verdicts)
 
 
 def _check_is_correct(topic: str, check: dict, steps: list[str]) -> bool:
@@ -901,15 +1036,25 @@ def _generate_level_2(
     for attempt in range(MAX_GENERATION_ATTEMPTS):
         try:
             payload, latency = generate_json(
-                [_level_2_prompt(topic, problem, req.error_type)],
-                job="worked_example",
-                temperature=0.6 if attempt else 0.3,
+                [
+                    _level_2_prompt(
+                        req.subject,
+                        topic,
+                        problem,
+                        req.error_type,
+                    )
+                ],
             )
         except ModelError as exc:
             logger.warning("level 2 generation failed: %s", exc)
             return None
         total_latency += latency
-        example = _verify_example(topic, payload, problem)
+        example = _verify_example(
+            req.subject,
+            topic,
+            payload,
+            problem,
+        )
         if example is not None:
             return example, total_latency
         logger.info("level 2 example failed verification, attempt %d", attempt + 1)
@@ -919,7 +1064,7 @@ def _generate_level_2(
 # ---------------------------------------------------------------------------
 # Level 3: their own step, with the gate.
 # ---------------------------------------------------------------------------
-_LEVEL_3_PROMPT = (
+_CHEMISTRY_LEVEL_3_PROMPT = (
     "You are a patient chemistry tutor at a desk with a student, working "
     "through the line they got wrong. Reason through THEIR step with them, "
     "out loud, up to but not including the answer to the problem.\n"
@@ -946,7 +1091,7 @@ _LEVEL_3_PROMPT = (
 
 # The same tutor, with withholding off. Level 3 is now allowed to finish the
 # step it is working, which is the whole point of the rung.
-_LEVEL_3_PROMPT_OPEN = (
+_CHEMISTRY_LEVEL_3_PROMPT_OPEN = (
     "You are a patient chemistry tutor at a desk with a student, working "
     "through the line they got wrong. Take THEIR step and reason it all the "
     "way through with them, out loud, until that step is finished.\n"
@@ -969,16 +1114,59 @@ _LEVEL_3_PROMPT_OPEN = (
     'Reply with JSON: {"hint": "<three to five sentences>", "declined": false}'
 )
 
+_MATH_LEVEL_3_PROMPT = (
+    "You are a patient math tutor working through one incorrect line with "
+    "a student. Reason through THEIR step with them, up to but not including "
+    "the final answer to the overall problem.\n"
+    "Explain what operation is appropriate, why, and what they should check.\n"
+    "Talk directly to the student using 'you' and 'we'.\n"
+    "Use the actual expressions and numbers on their page.\n"
+    "Do not solve later steps.\n"
+    "Do not state the final answer.\n"
+    "No markdown, headings, lists, praise, or filler.\n"
+    "Length: three or four sentences.\n"
+    'If you cannot help without revealing the answer, reply with '
+    '{"declined": true} and nothing else.\n'
+    'Reply with JSON: {"hint": "<three or four sentences>", "declined": false}'
+)
+
+
+_MATH_LEVEL_3_PROMPT_OPEN = (
+    "You are a patient math tutor working through one incorrect line with "
+    "a student. Take THEIR step and reason it all the way through until that "
+    "single step is finished.\n"
+    "Talk directly to the student using 'you' and 'we'.\n"
+    "Use the actual expressions and numbers on their page.\n"
+    "Finish this one step, but do not continue solving the rest of the problem.\n"
+    "No markdown, headings, lists, praise, or filler.\n"
+    "Length: three to five sentences.\n"
+    'Reply with JSON: {"hint": "<three to five sentences>", "declined": false}'
+)
+
 
 def _generate_level_3(req: HintRequest, session: ProblemSession) -> tuple[str, int] | None:
+    if req.subject == "chemistry":
+        base_prompt = (
+            _CHEMISTRY_LEVEL_3_PROMPT
+            if WITHHOLD_ANSWER
+            else _CHEMISTRY_LEVEL_3_PROMPT_OPEN
+        )
+    else:
+        base_prompt = (
+            _MATH_LEVEL_3_PROMPT
+            if WITHHOLD_ANSWER
+            else _MATH_LEVEL_3_PROMPT_OPEN
+        )
+
     prompt = (
-        (_LEVEL_3_PROMPT if WITHHOLD_ANSWER else _LEVEL_3_PROMPT_OPEN)
+        base_prompt
         + f"\n\nTopic: {req.topic or session.topic}"
         + f"\nProblem: {req.problem or session.problem}"
         + f"\nThe line before: {req.previous_line or '(this is the first line)'}"
         + f"\nTheir line (line {req.line_number}): {req.student_line}"
         + f"\nWhat the checker proved: {req.error_type}"
     )
+
     try:
         payload, latency = generate_json([prompt], job="hint", temperature=0.2)
     except ModelError as exc:
@@ -999,9 +1187,9 @@ def generate_hint(req: HintRequest) -> HintResponse:
 
     session = SESSIONS.get(req.session_id)
 
-    # Math is unchanged: the template ladder, no model, no session.
-    if req.subject != "chemistry":
-        return _finalise(req, _template_hint(req), session=None, trusted=True)
+    # A session created for one topic must never be reused for another.
+    if session is not None and req.topic is not None and session.topic != req.topic:
+        session = None
 
     topic = req.topic or (session.topic if session else None)
     resource = RESOURCES.get(topic or "", None)

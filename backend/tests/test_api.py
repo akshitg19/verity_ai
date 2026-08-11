@@ -696,3 +696,35 @@ def test_hint_contract() -> None:
     assert response.json()["level"] == 2
     assert response.json()["max_level"] == 3
     assert "sign" in response.json()["hint"].lower()
+
+def test_math_session_opens_for_supported_algebra():
+    response = client.post(
+        "/math/session",
+        json={
+            "topic": "algebra",
+            "problem": "3*x - 12 = 2*x + 5",
+        },
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["topic"] == "algebra"
+    assert body["session_id"]
+    assert body["level_3_remaining"] == 3
+    assert body["total_steps"] == 1
+
+    # The server may know the answer, but the response must not expose it.
+    assert "17" not in str(body)
+
+def test_math_session_rejects_unimplemented_topic():
+    response = client.post(
+        "/math/session",
+        json={
+            "topic": "calculus",
+            "problem": "d/dx x^2",
+        },
+    )
+
+    assert response.status_code == 422

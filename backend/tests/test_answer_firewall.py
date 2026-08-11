@@ -37,6 +37,7 @@ from answer_vault import (
     vault_for_solutions,
     vault_for_stoichiometry,
     vault_for_structure,
+    vault_for_algebra,
 )
 from judge.solutions import SolutionsProblem
 from judge.stoichiometry import StoichiometryProblem
@@ -485,3 +486,30 @@ def test_larger_coefficients_are_covered_too():
     allowed, _ = check_outbound("Put 13O2 on the left.", vault)
 
     assert allowed is False
+
+# ---------------------------------------------------------------------------
+# Algebra Vault: it is a symbolic solver, so the answer is a number, not a coefficient.
+# ---------------------------------------------------------------------------
+
+def test_algebra_vault_contains_solution_without_exposing_it():
+    vault = vault_for_algebra("3*x - 12 = 2*x + 5")
+
+    assert vault.topic == "algebra"
+    assert 17.0 in vault.numeric_answers
+    assert "x = 17" in vault.answer_forms
+
+
+def test_algebra_vault_supports_fraction_solution():
+    vault = vault_for_algebra("2*x = 3")
+
+    assert 1.5 in vault.numeric_answers
+
+
+def test_algebra_vault_rejects_multiple_solutions():
+    with pytest.raises(ValueError):
+        vault_for_algebra("x^2 = 9")
+
+
+def test_algebra_vault_rejects_multiple_variables():
+    with pytest.raises(ValueError):
+        vault_for_algebra("x + y = 5")

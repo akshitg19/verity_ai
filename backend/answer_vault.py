@@ -23,6 +23,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from sympy import Eq, solve
+
+from judge.algebra import _parse_equation
+
 from judge.chemistry import (
     ChemistryParseError,
     UnsupportedChemistryError,
@@ -263,6 +267,51 @@ def vault_for_cell_potential(problem: str, cathode: str, anode: str) -> AnswerVa
     _add_forms(vault, solve_cell_potential(cathode, anode))
     return vault
 
+def vault_for_algebra(problem: str) -> AnswerVault:
+    """Build a protected answer vault for a supported one-variable equation."""
+    try:
+        parsed = _parse_equation(problem)
+    except Exception as exc:
+        raise ValueError(f"could not parse algebra problem: {exc}") from exc
+
+    if not isinstance(parsed, Eq):
+        raise ValueError("math sessions currently require an equation")
+
+    symbols = sorted(parsed.free_symbols, key=lambda symbol: symbol.name)
+    if len(symbols) != 1:
+        raise ValueError("math sessions currently support one-variable equations")
+
+    symbol = symbols[0]
+    solutions = solve(parsed, symbol)
+
+    if len(solutions) != 1:
+        raise ValueError("math sessions currently require one unique solution")
+
+    answer = solutions[0]
+
+    vault = AnswerVault(
+        topic="algebra",
+        problem=problem,
+    )
+
+    # Text forms that generated hints must never reveal.
+    vault.answer_forms.extend(
+        [
+            str(answer),
+            f"{symbol}={answer}",
+            f"{symbol} = {answer}",
+        ]
+    )
+
+    # Numeric leak detection catches alternate formatting such as 17.0.
+    if answer.is_real and answer.is_number:
+        try:
+            vault.numeric_answers.append(float(answer))
+        except (TypeError, ValueError):
+            pass
+
+    return vault
+
 
 class VaultConstructionError(ValueError):
     """The problem could not be solved, so no vault can be built for it."""
@@ -311,6 +360,19 @@ def build_vault(
     raise VaultConstructionError(f"no vault can be built for topic {topic!r}")
 
 
+def build_math_vault(*, topic: str, problem: str) -> AnswerVault:
+    """Construct a protected answer vault for a supported math problem."""
+    try:
+        if topic == "algebra":
+            return vault_for_algebra(problem)
+    except ValueError as exc:
+        raise VaultConstructionError(str(exc)) from exc
+
+    raise VaultConstructionError(
+        f"no math vault can be built for topic {topic!r}"
+    )
+
+
 __all__ = [
     "AnswerVault",
     "LEAK_TOLERANCE",
@@ -324,4 +386,6 @@ __all__ = [
     "vault_for_solutions",
     "vault_for_stoichiometry",
     "vault_for_structure",
+    "build_math_vault",
+    "vault_for_algebra",
 ]

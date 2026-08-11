@@ -18,7 +18,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 
 import hints
-from answer_vault import vault_for_balance, vault_for_solutions, vault_for_structure
+from answer_vault import (
+    vault_for_balance, 
+    vault_for_solutions, 
+    vault_for_structure, 
+    vault_for_algebra,
+)
 from judge.solutions import SolutionsProblem
 from schemas import HintRequest
 from sessions import SESSIONS
@@ -46,6 +51,12 @@ def balance_session():
     return SESSIONS.create("balancing", vault.problem, vault)
 
 
+@pytest.fixture
+def algebra_session():
+    vault = vault_for_algebra("3*x - 12 = 2*x + 5")
+    return SESSIONS.create("algebra", vault.problem, vault)
+
+
 def request_for(session, level: int, **overrides) -> HintRequest:
     payload = {
         "line_number": 2,
@@ -61,6 +72,22 @@ def request_for(session, level: int, **overrides) -> HintRequest:
     payload.update(overrides)
     return HintRequest(**payload)
 
+def math_request_for(session, level: int, **overrides) -> HintRequest:
+    payload = {
+        "line_number": 2,
+        "error_type": "algebraic",
+        "level": level,
+        "subject": "math",
+        "topic": "algebra",
+        "session_id": session.session_id,
+        "problem": session.problem,
+        "previous_line": "3*x - 12 = 2*x + 5",
+        "student_line": "3*x = 2*x + 7",
+    }
+
+    payload.update(overrides)
+
+    return HintRequest(**payload)
 
 # ---------------------------------------------------------------------------
 # Math is untouched
@@ -94,6 +121,18 @@ def test_an_invalid_level_is_rejected():
             HintRequest.model_construct(line_number=1, error_type="sign", level=9)
         )
 
+
+def test_hint_request_accepts_math_topic():
+    request = HintRequest(
+        line_number=2,
+        error_type="algebraic",
+        level=1,
+        subject="math",
+        topic="algebra",
+    )
+
+    assert request.subject == "math"
+    assert request.topic == "algebra"
 
 # ---------------------------------------------------------------------------
 # Falling back rather than failing
@@ -173,6 +212,58 @@ def test_level_1_without_the_student_line_falls_back(monkeypatch, ph_session):
 
     assert response.source == "fallback"
 
+def test_math_level_1_uses_generated_diagnosis(monkeypatch, algebra_session):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+
+    captured = {}
+
+    def fake_generate_json(messages, **kwargs):
+        captured["prompt"] = messages[0]
+        return (
+            {
+                "hint": (
+                    "You changed the constant incorrectly on the right side. "
+                    "Compare what happened to the 12 on both sides."
+                )
+            },
+            250,
+        )
+
+    monkeypatch.setattr(hints, "generate_json", fake_generate_json)
+
+    response = hints.generate_hint(
+        math_request_for(algebra_session, 1)
+    )
+
+    assert response.source == "model"
+    assert response.level == 1
+    assert response.latency_ms == 250
+    assert "changed the constant" in response.hint
+
+
+def test_math_level_1_uses_math_prompt(monkeypatch, algebra_session):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+
+    captured = {}
+
+    def fake_generate_json(messages, **kwargs):
+        captured["prompt"] = messages[0]
+        return (
+            {"hint": "Check the operation you applied to both sides."},
+            100,
+        )
+
+    monkeypatch.setattr(hints, "generate_json", fake_generate_json)
+
+    hints.generate_hint(
+        math_request_for(algebra_session, 1)
+    )
+
+    prompt = captured["prompt"].lower()
+
+    assert "math tutor" in prompt
+    assert "chemistry tutor" not in prompt
+
 
 # ---------------------------------------------------------------------------
 # Level 2: the verification loop. The rejection path, hard.
@@ -191,6 +282,30 @@ GOOD_SOLUTIONS_EXAMPLE = {
         "params": {"concentration_m": 0.05, "ka": 1.3e-5},
         "answer": 3.09,
     },
+}
+
+
+GOOD_ALGEBRA_EXAMPLE = {
+    "problem": "7*x + 6 = 34",
+    "technique": "Undo the constant term before dividing by the coefficient.",
+    "steps": [
+        "7*x + 6 = 34",
+        "7*x = 28",
+        "x = 4",
+    ],
+    "check": {},
+}
+
+
+BAD_ALGEBRA_EXAMPLE = {
+    "problem": "7*x + 6 = 34",
+    "technique": "Undo the constant term before dividing by the coefficient.",
+    "steps": [
+        "7*x + 6 = 34",
+        "7*x = 25",
+        "x = 4",
+    ],
+    "check": {},
 }
 
 
@@ -306,6 +421,73 @@ def test_verification_retries_before_giving_up(monkeypatch, ph_session):
     response = hints.generate_hint(request_for(ph_session, 2))
 
     assert calls["count"] == 2
+    assert response.worked_example is not None
+
+
+def test_math_level_2_accepts_verified_example(monkeypatch, algebra_session):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+
+    monkeypatch.setattr(
+        hints,
+        "generate_json",
+        lambda *args, **kwargs: (GOOD_ALGEBRA_EXAMPLE, 500),
+    )
+
+    response = hints.generate_hint(
+        math_request_for(algebra_session, 2)
+    )
+
+    assert response.source == "model"
+    assert response.worked_example is not None
+    assert response.worked_example.verified is True
+    assert response.worked_example.problem == "7*x + 6 = 34"
+    assert response.worked_example.steps[-1] == "x = 4"
+
+
+def test_math_level_2_rejects_invalid_worked_example(
+    monkeypatch,
+    algebra_session,
+):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+
+    monkeypatch.setattr(
+        hints,
+        "generate_json",
+        lambda *args, **kwargs: (BAD_ALGEBRA_EXAMPLE, 500),
+    )
+
+    response = hints.generate_hint(
+        math_request_for(algebra_session, 2)
+    )
+
+    assert response.worked_example is None
+    assert response.source == "fallback"
+
+
+def test_math_level_2_does_not_use_chemistry_verifier(
+    monkeypatch,
+    algebra_session,
+):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+
+    monkeypatch.setattr(
+        hints,
+        "_check_is_correct",
+        lambda *args, **kwargs: pytest.fail(
+            "math Level 2 must not use chemistry verification"
+        ),
+    )
+
+    monkeypatch.setattr(
+        hints,
+        "generate_json",
+        lambda *args, **kwargs: (GOOD_ALGEBRA_EXAMPLE, 500),
+    )
+
+    response = hints.generate_hint(
+        math_request_for(algebra_session, 2)
+    )
+
     assert response.worked_example is not None
 
 
@@ -463,6 +645,29 @@ def test_every_response_reports_the_remaining_budget(monkeypatch, ph_session):
     response = hints.generate_hint(request_for(ph_session, 1))
 
     assert response.level_3_remaining == 3
+
+
+def test_math_level_3_is_terminal_until_math_progress_tracking_exists(
+    monkeypatch,
+    algebra_session,
+):
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", True)
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+
+    monkeypatch.setattr(
+        hints,
+        "_generate_level_3",
+        lambda *args, **kwargs: pytest.fail(
+            "terminal math step must not call the model"
+        ),
+    )
+
+    response = hints.generate_hint(
+        math_request_for(algebra_session, 3)
+    )
+
+    assert response.terminal_step is True
+    assert response.source == "fallback"
 
 
 # ---------------------------------------------------------------------------

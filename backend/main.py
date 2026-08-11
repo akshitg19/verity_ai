@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from answer_vault import VaultConstructionError, build_vault
+from answer_vault import VaultConstructionError, build_vault, build_math_vault
 from chem_model import ReactionJudge
 from hints import generate_hint
 from judge import AlgebraJudge, BalanceJudge, ChemistryJudge, FunctionalGroupJudge
@@ -65,6 +65,8 @@ from schemas import (
     StructureTranscribeResponse,
     TranscribeRequest,
     TranscribeResponse,
+    MathSessionRequest,
+    MathSessionResponse,
 )
 from sessions import SESSIONS
 from structure_recognition import transcribe_chemistry_line, transcribe_structure
@@ -456,6 +458,28 @@ def open_chemistry_session(req: ChemistrySessionRequest):
 
     session = SESSIONS.create(req.topic, req.problem, vault)
     return ChemistrySessionResponse(
+        session_id=session.session_id,
+        topic=req.topic,
+        level_3_remaining=session.level_3_remaining,
+        total_steps=vault.total_steps,
+    )
+
+@app.post("/math/session", response_model=MathSessionResponse)
+def open_math_session(req: MathSessionRequest):
+    try:
+        vault = build_math_vault(
+            topic=req.topic,
+            problem=req.problem,
+        )
+    except VaultConstructionError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"This problem could not be solved, so hints will be limited: {exc}",
+        ) from exc
+
+    session = SESSIONS.create(req.topic, req.problem, vault)
+
+    return MathSessionResponse(
         session_id=session.session_id,
         topic=req.topic,
         level_3_remaining=session.level_3_remaining,

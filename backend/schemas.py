@@ -45,6 +45,15 @@ ChemistryTopic = Literal[
     "organic",
 ]
 
+MathTopic = Literal[
+    "pre_algebra",
+    "algebra",
+    "geometry",
+    "trigonometry",
+    "statistics",
+    "calculus",
+]
+
 
 class Step(BaseModel):
     line_number: LineNumber
@@ -557,6 +566,16 @@ class ChemistrySessionResponse(BaseModel):
     level_3_remaining: int
     total_steps: int | None = None  # how long the correct working is
 
+class MathSessionRequest(BaseModel):
+    topic: MathTopic
+    problem: MathText
+
+
+class MathSessionResponse(BaseModel):
+    session_id: str
+    topic: MathTopic
+    level_3_remaining: int
+    total_steps: int
 
 # ---------------------------------------------------------------------------
 # Hints, v3 ladder.
@@ -607,7 +626,7 @@ class HintRequest(BaseModel):
     # Everything below is the v3 widening. All of it is optional, so the
     # existing two-field call site keeps working unchanged.
     subject: Literal["math", "chemistry"] = "math"
-    topic: ChemistryTopic | None = None
+    topic: MathTopic | ChemistryTopic | None = None
     session_id: str | None = None
     problem: Annotated[str, StringConstraints(max_length=1024)] | None = None
     student_line: Annotated[str, StringConstraints(max_length=512)] | None = None
