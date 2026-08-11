@@ -99,8 +99,8 @@ function EquationLine({ text, previous }) {
     <div
       style={{
         fontFamily: FONT.mono,
-        fontSize: 15,
-        lineHeight: 1.6,
+        fontSize: 16.5,
+        lineHeight: 1.65,
         color: COLORS.text,
         wordBreak: "break-word",
       }}
@@ -119,16 +119,27 @@ export default function WorkedExampleStepper({ example }) {
   const [index, setIndex] = useState(0);
 
   if (!steps.length) return null;
+
+  // The server sends the equation on each step, read by the same parser that
+  // judges the student, so the tally is right rather than usually right.
+  // Falling back to reading the prose here keeps this working against an
+  // older backend, and against the static fallback hint, which has no
+  // equations attached.
+  const equationFor = (position) =>
+    example?.equations?.[position] ?? steps[position] ?? null;
+
   const current = steps[index];
-  const previous = index > 0 ? steps[index - 1] : null;
-  const hasEquation = Boolean(parseEquation(current));
+  const currentEquation = equationFor(index);
+  const previousEquation = index > 0 ? equationFor(index - 1) : null;
+  const hasEquation = Boolean(currentEquation && parseEquation(currentEquation));
 
   return (
     <div
       style={{
-        marginTop: 10,
-        padding: 14,
-        borderRadius: RADIUS.md,
+        marginTop: 4,
+        marginBottom: 10,
+        padding: 16,
+        borderRadius: RADIUS.lg,
         background: COLORS.surface,
         border: `1px solid ${COLORS.border}`,
       }}
@@ -139,8 +150,13 @@ export default function WorkedExampleStepper({ example }) {
           40%  { transform: scale(1.35); }
           100% { transform: scale(1);    }
         }
+        @keyframes verity-step-in {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0);   }
+        }
         @media (prefers-reduced-motion: reduce) {
           @keyframes verity-pop { from, to { transform: none; } }
+          @keyframes verity-step-in { from, to { opacity: 1; transform: none; } }
         }
       `}</style>
 
@@ -174,21 +190,51 @@ export default function WorkedExampleStepper({ example }) {
       >
         <div
           style={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: COLORS.muted,
-            marginBottom: 6,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 8,
           }}
         >
-          Step {index + 1} of {steps.length}
+          <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.muted }}>
+            Step {index + 1} of {steps.length}
+          </div>
+          <div
+            aria-hidden="true"
+            style={{
+              flex: 1,
+              height: 3,
+              borderRadius: 999,
+              background: COLORS.border,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${((index + 1) / steps.length) * 100}%`,
+                height: "100%",
+                background: SUBJECTS.chemistry.accent,
+                borderRadius: 999,
+                transition: "width 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+              }}
+            />
+          </div>
         </div>
-        <div style={{ fontSize: 13.5, lineHeight: 1.5, color: COLORS.text }}>
+        <div
+          key={index}
+          style={{
+            fontSize: 13.5,
+            lineHeight: 1.5,
+            color: COLORS.text,
+            animation: "verity-step-in 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
           {current}
         </div>
         {hasEquation && (
           <div style={{ marginTop: 10 }}>
-            <EquationLine text={current} previous={previous} />
-            <AtomTally text={current} previous={previous} />
+            <EquationLine text={currentEquation} previous={previousEquation} />
+            <AtomTally text={currentEquation} previous={previousEquation} />
           </div>
         )}
       </div>
@@ -232,20 +278,6 @@ export default function WorkedExampleStepper({ example }) {
           Next step
         </button>
 
-        <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-          {steps.map((_, dot) => (
-            <span
-              key={dot}
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: dot <= index ? SUBJECTS.chemistry.accent : COLORS.border,
-                transition: "background 200ms ease",
-              }}
-            />
-          ))}
-        </div>
       </div>
     </div>
   );

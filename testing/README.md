@@ -10,8 +10,24 @@ gets built; this folder only records what was observed.
 ```
 testing/
   chemistry/
-    equations-and-balancing.md
+    equations-and-balancing.md    10 questions
+    stoichiometry.md              10 questions
+    solutions.md                  10 questions
+    redox.md                      10 questions
+    structure-and-bonding.md      10 questions
+    organic.md                    10 questions
 ```
+
+All sixty are locked as deterministic tests in
+`backend/tests/test_chemistry_walkthrough.py` and
+`backend/tests/test_balancing_walkthrough.py`, so the sheets cannot go stale
+without CI saying so.
+
+**The one finding that spans topics.** The numeric judges mark a line valid
+when it matches *any* quantity in the correct working, which is right for a
+middle line and wrong for the last one. A student who answers a pH question
+with the pOH gets a tick. Nothing marks a line as the final answer. Full
+write-up in `solutions.md`.
 
 Ten questions per topic is the target. Each file holds the question exactly as
 it was typed in, the lines exactly as they were written, what the app was

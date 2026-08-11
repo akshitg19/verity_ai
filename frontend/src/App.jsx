@@ -5,15 +5,17 @@ import useCanvas from "./canvas/useCanvas";
 import useChemistry from "./chemistry/useChemistry";
 import QuestionPrompt from "./chemistry/QuestionPrompt";
 import CanvasSurface from "./components/CanvasSurface";
+import useKeyboardShortcuts from "./useKeyboardShortcuts";
 import useTheme from "./useTheme";
 import FeedbackPanel from "./components/FeedbackPanel";
+import PageActions from "./components/PageActions";
 import WorkspaceToolbar from "./components/WorkspaceToolbar";
 import NotebookSidebar from "./notebook/NotebookSidebar";
 import useNotebook from "./notebook/useNotebook";
 import useMathWorkflow from "./math/useMathWorkflow";
 import { SURFACES } from "./theme";
 
-const SIDEBAR_WIDTH = 250;
+const SIDEBAR_WIDTH = 288;
 const SWIPE_DISTANCE = 90;
 const SWIPE_SLOPE = 60;
 
@@ -46,6 +48,12 @@ export default function App({ theme: themeFromRoute, subject }) {
     },
   });
 
+  useKeyboardShortcuts({
+    onUndo: canvas.handleUndo,
+    onRedo: canvas.handleRedo,
+    onToggleNotebook: () => setShowNotebook((value) => !value),
+  });
+
   const transcribing = mode === "chemistry" ? chemistry.reading : math.transcribing;
   const status = mode === "chemistry" ? chemistry.status : math.lastResult;
 
@@ -76,6 +84,16 @@ export default function App({ theme: themeFromRoute, subject }) {
     if (verdictStatus) notebook.recordOutcome(verdictStatus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chemistry.verdict]);
+
+  // Once the question is known, name the note after it. The question is
+  // already transcribed, so "C3H8 + O2 -> CO2 + H2O" costs nothing and beats
+  // "Chemistry 3" when the student comes back to find it. Only ever applied to
+  // a note still carrying its generated name.
+  useEffect(() => {
+    if (mode !== "chemistry" || !chemistry.ready) return;
+    notebook.nameFromQuestion(chemistry.problemText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chemistry.ready, chemistry.problemText, mode]);
 
   // The route names the subject, so /chemistry opens a chemistry note even
   // if the last one open was math. Runs once per subject change, not on
@@ -172,8 +190,10 @@ export default function App({ theme: themeFromRoute, subject }) {
         open={showNotebook}
         onClose={() => setShowNotebook(false)}
         width={SIDEBAR_WIDTH}
+        subject={mode}
+        onSubjectChange={handleModeChange}
       />
-      <CanvasSurface canvas={canvas}>
+      <CanvasSurface canvas={canvas} mode={mode}>
         {mode === "chemistry" && chemistry.questionCandidateRow !== null && (
           <QuestionPrompt
             bounds={canvas.getRowBounds(chemistry.questionCandidateRow)}
@@ -203,6 +223,15 @@ export default function App({ theme: themeFromRoute, subject }) {
         onProblemEditDone={math.handleProblemEditDone}
         canvas={canvas}
         theme={theme}
+        onFinishLine={canvas.finishActiveRow}
+        onReadPage={handleReadPage}
+        onClear={handleClear}
+      />
+      <PageActions
+        mode={mode}
+        chemistry={chemistry}
+        strokeCount={canvas.strokes.length}
+        activeLineNumber={canvas.activeLineNumber}
         onFinishLine={canvas.finishActiveRow}
         onReadPage={handleReadPage}
         onClear={handleClear}

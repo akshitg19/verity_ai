@@ -215,17 +215,59 @@ needs a decision, and none of them is a transcription problem.
    transcription produces `unknown element 'A' in 'AL'`. A student needs
    something closer to "there is no element AL, did you mean Al".
 
-## Questions 6 to 10, not yet written up
+## Q6 to Q10
 
-Chosen to keep covering new ground rather than more of the same:
+Chosen to keep covering new ground rather than more of the same. Verdicts
+confirmed against the judge; hint behaviour still to be checked by hand.
 
-6. Net ionic equation, which is the other endpoint on this topic and is
-   completely untested by hand.
-7. A combustion where the student balances oxygen first and has to come back,
-   so several lines in a row are invalid.
-8. An equation with a state symbol on every species, `(s)`, `(l)`, `(g)`,
-   `(aq)`, to see whether they survive handwriting and are stripped correctly.
-9. A dichromate half-reaction in base, so the charge path is tested twice with
-   different ions.
-10. An equation the student has already balanced correctly on line 1, so the
-    app has to say valid immediately and offer nothing to fix.
+### Q6. Net ionic equation
+
+The other endpoint on this topic, and it was completely untested.
+
+**Type into the problem field:** `AgNO3 + NaCl -> AgCl + NaNO3`, type **Net
+ionic equation**.
+
+| Write | Expected |
+|---|---|
+| `Ag^+ + Cl^- -> AgCl` | valid |
+| `AgNO3 + NaCl -> AgCl + NaNO3` (the molecular equation again) | invalid, `wrong_species`, "the species on this line are not the ones that react" |
+
+### Q7. Neutralisation, net ionic
+
+**Problem:** `HCl + NaOH -> NaCl + H2O`. **Answer:** `H^+ + OH^- -> H2O`.
+Confirmed valid. Worth having because the spectator ions are on both sides and
+the product is one molecule, so the reduction is more dramatic than Q6.
+
+### Q8. Several wrong lines in a row
+
+**Problem:** `C3H8 + O2 -> CO2 + H2O` again, but balance oxygen first, which
+forces you to come back and redo it.
+
+| Write | Expected |
+|---|---|
+| `C3H8 + 5O2 -> CO2 + H2O` | invalid, atoms differ for C, H |
+| `C3H8 + 5O2 -> 3CO2 + H2O` | invalid, atoms differ for H, O |
+| `C3H8 + 5O2 -> 3CO2 + 4H2O` | valid |
+
+The thing being tested is not the verdicts, it is the flagging rule: **a wrong
+line is flagged once and gently**, and the line after it is judged on its own
+rather than against the wrong line before it. Confirmed at the judge level in
+`test_q1_wrong_line_does_not_poison_the_line_after_it`. Check what the page
+looks like with two red rows in a row.
+
+### Q9. Dichromate half-reaction in acid
+
+**Problem:** `Cr2O7^2- + H^+ + e- -> Cr^3+ + H2O`
+**Answer:** `Cr2O7^2- + 14H^+ + 6e- -> 2Cr^3+ + 7H2O`
+
+A second pass through the charge path with different ions and a coefficient on
+the product. Writing `7e-` instead of `6e-` gives `unbalanced_charge` with
+every atom already correct.
+
+### Q10. Already correct on line one
+
+**Problem:** `Fe + O2 -> Fe2O3`. Write `4Fe + 3O2 -> 2Fe2O3` and nothing else.
+
+Expected: valid immediately, nothing flagged, no hint offered, and the hint
+ladder should not be inviting. A student who gets it right first time is the
+case least often tested and the one a teacher will try first.

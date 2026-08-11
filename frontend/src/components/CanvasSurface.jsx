@@ -1,6 +1,31 @@
-import { COLORS, SURFACES } from "../theme";
+import { COLORS, FONT, SURFACES } from "../theme";
 
-export default function CanvasSurface({ canvas, children }) {
+// A blank page with nothing on it and nothing said is the least inviting
+// screen in the app, and it is the first one a student sees. One line, in the
+// margin where the first row will be, gone the moment they start writing.
+function EmptyPageHint({ mode }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        top: 34,
+        left: 46,
+        pointerEvents: "none",
+        color: COLORS.muted,
+        fontFamily: FONT.sans,
+        fontSize: 15,
+        opacity: 0.5,
+      }}
+    >
+      {mode === "chemistry"
+        ? "Write the question here, then your working below it."
+        : "Write the problem here, then your working below it."}
+    </div>
+  );
+}
+
+export default function CanvasSurface({ canvas, mode, children }) {
   const {
     staticCanvasRef,
     overlayCanvasRef,
@@ -11,6 +36,7 @@ export default function CanvasSurface({ canvas, children }) {
     handlePointerUp,
     handlePointerCancel,
     handlePointerLeave,
+    strokes,
   } = canvas;
 
   return (
@@ -59,6 +85,8 @@ export default function CanvasSurface({ canvas, children }) {
           cursor: activeTool === "eraser" ? "none" : "crosshair",
         }}
       />
+      {strokes.length === 0 && <EmptyPageHint mode={mode} />}
+
       {/* Anything anchored to ink -- the question prompt -- renders here so it
           can use canvas coordinates directly. */}
       {children}

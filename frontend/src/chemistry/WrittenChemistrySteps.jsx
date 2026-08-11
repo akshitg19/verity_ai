@@ -24,8 +24,8 @@ function statusForLine(line, verdict, blocked, ready) {
       "unsupported",
       "Needs review",
       line.unreadable
-        ? "We could not confidently read this row. Correct it before checking."
-        : "Enter the transcription for this row before checking."
+        ? "Not read confidently. Fix it here."
+        : "Type what this row says."
     );
   }
 
@@ -33,25 +33,25 @@ function statusForLine(line, verdict, blocked, ready) {
     return styleFor(
       "waiting",
       "Waiting for earlier row",
-      "Correct the earlier unreadable row before checking this step."
+      "Waiting on the row above."
     );
   }
 
   const status = verdictStatus(verdict);
   if (!verdict) {
     return ready
-      ? styleFor("waiting", "Checking", "Read and understood. Checking it now.")
+      ? styleFor("waiting", "Checking", "Checking this row now.")
       : styleFor(
           "waiting",
           "Not checked yet",
-          "Nothing has been checked because the question is not set. Mark a row as the question, or type it in the panel."
+          "Mark a row as the question first."
         );
   }
   if (status === "valid") {
     return styleFor(
       "valid",
       "Correct step",
-      "This follows from the previous chemistry row."
+      "Follows from the row above."
     );
   }
   if (status === "invalid") {
@@ -60,19 +60,19 @@ function statusForLine(line, verdict, blocked, ready) {
       "Review this step",
       verdict.error_type
         ? `Possible ${verdict.error_type.replaceAll("_", " ")}.`
-        : "This does not follow from the previous row."
+        : "Does not follow from the row above."
     );
   }
   return status === "parse_error"
     ? styleFor(
         "parse_error",
         "Could not read",
-        "Try rewriting or editing this row's transcription."
+        "Our reading failed. Rewrite it, or fix the text below."
       )
     : styleFor(
         "unsupported",
         "Can't check this yet",
-        "This type of step is outside the current scope."
+        "Outside what we can check yet. Not your mistake."
       );
 }
 

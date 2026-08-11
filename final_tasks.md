@@ -448,6 +448,27 @@ any row here as evidence.
 
 ### Math: the six
 
+> **For whoever picks up math: copy the chemistry functionality across.**
+> Chemistry is ahead of math on everything that is not the judge, and none of
+> it is chemistry-specific. Port it rather than reinventing it, and port it
+> from the files named here.
+>
+> | Bring across | From | What math has today |
+> |---|---|---|
+> | The two-level subject and topic selector | `frontend/src/chemistry/topics.js`, served by `GET /chemistry/topics` | One typed problem field |
+> | The v3 hint ladder, generated live | `backend/hints.py` | The static template ladder only |
+> | The worked example stepped through with a moving tally | `components/WorkedExampleStepper.jsx`, `WorkedExample.equations` | Nothing at level 2 |
+> | The answer vault and the session budget | `answer_vault.py`, `sessions.py` | No vault, so no redaction reference |
+> | The question written on the page rather than typed | `useRowAsQuestion` in `useChemistry.js`, `QuestionPrompt.jsx` | Typed into the toolbar |
+> | Remembering the topic across navigation | `chemistry/topicMemory.js` | Nothing to remember yet |
+> | Ten hand-written questions per topic, logged | `testing/chemistry/` | Not started |
+>
+> Math already has the one thing chemistry copied in the other direction:
+> automatic rechecking after every transcription. Chemistry took that from
+> `useMathWorkflow.recheck`.
+
+
+
 | # | Subject | Grade band | Authoritative engine | Status |
 |---|---|---|---|---|
 **The six names are fixed.** Elementary math, algebra, geometry, trigonometry,
@@ -662,12 +683,38 @@ markdown file per topic. This is the measurement the status column above does
 not make: "built, unit-tested, reachable" has never meant "seen to work on
 handwriting", and this is how that gap gets closed one topic at a time.
 
-Started with equations and balancing, on the grounds that it is the hardest.
-Five of the ten are written up in `testing/chemistry/equations-and-balancing.md`
-with the same five locked as deterministic tests in
-`backend/tests/test_balancing_walkthrough.py`.
+**All six topics now have their ten**, sixty questions in `testing/chemistry/`,
+each one run through its real judge so the expected column is measured rather
+than guessed. Sixty are locked as deterministic tests in
+`backend/tests/test_balancing_walkthrough.py` and
+`test_chemistry_walkthrough.py`. What is *not* done is the handwriting: these
+were driven through the judges directly, and the result rows in each sheet are
+blank until someone writes them on a tablet.
 
-Four findings from the judge, before any handwriting was involved:
+| Topic | Sheet | Judge behaviour |
+|---|---|---|
+| Equations and balancing | `equations-and-balancing.md` | Solid, two holes below |
+| Formulas, moles and stoichiometry | `stoichiometry.md` | Solid, shares the quantity hole |
+| Solutions, acids and bases | `solutions.md` | The quantity hole is worst here |
+| Redox and electrochemistry | `redox.md` | Clean on all ten |
+| Molecular structure and bonding | `structure-and-bonding.md` | Clean on all ten |
+| Organic groups and naming | `organic.md` | Clean on all eight groups; reactions untested |
+
+**The finding that spans topics, and the most serious one found so far.** The
+numeric judges mark a line valid when it matches *any* quantity in the correct
+working. That is right for a middle line and wrong for the last one, and
+nothing marks a line as the final answer. A student who answers a pH question
+with the pOH gets a tick, which is the single most common mistake in that
+topic. Same shape as the balancing hole below: the engine checks the line
+against the *problem's working* rather than against *what was asked*.
+
+| Done | Finding | Detail |
+|------|---|---|
+| [ ] | The pOH is accepted as the answer to a pH question | Confirmed on four of the ten solutions questions, and the pKa is accepted on a fifth. Also in stoichiometry, where a molar mass answers a mass question. The fix is not to narrow the quantity set, which would break honest middle lines; it is to know which line is the answer. `xfail` in `test_chemistry_walkthrough.py` |
+| [ ] | Reaction prediction has never been exercised by hand | The only model-judged path in chemistry, so the one that most needs a person looking at it, and the least tested. `judged_by` must be visible on the verdict |
+| [ ] | Units are optional and ignored in every numeric topic | `0.25`, `0.250 M` and `0.250 mol/L` all pass. A chemistry teacher marks a bare number down. Decide |
+
+Four findings from balancing, before any handwriting was involved:
 
 | Done | Finding | Detail |
 |------|---|---|
@@ -676,8 +723,67 @@ Four findings from the judge, before any handwriting was involved:
 | [ ] | A balanced multiple of the answer is accepted | `4C3H8 + 20O2 -> 12CO2 + 16H2O` is valid, and `coefficient_distance` reduces before comparing so it reads as zero from the answer. Lowest whole numbers is what a teacher marks. Decide whether that is a verdict, a nudge, or nothing |
 | [ ] | Parse error text is written for a developer | All-caps `AL` out of transcription produces `unknown element 'A' in 'AL'`. Students see this string |
 
-Remaining topics, same treatment, in this order: solutions and acids and bases,
-stoichiometry, redox, structure, organic.
+---
+
+## Workspace and notebook
+
+The page is the product. Everything else on screen is competing with it, and
+until this pass most of it was winning. Research pass over Apple Notes, Samsung
+Notes and the stylus-first study apps landed on three things they all do and we
+did not: one subject in view rather than every subject at once, a three-dot menu
+on every row instead of a scatter of tiny glyphs, and a results panel that docks
+and undocks rather than permanently owning a column.
+
+### Done in this pass
+
+| Done | Change | Why |
+|------|---|---|
+| [x] | Feedback panel is a drawer that slides | A card welded to the right edge is a panel the student writes around |
+| [x] | Edge tab with a status dot and one word | Closing the drawer must not mean losing track of whether a line is wrong |
+| [x] | The drawer opens itself once when a line is flagged | And does not reopen if you slide it away while the line is still wrong |
+| [x] | Read and New question moved to a floating pill at the bottom | The top right of a tablet is the furthest point from the hand holding the pen |
+| [x] | Notebook shows one subject at a time | Two whole trees at once was why the shelf read as a file manager |
+| [x] | Subject as a real heading, big | It said "First structure" where it should say "Chemistry" |
+| [x] | Note search | Every notes app has it |
+| [x] | Three-dot menu per row: rename, duplicate, move, delete | Replaces double-click-to-rename and a 13px × |
+| [x] | Inline rename, in the sidebar and in the toolbar | Rename where you read the name |
+| [x] | New notes are numbered | Four rows called "Chemistry" is a list you open one at a time |
+| [x] | Duplicate a note, ink and all | How a student reuses working as a starting point |
+| [x] | Per-page delete on the page strip | Double-click to delete a page was undiscoverable and unforgiving |
+| [x] | Drive and OneDrive as labelled placeholders | A menu that says "not connected yet" is a promise; an absent menu reads as never having thought about it |
+| [x] | Subject sublabel removed from the toolbar | The subject is already the toggle two controls along |
+| [x] | Chemistry problem chip is one line, not two | The topic was printed there and again in the panel, reading as a second tab bar |
+| [x] | Topic remembered across navigation | Leaving and coming back reset it and threw the work away |
+| [x] | Written chemistry checks itself | Math has since the beginning; chemistry waited for a button |
+| [x] | Hint loading names the level being fetched | It promised a worked example while fetching level 1 |
+| [x] | A new hint scrolls itself into view | On a tablet it landed below the fold |
+| [x] | Panel heights in `dvh` plus safe-area inset | `vh` counts a tablet browser's toolbars, so the foot of the panel was behind one |
+| [x] | Light is the default theme | Dark is half a theme while the paper cannot invert |
+| [x] | Worked-example equations extracted server-side | The client was parsing prose and tallying English words as elements |
+| [x] | Pin a note to the top | Apple Notes, Keep and Samsung Notes all have it |
+| [x] | Delete a note is undoable | Deleting was silent and final, over a term of homework |
+| [x] | Notes name themselves from the question | The question is already transcribed; a name the student chose is never overwritten |
+| [x] | Empty page says what to do, and stops once you write | The first screen a student sees was a blank sheet with no invitation |
+| [x] | Keyboard shortcuts: undo, redo, toggle the shelf | Teachers will look at this on a laptop |
+| [x] | Panel prose cut back | Six status strings and two paragraphs that said what the screen already showed |
+| [x] | Page thumbnails instead of numbered squares | "The one with the long division on it" is how people pick a page |
+| [x] | Drag a note onto a folder | What people try before they find the menu |
+| [x] | The worked example is its own card, not nested in the hint bubble | A stepper, an equation and a row of atom counts were squeezed into a box sized for two sentences |
+| [x] | Step progress is a bar, and each step arrives rather than swapping | The dots duplicated the counter and nothing moved between steps |
+
+### Next, in rough order of how much they are worth
+
+| Done | Change | Detail |
+|------|---|---|
+| [ ] | Undo and redo as a two-finger tap and a three-finger tap | The iPad gesture. Undo already exists, only the gesture is missing |
+| [ ] | Pinch to zoom the page | The single most requested thing in every notes app review |
+| [ ] | A highlighter | Pen, highlighter, eraser is the whole toolset the research says to offer |
+| [ ] | Ruled, squared and blank paper | One CSS-variable swap plus the canvas grid draw |
+| [ ] | Swipe left on a note row to delete | Standard on both platforms |
+| [ ] | Export a page as PNG or PDF | The reason students screenshot their notes |
+| [ ] | The drawer resizable by dragging its edge | The stylus research calls out dockable, resizable result panels by name |
+| [ ] | More keyboard shortcuts: new note, search, next page | Three exist; these are the next three |
+| [ ] | Make the tab draggable, not only tappable | Half a swipe should half-open the drawer |
 
 ---
 

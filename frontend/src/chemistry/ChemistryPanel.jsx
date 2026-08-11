@@ -212,18 +212,10 @@ export default function ChemistryPanel({
 
   return (
     <div>
-      <SectionLabel>Subject</SectionLabel>
+      {/* The blurb under the picker said in a sentence what the picker
+          already says in a word, and the "Subject" label above it named the
+          thing the icons make obvious. Both gone. */}
       <TopicPicker topicId={topicId} onChoose={handleTopicChange} />
-      <div
-        style={{
-          marginTop: 6,
-          fontSize: 11.5,
-          color: COLORS.muted,
-          lineHeight: 1.4,
-        }}
-      >
-        {topic.blurb}
-      </div>
 
       <SectionLabel>Question</SectionLabel>
       <select
@@ -299,12 +291,11 @@ export default function ChemistryPanel({
             >
               {topic.glyph}
             </div>
-            <div style={{ marginBottom: 5, color: COLORS.text, fontSize: 14, fontWeight: 700 }}>
+            <div style={{ marginBottom: 4, color: COLORS.text, fontSize: 14, fontWeight: 700 }}>
               Write one row at a time
             </div>
-            <div style={{ maxWidth: 240, color: COLORS.muted, fontSize: 12, lineHeight: 1.5 }}>
-              Finish each chemistry row before moving lower. Each row is read,
-              editable, and checked as its own step.
+            <div style={{ maxWidth: 220, color: COLORS.muted, fontSize: 12, lineHeight: 1.5 }}>
+              Each row is read and checked on its own.
             </div>
           </div>
         ) : (
