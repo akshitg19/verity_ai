@@ -27,11 +27,11 @@ const SUBJECT_AREAS = [
     heading: "Math",
     body: "Every step compared exactly, with the kind of mistake named rather than a bare wrong.",
     items: [
-      "Linear equations, term by term",
-      "Sign and arithmetic errors",
-      "Distribution and division errors",
-      "Fractions and rational arithmetic",
+      "Elementary math",
+      "Algebra",
+      "Geometry (coming next)",
       "Trigonometry (coming next)",
+      "Statistics (coming next)",
       "Calculus (coming next)",
     ],
     route: "/math",
@@ -67,7 +67,7 @@ const FAQ = [
   },
   {
     q: "Which topics does it cover?",
-    a: "Six chemistry subjects, from moles and stoichiometry through balancing, redox, solutions, structure and organic. Math covers linear equations and rational arithmetic today, with trigonometry and calculus next.",
+    a: "Six chemistry subjects, from moles and stoichiometry through balancing, redox, solutions, structure and organic. Six math subjects: elementary math, algebra, geometry, trigonometry, statistics and calculus. Elementary math and algebra are checked today, and the other four are marked as coming until they are.",
   },
   {
     q: "How does it decide whether my work is right?",
@@ -412,8 +412,9 @@ export default function Landing({ theme }) {
             color: COLORS.muted,
           }}
         >
-          Two subjects today, and every topic below is something the app can
-          actually check rather than a heading with nothing behind it.
+          Six subjects in chemistry and six in math. Everything without a
+          "coming next" beside it is something the app can actually check
+          today, rather than a heading with nothing behind it.
         </p>
 
         <div

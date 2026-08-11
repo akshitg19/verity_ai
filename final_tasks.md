@@ -450,14 +450,22 @@ any row here as evidence.
 
 | # | Subject | Grade band | Authoritative engine | Status |
 |---|---|---|---|---|
-| 1 | Elementary and pre-algebra | 6-8 | Deterministic | Partly built |
+**The six names are fixed.** Elementary math, algebra, geometry, trigonometry,
+statistics, calculus. Those exact words, in that order, everywhere they appear:
+this file, the landing page, the deck, the README, the UI. No renaming to
+"pre-algebra", "statistics and probability", or anything else, because a student
+picking a subject and a judge reading the deck should see the same six words.
+
+| # | Subject | Grade band | Authoritative engine | Status |
+|---|---|---|---|---|
+| 1 | Elementary math | 6-8 | Deterministic | Partly built |
 | 2 | Algebra | 8-11 | Deterministic | Partly built |
 | 3 | Geometry | 8-11 | Mixed | Not started |
 | 4 | Trigonometry | 10-12 | Deterministic | Not started |
-| 5 | Statistics and probability | 9-12 | Mixed | Not started |
+| 5 | Statistics | 9-12 | Mixed | Not started |
 | 6 | Calculus | 11-12 | Deterministic | Not started |
 
-**1. Elementary and pre-algebra.** Integer and fraction arithmetic, decimals,
+**1. Elementary math.** Integer and fraction arithmetic, decimals,
 percents, ratio and proportion, order of operations, integer exponents, roots,
 unit conversion. A step is an arithmetic claim and SymPy compares it exactly.
 Almost entirely reachable today.
@@ -479,7 +487,7 @@ interval, law of sines and cosines, graph transformations. `sympy.simplify` and
 `trigsimp` decide expression equivalence exactly. Interval solving needs the
 solution set compared rather than a single value.
 
-**5. Statistics and probability.** Descriptive statistics, probability rules,
+**5. Statistics.** Descriptive statistics, probability rules,
 distributions, confidence intervals, hypothesis test arithmetic, regression
 coefficients. The arithmetic is deterministic and easy. **Choosing the right
 test, reading a distribution, and interpreting a result are judgement calls with
@@ -505,6 +513,78 @@ line N follow from line N-1". Calculus and identity work want "is this line
 equivalent to the correct target". Both are deterministic; they are different
 reference choices. Build it as a `mode` flag on `base.py`, not a separate
 product.
+
+#### Build brief: the six math subjects, ten questions each
+
+**This is the spec to hand to whoever picks up the math subjects.** One section
+per subject. Each one lists the question types a student would actually be set,
+the deterministic check that decides a step, and what the judge must refuse
+rather than guess.
+
+**The rule for all six: try at least ten example questions per subject.** Ten
+real questions, written the way a textbook writes them, each carried through the
+full path (problem statement -> handwritten lines -> transcription -> judge ->
+verdict -> hint) before the subject is called done. Not ten unit-test
+expressions: ten questions, with their working lines, spread across the question
+types listed for that subject rather than ten variations of the easiest one. At
+least two of the ten must contain a deliberate student mistake, so the error
+classifier and the hint ladder are exercised and not just the happy path. Put
+them in a fixture file beside the judge module so they run in CI.
+
+**1. Elementary math.** Question types: integer arithmetic with negatives,
+fraction addition and subtraction with unlike denominators, fraction
+multiplication and division, decimal arithmetic, percent of a number and percent
+change, ratio and proportion, order of operations with nested brackets, integer
+exponents, square and cube roots, unit conversion. A step is an arithmetic
+claim; SymPy compares the two sides exactly under `Rational`, never float
+equality. Refuse rather than guess: anything with a variable in it belongs to
+algebra.
+
+**2. Algebra.** Question types: one-variable linear equations, linear
+inequalities including the direction flip on a negative multiply, two-equation
+systems by substitution and by elimination, quadratics by factoring, by
+completing the square and by formula, polynomial expansion and factoring,
+rational expression simplification, exponent laws, logarithm and exponential
+equations, absolute value equations. A step is valid if it preserves the
+solution set. `AlgebraJudge` covers the linear case today; the rest reuse the
+same equivalence check with the guards in the algebra-depth table above lifted.
+
+**3. Geometry.** Question types: angle chasing on parallel lines, triangle angle
+sum and exterior angle, congruence and similarity with a scale factor,
+Pythagoras and its converse, circle theorems, area and perimeter of composite
+figures, surface area and volume of solids, coordinate distance, midpoint and
+slope, transformations, a two-column proof. Numeric and coordinate steps are
+symbolic and deterministic. A proof step is a logical claim about a figure with
+no symbolic form, so it routes to the model path and comes back
+`judged_by="model"`. Refuse rather than guess: a step that depends on a figure
+we never saw is `unsupported`, not `invalid`.
+
+**4. Trigonometry.** Question types: exact unit circle values, converting
+degrees and radians, evaluating in each quadrant with the right sign, proving a
+Pythagorean identity, proving a sum or difference identity, double angle work,
+solving an equation over an interval, law of sines, law of cosines, amplitude
+and period from a transformed graph. `simplify` and `trigsimp` decide expression
+equivalence exactly. Interval solving compares the whole solution set, so a
+student who found one root out of two is missing a root, not wrong.
+
+**5. Statistics.** Question types: mean, median, mode and range, variance and
+standard deviation, five-number summary and outlier rule, probability of
+independent and of mutually exclusive events, conditional probability, binomial
+probability, normal distribution and z-scores, a confidence interval for a mean,
+the arithmetic of a hypothesis test, least-squares regression coefficients. The
+arithmetic is deterministic. Choosing the test, reading a distribution, and
+interpreting a result are judgement calls with no symbolic form, so
+interpretation is the model path with provenance labelling.
+
+**6. Calculus.** Question types: a limit by direct substitution, a limit needing
+factoring or conjugates, the derivative from first principles, power rule
+chains, product and quotient rule, chain rule, implicit differentiation, a
+tangent line or rate-of-change application, an indefinite integral by
+substitution, a definite integral and an area between curves. Integration is
+checked by differentiating the student's answer and comparing to the integrand,
+which scales past what `integrate` can handle. Constants of integration are
+handled by checking the difference is constant, not by requiring the `+ C` to
+match.
 
 ### Chemistry: the six
 
@@ -786,7 +866,7 @@ gesture.
 
 | Subject | Samples | Must include |
 |---|---|---|
-| Elementary and pre-algebra | 20 | Fractions with real fraction bars, mixed numbers, decimals, percent signs, long division layout |
+| Elementary math | 20 | Fractions with real fraction bars, mixed numbers, decimals, percent signs, long division layout |
 | Algebra | 30 | Negative signs everywhere, parentheses, `x` vs `×` vs `+` ambiguity, superscript 2, subscripts on variables, systems written as a brace |
 | Trigonometry | 15 | `sin`/`cos`/`tan` written quickly, θ and π, degree symbols, fractions inside functions |
 | Calculus | 15 | Integral signs, `dx`, limit notation, primes on functions, Leibniz `dy/dx` stacked |
