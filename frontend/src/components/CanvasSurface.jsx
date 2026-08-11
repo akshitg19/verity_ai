@@ -1,6 +1,6 @@
-import { COLORS } from "../theme";
+import { COLORS, SURFACES } from "../theme";
 
-export default function CanvasSurface({ canvas }) {
+export default function CanvasSurface({ canvas, children }) {
   const {
     staticCanvasRef,
     overlayCanvasRef,
@@ -10,6 +10,7 @@ export default function CanvasSurface({ canvas }) {
     handlePointerMove,
     handlePointerUp,
     handlePointerCancel,
+    handlePointerLeave,
   } = canvas;
 
   return (
@@ -19,7 +20,7 @@ export default function CanvasSurface({ canvas }) {
         aria-hidden="true"
         style={{
           display: "block",
-          background: "#faf8f2",
+          background: SURFACES.paper,
           borderRight: `1px solid ${COLORS.border}`,
         }}
       />
@@ -41,17 +42,26 @@ export default function CanvasSurface({ canvas }) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
+        onPointerLeave={handlePointerLeave}
         style={{
           position: "absolute",
           inset: 0,
-          touchAction: activeTool === "scroll" ? "pan-y" : "none",
+          // Never relaxed. `touch-action` governs pen as well as touch, so
+          // `pan-y` here handed the stylus to the browser as a pan gesture
+          // and drawing stopped working. Finger scrolling is done in JS
+          // instead -- see the touch branch in useCanvas.
+          touchAction: "none",
           userSelect: "none",
           WebkitUserSelect: "none",
           WebkitTouchCallout: "none",
           display: "block",
           background: "transparent",
+          cursor: activeTool === "eraser" ? "none" : "crosshair",
         }}
       />
+      {/* Anything anchored to ink -- the question prompt -- renders here so it
+          can use canvas coordinates directly. */}
+      {children}
     </div>
   );
 }

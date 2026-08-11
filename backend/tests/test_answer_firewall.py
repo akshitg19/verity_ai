@@ -436,3 +436,52 @@ def test_a_leaking_generated_hint_is_replaced_by_the_static_floor(monkeypatch, p
     assert "2.88" not in response.hint
     assert response.source == "fallback"
     assert response.hint  # never empty
+
+
+# ---------------------------------------------------------------------------
+# What a balancing vault treats as the answer.
+#
+# It used to list bare coefficients, so "2" and "3" were unsayable. In a
+# subject where atom counts are small integers that blocked level 1 on almost
+# every balancing problem and every level-2 worked example, because any
+# example about any reaction contains a small integer. What actually
+# discloses the answer is a coefficient attached to a species.
+# ---------------------------------------------------------------------------
+
+def test_a_bare_count_is_sayable_on_a_balancing_problem():
+    vault = vault_for_balance("Balance N2 + H2 -> NH3", "N2 + H2 -> NH3")
+
+    allowed, violation = check_outbound(
+        "There are 2 nitrogen atoms on the left and 2 on the right, so look "
+        "at the hydrogens next.",
+        vault,
+    )
+
+    assert allowed is True, violation
+
+
+def test_a_coefficient_attached_to_a_species_is_still_blocked():
+    vault = vault_for_balance("Balance N2 + H2 -> NH3", "N2 + H2 -> NH3")
+
+    for leak in ["You need 3H2 on the left.", "You need 3 H2 on the left."]:
+        allowed, violation = check_outbound(leak, vault)
+        assert allowed is False, leak
+        assert violation
+
+
+def test_the_balanced_equation_itself_is_still_blocked():
+    vault = vault_for_balance("Balance N2 + H2 -> NH3", "N2 + H2 -> NH3")
+
+    allowed, _ = check_outbound("The answer is N2 + 3H2 -> 2NH3", vault)
+
+    assert allowed is False
+
+
+def test_larger_coefficients_are_covered_too():
+    vault = vault_for_balance(
+        "Balance C4H10 + O2 -> CO2 + H2O", "C4H10 + O2 -> CO2 + H2O"
+    )
+
+    allowed, _ = check_outbound("Put 13O2 on the left.", vault)
+
+    assert allowed is False

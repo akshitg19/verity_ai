@@ -114,6 +114,14 @@ def check_outbound(
     `allow_near_answer` is set only for level 3, which is permitted to work
     the student's own step and therefore to restate quantities they have
     already produced. It never relaxes the answer check itself.
+
+    Note for anyone tempted to add a relaxation here: the reason level 2 and
+    level 1 were once blocked on every balancing problem was not this filter
+    being too strict. It was `vault_for_balance` listing bare coefficients as
+    answer forms, which made "2" and "3" unsayable in a subject where atom
+    counts are small integers. That was fixed at the vault instead, and the
+    relaxation this file briefly carried was removed again. Fix the forms,
+    not the gate.
     """
     if not text or not text.strip():
         return False, "empty hint"
@@ -180,7 +188,9 @@ def redact_or_fallback(
     been told an answer.
     """
     allowed, violation = check_outbound(
-        text, vault, allow_near_answer=allow_near_answer
+        text,
+        vault,
+        allow_near_answer=allow_near_answer,
     )
     if allowed:
         return text, None

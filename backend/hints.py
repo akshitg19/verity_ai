@@ -28,6 +28,7 @@ that and fails if a second construction site appears.
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 from model import ModelError, generate_json, is_configured
@@ -36,6 +37,23 @@ from schemas import HintRequest, HintResponse, WorkedExample
 from sessions import SESSIONS, ProblemSession
 
 logger = logging.getLogger(__name__)
+
+# Whether the three withholding mechanisms are armed: the terminal-step
+# refusal, the per-problem level-3 budget, and the answer check inside
+# redaction on level 3.
+#
+# Set to False on Aug 10 by an explicit product call: functionality first,
+# withholding second. Every question now gets all three levels and level 3
+# works the student's step through to the end, including on the last step.
+#
+# This contradicts the rules in CLAUDE.md and the answer-firewall section of
+# final_tasks.md, which call withholding non-negotiable. That conflict is
+# recorded rather than hidden, and the decision is the owner's to make.
+#
+# Nothing was deleted to do it. The vault is still built, redaction still
+# runs on levels 1 and 2, and every mechanism comes back by setting this to
+# True or exporting VERITY_WITHHOLD_ANSWER=1.
+WITHHOLD_ANSWER = os.getenv("VERITY_WITHHOLD_ANSWER", "0") == "1"
 
 # Deterministic, template-based hints. For math this is the whole product;
 # for chemistry it is the floor that catches every failure of the generated
@@ -335,7 +353,15 @@ def _finalise(
     vault = session.vault if session else None
     fallback = _template_hint(req)
 
-    if trusted and worked_example is None:
+    # Level 3 is the rung that works the student's own step, so with
+    # withholding off it is the one that must be allowed to reach the end of
+    # that step. Levels 1 and 2 are still redacted: level 1 is a diagnosis
+    # and has no business stating a value, and level 2 is a different
+    # problem, so neither needs the exemption and both are better for not
+    # having it.
+    level_3_unrestricted = not WITHHOLD_ANSWER and req.level == 3
+
+    if (trusted or level_3_unrestricted) and worked_example is None:
         # Text this module wrote itself -- a template, the terminal-step
         # message, the budget message -- has never been told an answer, so
         # it does not need checking against one. Running it through
@@ -354,7 +380,14 @@ def _finalise(
         worked_example = None
         source = "fallback"
 
-    if worked_example is not None:
+    # A level-2 example is a solution to a *different* problem that our own
+    # engine has already verified, and the similarity guard has already
+    # asserted its numbers differ from the student's. Running it through the
+    # answer filter as well mostly catches coincidence: an example about
+    # Fe + O2 was thrown away for containing "3O2" because the student's
+    # unrelated answer also had a 3O2 in it. With withholding off that trade
+    # is not worth making. With it on, the check stands.
+    if worked_example is not None and WITHHOLD_ANSWER:
         for line in [worked_example.problem, worked_example.technique, *worked_example.steps]:
             _, line_violation = redact_or_fallback(line, vault, fallback)
             if line_violation:
@@ -389,16 +422,32 @@ def _finalise(
 # Level 1: diagnosis.
 # ---------------------------------------------------------------------------
 _LEVEL_1_PROMPT = (
-    "You are a chemistry tutor looking at one line of a student's written "
-    "work that a deterministic checker has proven wrong.\n"
-    "Write a one or two sentence diagnosis. Name the operation the student "
-    "actually performed on this line, say in what way it went wrong, and "
-    "tell them what to compare against what.\n"
-    "Hard rules:\n"
+    "You are a patient chemistry tutor sitting next to a student, looking at "
+    "the one line of their written work that a checker has proven wrong.\n"
+    "Say what they did on this line, what went wrong about it, and what to "
+    "compare with what. Two sentences at most.\n"
+    "How to talk:\n"
+    "- Talk TO the student. Say 'you', never 'the student'.\n"
+    "- Sound like a person who has taught this a hundred times and is not "
+    "remotely annoyed about it. Warm, brief, matter of fact.\n"
+    "- Getting this wrong is ordinary. Do not congratulate, do not "
+    "sympathise, do not soften it with praise. Just help.\n"
+    "- Short words and short sentences. If a sentence runs past about "
+    "twenty words, split it.\n"
+    "- Name the actual substances and numbers on their page. A sentence "
+    "that would fit any problem is not worth sending.\n"
+    "Never do:\n"
+    "- No em dashes, ever. Use a comma or a full stop.\n"
+    "- No markdown, no headings, no lists, no bold.\n"
+    "- No 'Great question', 'Let's', 'Remember that', 'It looks like', "
+    "'It seems', 'I notice', 'Don't worry'.\n"
     "- Never state a corrected value, a corrected formula, or the answer.\n"
     "- Never do the step for them.\n"
-    "- Do not write 'you should' or 'try'. Describe what is there.\n"
-    "- Plain sentences. No markdown, no headings, no lists.\n"
+    "Good: 'You balanced the hydrogens, but that changed the nitrogen count "
+    "on the right. Count the nitrogens on each side and compare.'\n"
+    "Bad: 'The student attempted to balance the equation by adding "
+    "coefficients, but the number of atoms for at least one element is not "
+    "equal on both sides.'\n"
     'Reply with JSON: {"hint": "<one or two sentences>"}'
 )
 
@@ -437,6 +486,14 @@ _LEVEL_2_PROMPT = (
     "- Never mention the student's own numbers or their answer.\n"
     "- The `check` object is machine-verified against a deterministic "
     "engine before anything is shown, so it must be exactly right.\n"
+    "How to write the steps:\n"
+    "- Each step is one short sentence saying what you are doing and why, "
+    "then the line of chemistry itself.\n"
+    "- Write it the way a tutor talks at a whiteboard, not the way a "
+    "textbook prints. Say 'balance the phosphorus first', not 'the "
+    "phosphorus atoms are subsequently balanced'.\n"
+    "- No em dashes, ever. No markdown, no bold, no headings.\n"
+    "- No filler openers such as 'Let's', 'First of all', 'As we can see'.\n"
 )
 
 _CHECK_CONTRACTS = {
@@ -563,24 +620,71 @@ def _verify_balancing(check: dict, steps: list[str]) -> bool:
     if written != correct_left + correct_right:
         return False
     # And the worked steps must actually end at it.
-    return any(_same_equation(step, balanced) for step in steps[-2:])
+    return any(_same_equation(step, balanced) for step in steps[-3:])
+
+
+_ARROWS = ("->", "→", "⟶", "⇒", "=>", "➔", "-->")
+
+
+def _candidate_equations(text: str):
+    """Every sub-span of a line that parses as a chemical equation.
+
+    A model asked for one step per line writes "The balanced equation is
+    4Fe + 3O2 -> 2Fe2O3", not the bare equation, and parsing the whole line
+    as an equation was rejecting essentially every correct example, which is
+    why level 2 always fell back to the static floor.
+
+    Every span is yielded rather than the first that parses, because the
+    formula parser is lenient enough to read leading prose as species (`The`
+    is a plausible `Th` + `e`). The caller decides which span is the one it
+    was looking for, so leniency cannot smuggle prose into a match.
+    """
+    from judge.chemistry_equations import EquationParseError, parse_equation
+
+    normalised = text
+    for arrow in _ARROWS:
+        normalised = normalised.replace(arrow, "->")
+    if "->" not in normalised:
+        return
+
+    lhs, _, rhs = normalised.partition("->")
+    left_tokens = lhs.split()
+    right_tokens = [token.strip(".,;:!?") for token in rhs.split()]
+    right_tokens = [token for token in right_tokens if token]
+
+    for start in range(len(left_tokens)):
+        for end in range(len(right_tokens), 0, -1):
+            candidate = (
+                f"{' '.join(left_tokens[start:])} -> {' '.join(right_tokens[:end])}"
+            )
+            try:
+                parse_equation(candidate)
+            except EquationParseError:
+                continue
+            yield candidate
+
+
+def _equation_tally(equation: str):
+    from judge.chemistry_equations import EquationParseError, parse_equation
+
+    try:
+        left, right = parse_equation(equation)
+    except EquationParseError:
+        return None
+    return (
+        tuple(sorted((f, c) for c, f in left)),
+        tuple(sorted((f, c) for c, f in right)),
+    )
 
 
 def _same_equation(text: str, reference: str) -> bool:
-    from judge.chemistry_equations import EquationParseError, parse_equation
-
-    def tally(equation: str):
-        try:
-            left, right = parse_equation(equation)
-        except EquationParseError:
-            return None
-        return (
-            tuple(sorted((f, c) for c, f in left)),
-            tuple(sorted((f, c) for c, f in right)),
-        )
-
-    written = tally(text)
-    return written is not None and written == tally(reference)
+    """Whether this line states the reference equation, prose and all."""
+    target = _equation_tally(reference)
+    if target is None:
+        return False
+    return any(
+        _equation_tally(candidate) == target for candidate in _candidate_equations(text)
+    )
 
 
 def _verify_numeric(solution, check: dict, steps: list[str]) -> bool:
@@ -598,15 +702,31 @@ def _verify_numeric(solution, check: dict, steps: list[str]) -> bool:
     ):
         return False
 
-    # Every numeric line of the generated working must be a quantity our own
-    # solver produced. One invented intermediate and the example is rejected.
+    # Every numeric line of the generated working is checked against our own
+    # solution. The rule used to be "reject anything we did not produce",
+    # which was too strict to ever pass: a model showing its algebra writes
+    # intermediates no solver enumerates -- x^2 = 4.5e-6 on the way to x --
+    # and one of those threw away the whole example. Every correct example
+    # was being discarded, which is why level 2 never rendered.
+    #
+    # So only a *contradiction* rejects: a line that names a quantity we did
+    # compute and states a different value for it. An unrecognised
+    # intermediate is not evidence of an error, and the answer itself is
+    # still checked exactly, above.
     for step in steps:
         try:
             written = parse_quantity(step)
         except QuantityParseError:
             continue  # prose lines are fine; only numeric claims are checked
-        if solution.match(written) is None:
-            logger.info("level 2 rejected: step %r is not in our solution", step)
+        if solution.match(written) is not None:
+            continue
+        contradicts = any(
+            written.name
+            and (written.name == candidate.name.lower() or written.name in candidate.aliases)
+            for candidate in solution.steps
+        )
+        if contradicts:
+            logger.info("level 2 rejected: step %r contradicts our solution", step)
             return False
     return True
 
@@ -706,23 +826,59 @@ def _generate_level_2(
 # Level 3: their own step, with the gate.
 # ---------------------------------------------------------------------------
 _LEVEL_3_PROMPT = (
-    "You are a chemistry tutor walking a student through the line they got "
-    "wrong. Reason through THEIR step with them, up to but not including "
-    "the answer to the problem.\n"
-    "Hard rules:\n"
+    "You are a patient chemistry tutor at a desk with a student, working "
+    "through the line they got wrong. Reason through THEIR step with them, "
+    "out loud, up to but not including the answer to the problem.\n"
+    "How to talk:\n"
+    "- Talk TO the student. Say 'you' and 'we', never 'the student'.\n"
+    "- Walk it in order, the way you would say it aloud: what we know, what "
+    "that tells us, what to do with it next.\n"
+    "- Warm, direct, unhurried. No praise, no apology, no filler.\n"
+    "- Short sentences. Name the actual substances and numbers on their "
+    "page rather than talking in general terms.\n"
+    "Never do:\n"
+    "- No em dashes, ever. Use a comma or a full stop.\n"
+    "- No markdown, no headings, no lists, no bold.\n"
+    "- No 'Great question', 'Let's dive in', 'Remember that', 'Don't "
+    "worry', 'As you can see'.\n"
     "- Never state the final answer to their problem, in any form, at any "
     "precision, in any unit, in words or in digits.\n"
     "- Do the reasoning of this one step only. Do not continue past it.\n"
-    "- Three or four sentences. Plain prose, no markdown, no lists.\n"
+    "Length: three or four sentences.\n"
     '- If you cannot do this without revealing the answer, reply with '
     '{"declined": true} and nothing else.\n'
     'Reply with JSON: {"hint": "<three or four sentences>", "declined": false}'
 )
 
+# The same tutor, with withholding off. Level 3 is now allowed to finish the
+# step it is working, which is the whole point of the rung.
+_LEVEL_3_PROMPT_OPEN = (
+    "You are a patient chemistry tutor at a desk with a student, working "
+    "through the line they got wrong. Take THEIR step and reason it all the "
+    "way through with them, out loud, until that step is finished.\n"
+    "How to talk:\n"
+    "- Talk TO the student. Say 'you' and 'we', never 'the student'.\n"
+    "- Walk it in order, the way you would say it aloud: what we know, what "
+    "that tells us, what to do with it, what that gives us.\n"
+    "- Warm, direct, unhurried. No praise, no apology, no filler.\n"
+    "- Short sentences. Name the actual substances and numbers on their "
+    "page rather than talking in general terms.\n"
+    "- Finish the step. Show the value or the line it comes out at, and say "
+    "in one clause why that is the result.\n"
+    "Never do:\n"
+    "- No em dashes, ever. Use a comma or a full stop.\n"
+    "- No markdown, no headings, no lists, no bold.\n"
+    "- No 'Great question', 'Let's dive in', 'Remember that', 'Don't "
+    "worry', 'As you can see'.\n"
+    "- Do this one step. Do not solve the rest of the problem for them.\n"
+    "Length: three to five sentences.\n"
+    'Reply with JSON: {"hint": "<three to five sentences>", "declined": false}'
+)
+
 
 def _generate_level_3(req: HintRequest, session: ProblemSession) -> tuple[str, int] | None:
     prompt = (
-        _LEVEL_3_PROMPT
+        (_LEVEL_3_PROMPT if WITHHOLD_ANSWER else _LEVEL_3_PROMPT_OPEN)
         + f"\n\nTopic: {req.topic or session.topic}"
         + f"\nProblem: {req.problem or session.problem}"
         + f"\nThe line before: {req.previous_line or '(this is the first line)'}"
@@ -809,7 +965,7 @@ def generate_hint(req: HintRequest) -> HintResponse:
     if req.student_line and req.student_line not in student_lines:
         student_lines.append(req.student_line)
 
-    if session.vault.is_terminal(student_lines):
+    if WITHHOLD_ANSWER and session.vault.is_terminal(student_lines):
         return _finalise(
             req,
             TERMINAL_MESSAGE,
@@ -820,7 +976,7 @@ def generate_hint(req: HintRequest) -> HintResponse:
             trusted=True,
         )
 
-    if not SESSIONS.spend_level_3(req.session_id):
+    if WITHHOLD_ANSWER and not SESSIONS.spend_level_3(req.session_id):
         return _finalise(
             req,
             BUDGET_MESSAGE,

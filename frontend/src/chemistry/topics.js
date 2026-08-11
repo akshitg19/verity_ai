@@ -583,6 +583,24 @@ export function describeProblem(topic, type, values) {
   return `${topic.label} - ${type.label}${parts.length ? ` (${parts.join(", ")})` : ""}`;
 }
 
+// Which field a question written on the page fills in.
+//
+// Deliberately narrow. For an equation topic the transcribed line *is* the
+// question, so this is a direct assignment and nothing has to be parsed. The
+// numeric topics need "What is the pH of 0.100 M acetic acid, Ka = 1.8e-5"
+// turned into {task, concentration_m, ka}, which is a different and much
+// larger problem; until that is solved they keep the typed fields and this
+// returns null, so the popover never offers something that cannot work.
+const WRITTEN_QUESTION_FIELDS = ["reference_equation", "molecular_equation"];
+
+export function questionFieldFor(topic, type) {
+  if (inputModeFor(topic, type) !== "equation") return null;
+  const match = type.fields.find((entry) =>
+    WRITTEN_QUESTION_FIELDS.includes(entry.name)
+  );
+  return match?.name ?? null;
+}
+
 export function isProblemReady(type, values) {
   return type.fields
     .filter((f) => f.optional !== true && !/optional/i.test(f.label))

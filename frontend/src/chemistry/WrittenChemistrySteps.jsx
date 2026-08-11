@@ -1,4 +1,4 @@
-import { COLORS, FONT, RADIUS } from "../theme";
+import { COLORS, FONT, RADIUS, SUBJECTS, VERDICT_STYLES } from "../theme";
 import { readableChemistryLines } from "./lineModel";
 
 function verdictStatus(verdict) {
@@ -6,69 +6,78 @@ function verdictStatus(verdict) {
   return verdict.status ?? (verdict.valid ? "valid" : "invalid");
 }
 
-function statusForLine(line, verdict, blocked) {
+// A state that cannot advance has to say why. The old "Waiting" gave the same
+// sentence whether a check was seconds away or could never run at all, which
+// is how two rows sat at "Waiting" forever with nothing on screen explaining
+// that the question field was empty.
+function statusForLine(line, verdict, blocked, ready) {
+  const styleFor = (key, label, detail) => ({
+    label,
+    detail,
+    color: VERDICT_STYLES[key].color,
+    background: VERDICT_STYLES[key].background,
+    symbol: VERDICT_STYLES[key].symbol,
+  });
+
   if (line.unreadable || !line.text.trim()) {
-    return {
-      label: "Needs review",
-      detail: line.unreadable
+    return styleFor(
+      "unsupported",
+      "Needs review",
+      line.unreadable
         ? "We could not confidently read this row. Correct it before checking."
-        : "Enter the transcription for this row before checking.",
-      color: "#a96b1f",
-      background: "#fff7e8",
-      symbol: "!",
-    };
+        : "Enter the transcription for this row before checking."
+    );
   }
 
   if (blocked) {
-    return {
-      label: "Waiting for earlier row",
-      detail: "Correct the earlier unreadable row before checking this step.",
-      color: COLORS.muted,
-      background: "#f3f5f4",
-      symbol: "…",
-    };
+    return styleFor(
+      "waiting",
+      "Waiting for earlier row",
+      "Correct the earlier unreadable row before checking this step."
+    );
   }
 
   const status = verdictStatus(verdict);
   if (!verdict) {
-    return {
-      label: "Waiting",
-      detail: "This row will be checked as a separate chemistry step.",
-      color: COLORS.muted,
-      background: "#f3f5f4",
-      symbol: "…",
-    };
+    return ready
+      ? styleFor(
+          "waiting",
+          "Ready to check",
+          "Read and understood. Press Check work below."
+        )
+      : styleFor(
+          "waiting",
+          "Not checked yet",
+          "Nothing has been checked because the question is not set. Mark a row as the question, or type it in the panel."
+        );
   }
   if (status === "valid") {
-    return {
-      label: "Correct step",
-      detail: "This follows from the previous chemistry row.",
-      color: "#267a55",
-      background: "#edf8f2",
-      symbol: "✓",
-    };
+    return styleFor(
+      "valid",
+      "Correct step",
+      "This follows from the previous chemistry row."
+    );
   }
   if (status === "invalid") {
-    return {
-      label: "Review this step",
-      detail: verdict.error_type
+    return styleFor(
+      "invalid",
+      "Review this step",
+      verdict.error_type
         ? `Possible ${verdict.error_type.replaceAll("_", " ")}.`
-        : "This does not follow from the previous row.",
-      color: COLORS.danger,
-      background: "#fff0f0",
-      symbol: "!",
-    };
+        : "This does not follow from the previous row."
+    );
   }
-  return {
-    label: status === "parse_error" ? "Could not check" : "Not supported yet",
-    detail:
-      status === "parse_error"
-        ? "Try rewriting or editing this row's transcription."
-        : "This type of step is outside the current scope.",
-    color: "#a96b1f",
-    background: "#fff7e8",
-    symbol: "?",
-  };
+  return status === "parse_error"
+    ? styleFor(
+        "parse_error",
+        "Could not read",
+        "Try rewriting or editing this row's transcription."
+      )
+    : styleFor(
+        "unsupported",
+        "Can't check this yet",
+        "This type of step is outside the current scope."
+      );
 }
 
 export default function WrittenChemistrySteps({
@@ -77,22 +86,95 @@ export default function WrittenChemistrySteps({
   inputMode,
   ready,
   checking,
+  questionRow = null,
   onEdit,
   onCheck,
+  onReleaseQuestion,
 }) {
+  // The question is not a step, so it is neither numbered nor checked.
+  const stepLines = lines.filter((line) => line.row !== questionRow);
+  const questionLine = lines.find((line) => line.row === questionRow) ?? null;
   const canCheck =
-    ready && !checking && readableChemistryLines(lines).length > 0;
+    ready && !checking && readableChemistryLines(stepLines).length > 0;
+
+  const checkLabel = checking
+    ? "Checking…"
+    : !ready
+    ? "Set the question first"
+    : readableChemistryLines(stepLines).length === 0
+    ? "Write your working below the question"
+    : "Check work";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {lines.map((line, index) => {
-        const blocked = lines
+      {questionLine && (
+        <div
+          style={{
+            padding: 12,
+            borderRadius: RADIUS.md,
+            border: `1px solid ${SUBJECTS.chemistry.accent}44`,
+            background: SUBJECTS.chemistry.accentLight,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 6,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 0.6,
+                textTransform: "uppercase",
+                color: SUBJECTS.chemistry.accent,
+              }}
+            >
+              Your question
+            </div>
+            <button
+              type="button"
+              onClick={onReleaseQuestion}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: COLORS.muted,
+                fontSize: 12,
+                fontFamily: FONT.sans,
+                textDecoration: "underline",
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              Not the question
+            </button>
+          </div>
+          <div
+            style={{
+              color: COLORS.text,
+              fontFamily: FONT.mono,
+              fontSize: 14,
+              wordBreak: "break-word",
+            }}
+          >
+            {questionLine.text}
+          </div>
+        </div>
+      )}
+
+      {stepLines.map((line, index) => {
+        const blocked = stepLines
           .slice(0, index)
           .some((previous) => previous.unreadable || !previous.text.trim());
         const status = statusForLine(
           line,
           verdictsByLine.get(line.row),
-          blocked
+          blocked,
+          ready
         );
         return (
           <div
@@ -178,8 +260,8 @@ export default function WrittenChemistrySteps({
         style={{
           width: "100%",
           padding: "9px 14px",
-          background: canCheck ? COLORS.primary : "#d8ddda",
-          color: "#fff",
+          background: canCheck ? COLORS.primary : COLORS.border,
+          color: canCheck ? "#fff" : COLORS.muted,
           border: "none",
           borderRadius: RADIUS.sm,
           fontWeight: 700,
@@ -187,7 +269,7 @@ export default function WrittenChemistrySteps({
           cursor: canCheck ? "pointer" : "not-allowed",
         }}
       >
-        {checking ? "Checking…" : !ready ? "Fill in the question above first" : "Check work"}
+        {checkLabel}
       </button>
     </div>
   );

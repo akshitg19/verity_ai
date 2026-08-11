@@ -1,14 +1,11 @@
 # verity.ai
 
-**It knows the answer. It will never give it to you.**
-
 Live: <https://verity-ai-lovat.vercel.app>
 
 verity.ai is a tablet-first homework workspace. A student writes their work
 by hand with a stylus, exactly as they would on paper. As each line is
 finished, the app reads it, checks it, and flags the first line where the
-reasoning broke — while the student is still writing, and without ever
-handing over the answer.
+reasoning broke, while the student is still writing.
 
 Current homework apps only check the final answer. Photomath and its peers
 hand over the full solution, which is why schools ban them. Chat tutors
@@ -24,7 +21,7 @@ Competing step-checkers start from a completed page; chat tutors never see
 the page at all.
 
 **Precise about where.** It flags the first line where reasoning broke, and
-it distinguishes a proven mistake from a step it could not verify — so it
+it distinguishes a proven mistake from a step it could not verify, so it
 never accuses a student of an error it merely failed to understand.
 
 **Teaches up to the answer, never past it.** The help gets genuinely
@@ -50,7 +47,7 @@ than recognising a pattern.
 
 Two things here exist nowhere else. **No shipped product checks hand-drawn
 molecular structures live.** And verity.ai understands **generic structures**
-— a student can draw the general ester `R-C(=O)-O-R'` with R groups standing
+A student can draw the general ester `R-C(=O)-O-R'` with R groups standing
 for "any substituent", and it is judged as the general case rather than
 rejected as unreadable.
 
@@ -61,8 +58,8 @@ verdict.
 ## Math
 
 Deterministic verdicts over linear equations and rational arithmetic, with
-mistakes classified into named categories — `sign`, `arithmetic`,
-`division`, `distribution` — rather than a bare "wrong". A step that fails
+mistakes classified into named categories (`sign`, `arithmetic`,
+`division`, `distribution`) rather than a bare "wrong". A step that fails
 does not become the reference for the next line, so a single mistake never
 cascades false errors down the rest of the page.
 
@@ -77,43 +74,49 @@ demonstrate, then work it through with you.
    corrected value.
 2. **A worked example.** A *different* problem that mirrors theirs with
    different numbers, solved end to end. Every line of it is verified by the
-   same engine that checks the student's own work before it is ever shown —
+   same engine that checks the student's own work before it is ever shown,
    so a wrong worked example cannot reach a student.
-3. **Their own step**, reasoned through with them, up to but not including
-   the answer.
+3. **Their own step**, reasoned through with them until that step is
+   finished.
 
-On the final step, level 3 declines. It says so plainly and offers another
-worked example instead, so the ladder never terminates in the answer.
+Every level is generated for the problem in front of the student, and level
+2 is shown one step at a time with the atom counts moving as the equation
+comes into balance, rather than printed as a paragraph.
 
-## How the answer stays in
+## Which engine decides
 
-The system solves the problem completely and then refuses to tell you. That
-refusal is enforced by machinery, not by asking a model to be discreet:
-
-- The solved answer is held **server-side only**, and can never appear on
-  any response the app is capable of sending.
-- Every word bound for a student passes through a **single checkpoint** that
-  compares it against every form of the answer — the number at any
-  precision, the balanced equation, the structure in any equivalent
-  notation — and blocks it.
-- **On the last step, the deepest hint is refused** rather than softened.
-- Deep hints are **metered per problem**, because a student who needs one on
-  every line should be sent back to the worked examples instead.
-
-Where a chemistry engine can prove a step, its verdict is final and the AI's
-opinion is discarded. Where nothing can prove it — predicting a reaction
-product, for instance — the AI's judgement is shown **labelled as such**, so
-a student and a teacher can always see which engine spoke. If two
+Where a chemistry engine can prove a step, its verdict is final and the
+model's opinion is discarded. Where nothing can prove it, predicting a
+reaction product for instance, the model's judgement is shown **labelled as
+such**, so a student and a teacher can always see which engine spoke. If two
 independent reads disagree, the app asks the student to confirm the line
 rather than guessing at a verdict.
 
-The claim we make is exactly as narrow as what we enforce: **the answer is
-never stated.**
+Four outcomes, never three: `valid`, `invalid`, `unsupported` and
+`parse_error`. The last two are our limitations rather than the student's
+mistakes, and they are rendered as four different things so "we could not
+check this" can never read as "you got this wrong".
+
+## How much the hints give away
+
+The backend solves every problem before it writes a hint, and holds that
+solution server side where no response model can carry it. Every hint at
+levels 1 and 2 passes through a single deterministic checkpoint that
+compares it against every form of the answer, at any precision, as a
+balanced equation, or as an equivalent structure.
+
+**Level 3 is currently allowed to finish the step it is working**, including
+on the last step of a problem. That is a deliberate product decision:
+functionality first. The machinery that withholds is still present and still
+tested, switched off behind one flag, and comes back with
+`VERITY_WITHHOLD_ANSWER=1`. See the withholding section in `final_tasks.md`
+before repeating any stronger claim about what the product refuses to say.
 
 ## Notebook
 
-Notes, folders per subject, and pages — the app is built to be somewhere a
-student keeps a term of homework, not a single canvas that grows forever.
+Notes, folders you create inside each subject, and pages shown as a strip
+of thumbnails. It is built to be somewhere a student keeps a term of
+homework, not a single canvas that grows forever.
 Work is saved locally and stays there between sessions.
 
 ## Tech stack
@@ -135,7 +138,7 @@ Work is saved locally and stays there between sessions.
 backend/          FastAPI app, judges, recognition, hints
   judge/          One module per subject, all sharing the Judge contract
   tests/          pytest suite, including the recognition failure logs
-frontend/         React + Vite tablet client
+frontend/         React + Vite client, landing page and workspace
 Dockerfile        Builds both into one deployable image
 final_tasks.md    Task list and priority order (source of truth for scope)
 ```
@@ -210,7 +213,7 @@ One command builds both halves into a single container and ships it:
 
 It deploys to Cloud Run in the same Google Cloud project that serves the
 recognition model, so the running service authenticates through its own
-service account — there is no API key or credential file anywhere. The
+service account, so there is no API key or credential file anywhere. The
 deployment plan is written up in full at the bottom of `final_tasks.md`.
 
 The public UI is served separately from Vercel, which builds `frontend/` and
@@ -224,7 +227,7 @@ points it at the Cloud Run API through `VITE_API_BASE_URL`:
 Cloud Run still serves its own copy of the frontend at the API URL, so that
 address remains a complete, self-contained fallback if Vercel is ever in the
 way. Because the two are separate origins, `CORS_ORIGINS` on the Cloud Run
-service must list every Vercel alias — a new alias that is not in that list
+service must list every Vercel alias. A new alias that is not in that list
 fails every request from the browser.
 
 Ship a frontend change with:
@@ -262,6 +265,29 @@ Expected output: `working`. Automated tests never call Gemini.
 Configuration defaults are documented in `.env.example`. To override one,
 export `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, or `GEMINI_MODEL`
 before starting the backend. No secret values belong in that file.
+
+## Check it against the live service
+
+Every automated test in this repo mocks the model, which means they prove the
+judges reach the right verdict on a clean string and nothing at all about
+whether the product works. This drives the deployed service the way a student
+does: open a problem, submit the correct working, submit a wrong line, then
+ask for all three hint levels.
+
+```bash
+python backend/scripts/student_walkthrough.py
+python backend/scripts/student_walkthrough.py --topic balancing
+python backend/scripts/student_walkthrough.py --base http://127.0.0.1:8000
+```
+
+It makes real model calls and costs real money, so it is never part of
+pytest. It reports how often each hint level generates rather than falling
+back to a template, and it exits non-zero if any correct answer was judged
+wrong or any wrong answer was judged correct. That last number has a target
+of zero, and it is the one to look at first: it has already caught three
+cases the 576 mocked tests could not.
+
+Run it before a demo, and after any change to a judge, a vault, or a prompt.
 
 ## Validate changes
 
@@ -344,4 +370,4 @@ pass.
 - A tablet cannot open the frontend: use the Vite `Network` URL and keep the
   laptop and tablet on the same Wi-Fi.
 - IUPAC naming reports "not supported": OPSIN needs a Java runtime. Install
-  one, or leave naming out — every other feature is unaffected.
+  one, or leave naming out. Every other feature is unaffected.

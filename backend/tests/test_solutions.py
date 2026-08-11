@@ -207,3 +207,42 @@ def test_an_unsolvable_problem_reports_line_zero():
 
     assert verdicts[0].line_number == 0
     assert verdicts[0].error_type == "unsupported"
+
+
+# ---------------------------------------------------------------------------
+# The fatal category: a confident valid on a wrong line.
+#
+# Found by backend/scripts/student_walkthrough.py, not by this suite. A pH
+# answer group holds pH, pOH, [H+] and [OH-] so that a student may state
+# whichever the question asked for, and a mislabelled value used to fall
+# through to matching any member of that group. Writing "pH = 12.00" when the
+# pH is 2.00 matched the pOH, and the student was told they were right.
+# ---------------------------------------------------------------------------
+
+def test_pH_and_pOH_are_not_interchangeable():
+    from judge.quantities import parse_quantity
+    from judge.solutions import SolutionsProblem, solve_solutions
+
+    solution = solve_solutions(
+        SolutionsProblem(task="strong_acid_ph", concentration_m=0.010)
+    )
+
+    assert solution.match(parse_quantity("pH = 2.00")) is not None
+    assert solution.match(parse_quantity("pOH = 12.00")) is not None
+    # The pOH value, claimed as the pH.
+    assert solution.match(parse_quantity("pH = 12.00")) is None
+    assert solution.match(parse_quantity("pOH = 2.00")) is None
+
+
+def test_an_unknown_label_still_matches_on_value_alone():
+    # The other half of the rule: a label we do not recognise must never
+    # reject, or a student writing "n = 0.01" for a concentration is told
+    # they are wrong when they are not.
+    from judge.quantities import parse_quantity
+    from judge.solutions import SolutionsProblem, solve_solutions
+
+    solution = solve_solutions(
+        SolutionsProblem(task="strong_acid_ph", concentration_m=0.010)
+    )
+
+    assert solution.match(parse_quantity("n = 0.010")) is not None

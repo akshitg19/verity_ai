@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { renderLineToPng } from "./canvas/render";
 import useCanvas from "./canvas/useCanvas";
 import useChemistry from "./chemistry/useChemistry";
+import QuestionPrompt from "./chemistry/QuestionPrompt";
 import CanvasSurface from "./components/CanvasSurface";
+import useTheme from "./useTheme";
 import FeedbackPanel from "./components/FeedbackPanel";
 import WorkspaceToolbar from "./components/WorkspaceToolbar";
 import NotebookSidebar from "./notebook/NotebookSidebar";
@@ -15,10 +17,12 @@ const SIDEBAR_WIDTH = 250;
 const SWIPE_DISTANCE = 90;
 const SWIPE_SLOPE = 60;
 
-export default function App() {
+export default function App({ theme: themeFromRoute, subject }) {
   const notebook = useNotebook();
   const chemistry = useChemistry();
   const math = useMathWorkflow();
+  const ownTheme = useTheme();
+  const theme = themeFromRoute ?? ownTheme;
   const mode = notebook.activeNote.subject;
   const [showNotebook, setShowNotebook] = useState(false);
   const swipeStart = useRef(null);
@@ -72,6 +76,20 @@ export default function App() {
     if (verdictStatus) notebook.recordOutcome(verdictStatus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chemistry.verdict]);
+
+  // The route names the subject, so /chemistry opens a chemistry note even
+  // if the last one open was math. Runs once per subject change, not on
+  // every render, or it would fight the in-app subject toggle.
+  const routedSubjectRef = useRef(null);
+  useEffect(() => {
+    if (!subject || routedSubjectRef.current === subject) return;
+    routedSubjectRef.current = subject;
+    if (subject === mode) return;
+    const existing = notebook.folders[subject]?.[0];
+    if (existing) notebook.openNote(existing.id);
+    else notebook.createNote(subject);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject]);
 
   const handleClear = () => {
     canvas.clearPage();
@@ -155,7 +173,24 @@ export default function App() {
         onClose={() => setShowNotebook(false)}
         width={SIDEBAR_WIDTH}
       />
-      <CanvasSurface canvas={canvas} />
+      <CanvasSurface canvas={canvas}>
+        {mode === "chemistry" && chemistry.questionCandidateRow !== null && (
+          <QuestionPrompt
+            bounds={canvas.getRowBounds(chemistry.questionCandidateRow)}
+            text={
+              chemistry.lines.find(
+                (line) => line.row === chemistry.questionCandidateRow
+              )?.text
+            }
+            onUseAsQuestion={() =>
+              chemistry.useRowAsQuestion(chemistry.questionCandidateRow)
+            }
+            onDismiss={() =>
+              chemistry.dismissQuestionCandidate(chemistry.questionCandidateRow)
+            }
+          />
+        )}
+      </CanvasSurface>
       <WorkspaceToolbar
         notebook={notebook}
         showNotebook={showNotebook}
@@ -167,6 +202,7 @@ export default function App() {
         onProblemChange={math.handleProblemChange}
         onProblemEditDone={math.handleProblemEditDone}
         canvas={canvas}
+        theme={theme}
         onFinishLine={canvas.finishActiveRow}
         onReadPage={handleReadPage}
         onClear={handleClear}

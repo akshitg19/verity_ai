@@ -1,4 +1,29 @@
+import { useState } from "react";
+
 import { COLORS, FONT, RADIUS } from "../theme";
+import WorkedExampleStepper from "./WorkedExampleStepper";
+
+const HINTS_OPEN_KEY = "verity.hintsOpen";
+
+// Collapsed until asked for. The feedback was that help appearing on screen
+// while a student is still writing is disturbing, and a hint nobody asked for
+// is exactly the kind of thing that makes a page feel noisy. Opening it is one
+// tap, and the choice is remembered for the session.
+function readHintsOpen() {
+  try {
+    return globalThis.sessionStorage?.getItem(HINTS_OPEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberHintsOpen(open) {
+  try {
+    globalThis.sessionStorage?.setItem(HINTS_OPEN_KEY, open ? "1" : "0");
+  } catch {
+    // Remembering is a convenience, not a requirement.
+  }
+}
 
 // The v3 ladder, rendered.
 //
@@ -19,86 +44,6 @@ const NEXT_LABELS = {
   2: "Walk me through my step",
 };
 
-function WorkedExample({ example }) {
-  return (
-    <div
-      style={{
-        marginTop: 10,
-        padding: 12,
-        borderRadius: RADIUS.md,
-        background: COLORS.surface,
-        border: `1px solid ${COLORS.border}`,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: 0.6,
-          textTransform: "uppercase",
-          color: COLORS.muted,
-          marginBottom: 6,
-        }}
-      >
-        A different problem, worked in full
-      </div>
-      <div
-        style={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: COLORS.text,
-          lineHeight: 1.4,
-          marginBottom: 4,
-        }}
-      >
-        {example.problem}
-      </div>
-      <div
-        style={{
-          fontSize: 12,
-          color: COLORS.primary,
-          fontWeight: 600,
-          marginBottom: 10,
-        }}
-      >
-        {example.technique}
-      </div>
-
-      <ol style={{ margin: 0, paddingLeft: 18 }}>
-        {example.steps.map((step, index) => (
-          <li
-            key={index}
-            style={{
-              fontFamily: FONT.mono,
-              fontSize: 12.5,
-              lineHeight: 1.7,
-              color: COLORS.text,
-            }}
-          >
-            {step}
-          </li>
-        ))}
-      </ol>
-
-      {example.verified && (
-        // Only an example that passed our own deterministic judge, line by
-        // line, is ever rendered. Saying so is the point: it is the reason a
-        // generated worked example is safe to show at all.
-        <div
-          style={{
-            marginTop: 10,
-            fontSize: 11,
-            color: "#267a55",
-            fontWeight: 600,
-          }}
-        >
-          ✓ every line checked by the same engine that checks your work
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function HintLadder({
   level,
   hint,
@@ -115,6 +60,44 @@ export default function HintLadder({
   const atTop = level >= 3;
   const nextLabel = NEXT_LABELS[level] ?? "Show another hint";
   const spendsBudget = level === 2 && !terminalStep;
+  const [open, setOpen] = useState(readHintsOpen);
+
+  const setOpenAndRemember = (next) => {
+    setOpen(next);
+    rememberHintsOpen(next);
+  };
+
+  if (!open && level === 0 && !hint) {
+    return (
+      <div
+        style={{
+          marginTop: 14,
+          paddingTop: 14,
+          borderTop: `1px solid ${COLORS.border}`,
+          fontFamily: FONT.sans,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setOpenAndRemember(true)}
+          disabled={disabled}
+          style={{
+            width: "100%",
+            padding: "9px 14px",
+            background: "transparent",
+            color: COLORS.muted,
+            border: `1px dashed ${COLORS.border}`,
+            borderRadius: RADIUS.sm,
+            fontSize: 13,
+            fontFamily: FONT.sans,
+            cursor: disabled ? "not-allowed" : "pointer",
+          }}
+        >
+          Stuck? Get a hint
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -125,6 +108,29 @@ export default function HintLadder({
         fontFamily: FONT.sans,
       }}
     >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          marginBottom: 8,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setOpenAndRemember(false)}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: COLORS.muted,
+            fontSize: 12,
+            fontFamily: FONT.sans,
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          Hide hints
+        </button>
+      </div>
       {hint && (
         <div
           style={{
@@ -154,7 +160,7 @@ export default function HintLadder({
               }}
             >
               {terminalStep
-                ? "Last step — you finish it"
+                ? "Last step, you finish it"
                 : `Hint ${level} of 3 · ${LEVEL_LABELS[level] ?? ""}`}
             </div>
             {source === "fallback" && !terminalStep && (
@@ -169,7 +175,12 @@ export default function HintLadder({
 
           {hint}
 
-          {workedExample && <WorkedExample example={workedExample} />}
+          {workedExample && (
+            <WorkedExampleStepper
+              key={workedExample.problem}
+              example={workedExample}
+            />
+          )}
 
           {resource && (
             <a

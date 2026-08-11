@@ -379,7 +379,13 @@ def test_a_balancing_example_whose_steps_never_reach_the_answer_is_rejected(
 
 
 def test_level_3_declines_on_a_single_step_problem(monkeypatch):
-    """"Draw this molecule" has no step before the answer."""
+    """"Draw this molecule" has no step before the answer.
+
+    Pinned to WITHHOLD_ANSWER, which is off by default since Aug 10. The
+    mechanism is still here and still tested, so re-arming it is a one-line
+    change rather than an act of faith.
+    """
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", True)
     vault = vault_for_structure("Draw methyl ethanoate", "CC(=O)OC")
     session = SESSIONS.create("structure", vault.problem, vault)
     monkeypatch.setattr(hints, "is_configured", lambda: True)
@@ -407,6 +413,7 @@ def test_a_refused_terminal_step_costs_no_budget(monkeypatch):
 
 
 def test_level_3_walks_a_non_terminal_step(monkeypatch, ph_session):
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", True)
     monkeypatch.setattr(hints, "is_configured", lambda: True)
     monkeypatch.setattr(
         hints,
@@ -426,6 +433,7 @@ def test_level_3_walks_a_non_terminal_step(monkeypatch, ph_session):
 
 
 def test_the_budget_runs_out_and_says_so(monkeypatch, ph_session):
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", True)
     monkeypatch.setattr(hints, "is_configured", lambda: True)
     monkeypatch.setattr(
         hints, "_generate_level_3", lambda req, session: ("Walking your step.", 100)
@@ -455,3 +463,139 @@ def test_every_response_reports_the_remaining_budget(monkeypatch, ph_session):
     response = hints.generate_hint(request_for(ph_session, 1))
 
     assert response.level_3_remaining == 3
+
+
+# ---------------------------------------------------------------------------
+# The other half of the safeguard: a *correct* example must actually pass.
+#
+# The docstring at the top of this file says to test the rejection path harder
+# than the happy path, and that is right, but it was taken far enough that the
+# happy path was never tested at all. Both verifiers rejected every correct
+# example a model produced, so level 2 silently served the static floor on
+# every topic and no test noticed. These are the acceptance cases.
+# ---------------------------------------------------------------------------
+
+BALANCED = {"unbalanced": "Fe + O2 -> Fe2O3", "balanced": "4Fe + 3O2 -> 2Fe2O3"}
+
+
+@pytest.mark.parametrize(
+    "final_step",
+    [
+        "4Fe + 3O2 -> 2Fe2O3",
+        "The balanced equation is 4Fe + 3O2 -> 2Fe2O3",
+        "Step 3: 4Fe + 3O2 \u2192 2Fe2O3",
+        "So 4Fe + 3O2 -> 2Fe2O3.",
+        "Multiply through to get 4Fe + 3O2 => 2Fe2O3, which balances.",
+    ],
+)
+def test_a_correct_balancing_example_passes_however_the_line_is_worded(final_step):
+    # A model writes prose around the equation. Parsing the whole line as an
+    # equation is what used to fail, and it failed silently.
+    assert hints._verify_balancing(BALANCED, ["Count the atoms.", final_step])
+
+
+@pytest.mark.parametrize(
+    "steps",
+    [
+        ["Count the atoms.", "2Fe + O2 -> Fe2O3"],           # not the balanced form
+        ["Count the atoms.", "Balance it carefully."],        # no equation at all
+        ["Count the atoms.", "4Fe + 3O2 -> 2FeO"],           # different reaction
+    ],
+)
+def test_a_wrong_balancing_example_is_still_rejected(steps):
+    assert not hints._verify_balancing(BALANCED, steps)
+
+
+def test_wrong_coefficients_are_rejected_even_when_the_line_parses():
+    assert not hints._verify_balancing(
+        {"unbalanced": "Fe + O2 -> Fe2O3", "balanced": "2Fe + 3O2 -> 2Fe2O3"},
+        ["2Fe + 3O2 -> 2Fe2O3"],
+    )
+
+
+WEAK_ACID = {
+    "task": "weak_acid_ph",
+    "params": {"concentration_m": 0.250, "ka": 1.8e-5},
+    "answer": 2.68,
+}
+
+
+def test_algebraic_intermediates_do_not_reject_a_correct_example():
+    # x^2 = 4.5e-6 is a real step in the working and no solver enumerates it.
+    # Rejecting it threw away every correct numeric example.
+    assert hints._verify_solutions(
+        WEAK_ACID,
+        [
+            "Ka = x^2 / (0.250 - x).",
+            "Assume x is small: x^2 = 1.8e-5 * 0.250 = 4.5e-6.",
+            "x = 2.12e-3 M",
+            "pH = 2.68",
+        ],
+    )
+
+
+def test_a_wrong_final_answer_is_still_rejected():
+    assert not hints._verify_solutions(
+        {**WEAK_ACID, "answer": 3.9},
+        ["Ka = x^2 / (0.250 - x).", "x = 2.12e-3 M", "pH = 2.68"],
+    )
+
+
+def test_a_line_that_contradicts_a_quantity_we_computed_is_rejected():
+    # Naming pH and stating a different one is a contradiction, not an
+    # unknown intermediate, and must still throw the example away.
+    assert not hints._verify_solutions(
+        WEAK_ACID, ["Ka = x^2 / (0.250 - x).", "pH = 3.90"]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Withholding off, which is the shipping default since Aug 10.
+# ---------------------------------------------------------------------------
+
+def test_level_3_answers_the_terminal_step_when_withholding_is_off(monkeypatch):
+    vault = vault_for_structure("Draw methyl ethanoate", "CC(=O)OC")
+    session = SESSIONS.create("structure", vault.problem, vault)
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", False)
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints, "_generate_level_3", lambda req, session: ("Here is the step.", 100)
+    )
+
+    response = hints.generate_hint(request_for(session, 3, student_line="CC(=O)OC"))
+
+    assert response.terminal_step is False
+    assert response.source == "model"
+    assert response.hint == "Here is the step."
+
+
+def test_the_budget_never_blocks_when_withholding_is_off(monkeypatch, ph_session):
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", False)
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints, "_generate_level_3", lambda req, session: ("Walking your step.", 100)
+    )
+
+    for _ in range(6):
+        response = hints.generate_hint(
+            request_for(ph_session, 3, student_line="pH = 1.0")
+        )
+        assert response.source == "model"
+
+
+def test_levels_1_and_2_are_still_redacted_when_withholding_is_off(monkeypatch):
+    # Turning off the level-3 gate must not open the other two rungs.
+    vault = vault_for_balance("Balance N2 + H2 -> NH3", "N2 + H2 -> NH3")
+    session = SESSIONS.create("balancing", vault.problem, vault)
+    monkeypatch.setattr(hints, "WITHHOLD_ANSWER", False)
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints,
+        "_generate_level_1",
+        lambda req, session: ("The answer is N2 + 3H2 -> 2NH3", 100),
+    )
+
+    response = hints.generate_hint(request_for(session, 1, student_line="N2 + H2 -> NH3"))
+
+    assert response.source == "fallback"
+    assert "3H2" not in response.hint
