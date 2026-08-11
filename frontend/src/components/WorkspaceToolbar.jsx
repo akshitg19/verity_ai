@@ -90,7 +90,7 @@ function ToolButton({ active, children, style, ...props }) {
         border: active ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`,
         borderRadius: RADIUS.md,
         fontWeight: active ? 700 : 500,
-        fontFamily: "sans-serif",
+        fontFamily: "inherit",
         fontSize: 14,
         cursor: "pointer",
         ...style,
@@ -176,7 +176,7 @@ export default function WorkspaceToolbar({
     border: `1px solid ${COLORS.border}`,
     borderRadius: RADIUS.lg,
     boxShadow: SHADOW.float,
-    fontFamily: "sans-serif",
+    fontFamily: "inherit",
   };
   const menuHeading = {
     marginBottom: 10,
@@ -230,7 +230,7 @@ export default function WorkspaceToolbar({
       </button>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 150 }}>
-        <Logo size={38} accent={SUBJECTS[mode].accent} radius={10} />
+        <Logo size={34} accent={SUBJECTS[mode].accent} />
         <div style={{ minWidth: 0 }}>
           <div
             title={notebook.activeNote.title}
@@ -239,7 +239,7 @@ export default function WorkspaceToolbar({
               fontWeight: 700,
               fontSize: 16,
               lineHeight: 1.15,
-              fontFamily: "sans-serif",
+              fontFamily: "inherit",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -248,7 +248,7 @@ export default function WorkspaceToolbar({
           >
             {notebook.activeNote.title}
           </div>
-          <div style={{ color: COLORS.muted, fontSize: 11, marginTop: 2, fontFamily: "sans-serif" }}>
+          <div style={{ color: COLORS.muted, fontSize: 11, marginTop: 2, fontFamily: "inherit" }}>
             {SUBJECTS[mode].label}
           </div>
         </div>
@@ -272,7 +272,7 @@ export default function WorkspaceToolbar({
                 border: "none",
                 borderRadius: RADIUS.sm,
                 boxShadow: selected ? SHADOW.raised : "none",
-                fontFamily: "sans-serif",
+                fontFamily: "inherit",
                 fontSize: 13,
                 fontWeight: selected ? 700 : 500,
                 cursor: "pointer",
@@ -293,10 +293,10 @@ export default function WorkspaceToolbar({
           onBlur={onProblemEditDone}
           onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
           placeholder="Optional: type the problem instead"
-          style={{ flex: 1, minWidth: 180, maxWidth: 460, padding: "10px 14px", border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: COLORS.background, color: COLORS.text, fontFamily: "sans-serif", fontSize: 14, outline: "none" }}
+          style={{ flex: 1, minWidth: 180, maxWidth: 460, padding: "10px 14px", border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: COLORS.background, color: COLORS.text, fontFamily: "inherit", fontSize: 14, outline: "none" }}
         />
       ) : (
-        <div style={{ flex: 1, minWidth: 180, maxWidth: 520, padding: "8px 14px", border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: COLORS.background, fontFamily: "sans-serif", overflow: "hidden" }}>
+        <div style={{ flex: 1, minWidth: 180, maxWidth: 520, padding: "8px 14px", border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: COLORS.background, fontFamily: "inherit", overflow: "hidden" }}>
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: SUBJECTS.chemistry.accent }}>
             {chemistry.topic.label}
           </div>
@@ -437,7 +437,7 @@ export default function WorkspaceToolbar({
                       title={option.hint}
                       aria-pressed={selected}
                       onClick={() => { setEraseMode(option.id); setActiveTool("eraser"); }}
-                      style={{ flex: 1, padding: "9px 8px", background: selected ? COLORS.primaryLight : COLORS.background, color: selected ? COLORS.primary : COLORS.text, border: selected ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`, borderRadius: 9, fontSize: 12, fontWeight: selected ? 700 : 500, fontFamily: "sans-serif", cursor: "pointer" }}
+                      style={{ flex: 1, padding: "9px 8px", background: selected ? COLORS.primaryLight : COLORS.background, color: selected ? COLORS.primary : COLORS.text, border: selected ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`, borderRadius: 9, fontSize: 12, fontWeight: selected ? 700 : 500, fontFamily: "inherit", cursor: "pointer" }}
                     >
                       {option.label}
                     </button>

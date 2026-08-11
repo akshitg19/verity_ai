@@ -1,137 +1,166 @@
-import { COLORS, RADIUS, SHADOW, SUBJECTS, SURFACES } from "../theme";
-import Logo from "../components/Logo";
+import { useState } from "react";
+
+import { COLORS, RADIUS, SHADOW, SUBJECTS } from "../theme";
+import Logo, { LogoMark } from "../components/Logo";
 import { navigate } from "../router";
 import NotebookMock from "./NotebookMock";
 
-const MAX_WIDTH = 1120;
-
-const PROPERTIES = [
-  {
-    glyph: "✎",
-    title: "Live, on the page",
-    body:
-      "Feedback arrives while the student is still writing, from the strokes themselves. Not from a photo of finished work, and not from a chat window that never sees the page.",
-  },
-  {
-    glyph: "⌖",
-    title: "Precise about where",
-    body:
-      "It flags the first line where the reasoning broke, and it tells a proven mistake apart from a step it could not verify. It never accuses a student of an error it merely failed to understand.",
-  },
-  {
-    glyph: "◷",
-    title: "Teaches, step by step",
-    body:
-      "Three levels of help. What went wrong on this line, a different problem worked in full, then your own step reasoned through with you.",
-  },
-];
-
-const STACK = [
-  {
-    heading: "Recognition",
-    items: ["Gemini 2.5 Flash", "Vertex AI", "Application Default Credentials"],
-  },
-  {
-    heading: "Deterministic judges",
-    items: ["RDKit", "SymPy", "Exact rational balancer", "OPSIN"],
-  },
-  {
-    heading: "Backend",
-    items: ["FastAPI", "Python 3.11", "Pydantic", "574 tests"],
-  },
-  {
-    heading: "Frontend",
-    items: ["React", "Vite", "Canvas + Pointer Events", "Vitest"],
-  },
-  {
-    heading: "Runs on",
-    items: ["Cloud Run", "Vercel", "One container, one URL"],
-  },
-];
+const MAX_WIDTH = 1080;
 
 const SUBJECT_AREAS = [
   {
+    id: "chemistry",
     heading: "Chemistry",
-    body: "Six subjects, eleven judges, all reachable.",
+    body: "Six subjects, checked by software that computes the chemistry rather than recognising a pattern.",
     items: [
       "Formulas, moles and stoichiometry",
-      "Equations, balancing and net ionic",
+      "Chemical equations and balancing",
       "Redox and electrochemistry",
       "Solutions, acids, bases and buffers",
-      "Structure, bonding and isomers",
+      "Molecular structure and bonding",
       "Organic groups, naming and reactions",
     ],
-    accent: SUBJECTS.chemistry.accent,
-    tint: SUBJECTS.chemistry.accentLight,
     route: "/chemistry",
   },
   {
+    id: "math",
     heading: "Math",
-    body: "Step-by-step algebra, checked exactly.",
+    body: "Every step compared exactly, with the kind of mistake named rather than a bare wrong.",
     items: [
       "Linear equations, term by term",
-      "Sign, distribution and division errors named",
-      "Every verdict proven by SymPy",
-      "Trigonometry, calculus and geometry next",
+      "Sign and arithmetic errors",
+      "Distribution and division errors",
+      "Fractions and rational arithmetic",
+      "Trigonometry (coming next)",
+      "Calculus (coming next)",
     ],
-    accent: SUBJECTS.math.accent,
-    tint: SUBJECTS.math.accentLight,
     route: "/math",
   },
 ];
 
-const AUDIENCES = [
+const STEPS = [
   {
-    who: "Students",
-    body:
-      "Write homework by hand, the way you already do. Find out which line broke while you can still remember what you were thinking, instead of the next morning in red pen.",
+    number: "1",
+    title: "Write it out by hand",
+    body: "Open a page and work the problem with a stylus, the way you would on paper. Nothing to type, nothing to photograph.",
   },
   {
-    who: "Teachers",
-    body:
-      "A student who uses this still has to do the work. Every verdict says which engine decided it, so a proven check never looks the same as a guess.",
+    number: "2",
+    title: "Each line gets read and checked",
+    body: "As you finish a line it is read and compared against the line before it. The first line where the reasoning broke is marked, and the rest are left alone.",
   },
   {
-    who: "Tutors",
-    body:
-      "See where a student's method goes wrong, not just that their final answer is off. The mistake has a line number and a name.",
+    number: "3",
+    title: "Work through it with help",
+    body: "Ask what went wrong, watch a different problem worked in full, or go through your own step. You choose how much help you want.",
   },
 ];
 
+const FAQ = [
+  {
+    q: "Is it free?",
+    a: "Yes. There is no account to make and nothing to install. Open the page on a tablet and start writing.",
+  },
+  {
+    q: "What do I need to use it?",
+    a: "A tablet with a stylus and a browser. It is built for pen input first, so an iPad with an Apple Pencil or a Galaxy Tab with an S Pen is the intended way to use it. A mouse works for trying it out.",
+  },
+  {
+    q: "Which topics does it cover?",
+    a: "Six chemistry subjects, from moles and stoichiometry through balancing, redox, solutions, structure and organic. Math covers linear equations and rational arithmetic today, with trigonometry and calculus next.",
+  },
+  {
+    q: "How does it decide whether my work is right?",
+    a: "Wherever an exact engine can decide a step, it does, and its verdict is final. Chemistry structures go through RDKit, equations through an exact balancer, and algebra through SymPy. A model reads your handwriting; it does not get to overrule the engine that can prove the answer.",
+  },
+  {
+    q: "How are the hints made?",
+    a: "They are written for the problem in front of you rather than picked from a list. The worked example at level two is generated and then run back through the same engine that checks your own work, line by line, before it is shown. An example that fails that check is never displayed.",
+  },
+  {
+    q: "Will it just give me the answer?",
+    a: "It is built to teach the step you are stuck on rather than hand over a finished solution. The help gets more specific as you ask for more, and it always starts with what went wrong rather than what to write.",
+  },
+  {
+    q: "What if it misreads my handwriting?",
+    a: "Every line it reads is shown back to you and can be corrected before anything is judged. When it is unsure, it says so instead of guessing, and a line it could not read is never reported as a mistake.",
+  },
+  {
+    q: "Does my work leave the device?",
+    a: "Your notes and pages are saved in your own browser. A line is sent for reading when you finish it, and nothing else is stored.",
+  },
+];
 
-function Section({ children, style }) {
+const FOOTER = [
+  {
+    heading: "Subjects",
+    links: ["Chemistry", "Math", "All topics"],
+  },
+  {
+    heading: "About",
+    links: ["How it works", "Our approach", "Frequently asked questions"],
+  },
+  {
+    heading: "Resources",
+    links: ["For students", "For teachers", "For tutors"],
+  },
+  {
+    heading: "Legal",
+    links: ["Terms of use", "Privacy policy", "Accessibility", "Cookie notice"],
+  },
+];
+
+function Section({ children, style, inner }) {
   return (
     <section style={{ padding: "0 24px", ...style }}>
-      <div style={{ maxWidth: MAX_WIDTH, margin: "0 auto" }}>{children}</div>
+      <div style={{ maxWidth: MAX_WIDTH, margin: "0 auto", ...inner }}>{children}</div>
     </section>
   );
 }
 
-function Eyebrow({ children }) {
+function Button({ children, onClick, tone = "solid", style }) {
+  const tones = {
+    solid: { background: COLORS.primary, color: "#fff", border: "1px solid transparent" },
+    outline: {
+      background: "transparent",
+      color: COLORS.primary,
+      border: `1px solid ${COLORS.primary}`,
+    },
+    quiet: {
+      background: COLORS.surface,
+      color: COLORS.text,
+      border: `1px solid ${COLORS.border}`,
+    },
+  };
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
       style={{
-        fontSize: 12,
-        fontWeight: 700,
-        letterSpacing: 1.4,
-        textTransform: "uppercase",
-        color: COLORS.muted,
-        marginBottom: 14,
+        padding: "13px 24px",
+        borderRadius: RADIUS.md,
+        fontSize: 15,
+        fontWeight: 600,
+        fontFamily: "inherit",
+        cursor: "pointer",
+        ...tones[tone],
+        ...style,
       }}
     >
       {children}
-    </div>
+    </button>
   );
 }
 
-function Heading({ children, style }) {
+function SectionHeading({ children, style }) {
   return (
     <h2
       style={{
         margin: 0,
-        fontSize: "clamp(26px, 3.4vw, 38px)",
-        lineHeight: 1.15,
-        letterSpacing: -0.5,
+        fontSize: "clamp(24px, 3vw, 34px)",
+        lineHeight: 1.2,
+        letterSpacing: -0.4,
+        fontWeight: 700,
         color: COLORS.text,
         ...style,
       }}
@@ -141,46 +170,76 @@ function Heading({ children, style }) {
   );
 }
 
-function PrimaryButton({ children, onClick, accent = COLORS.primary, style }) {
+function FaqItem({ item, open, onToggle }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: "15px 28px",
-        background: accent,
-        color: "#fff",
-        border: "none",
-        borderRadius: RADIUS.pill,
-        fontSize: 16,
-        fontWeight: 700,
-        fontFamily: "sans-serif",
-        cursor: "pointer",
-        boxShadow: SHADOW.float,
-        ...style,
-      }}
-    >
-      {children}
-    </button>
+    <div style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        style={{
+          width: "100%",
+          padding: "20px 0",
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          background: "transparent",
+          border: "none",
+          textAlign: "left",
+          cursor: "pointer",
+          fontFamily: "inherit",
+        }}
+      >
+        <span style={{ flex: 1, fontSize: 17, fontWeight: 600, color: COLORS.text }}>
+          {item.q}
+        </span>
+        <span
+          aria-hidden="true"
+          style={{
+            flexShrink: 0,
+            width: 26,
+            height: 26,
+            display: "grid",
+            placeItems: "center",
+            borderRadius: "50%",
+            background: COLORS.primaryLight,
+            color: COLORS.primary,
+            fontSize: 15,
+            transform: open ? "rotate(45deg)" : "none",
+            transition: "transform 180ms ease",
+          }}
+        >
+          +
+        </span>
+      </button>
+      {open && (
+        <div
+          style={{
+            paddingBottom: 22,
+            paddingRight: 42,
+            fontSize: 15.5,
+            lineHeight: 1.65,
+            color: COLORS.muted,
+          }}
+        >
+          {item.a}
+        </div>
+      )}
+    </div>
   );
 }
 
 export default function Landing({ theme }) {
+  const [openFaq, setOpenFaq] = useState(0);
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: COLORS.background,
-        fontFamily: "sans-serif",
-        color: COLORS.text,
-      }}
-    >
-      {/* ---------------------------------------------------------- header */}
+    <div style={{ minHeight: "100vh", background: COLORS.background, color: COLORS.text }}>
+      {/* ------------------------------------------------------------ header */}
       <header
         style={{
           position: "sticky",
           top: 0,
-          zIndex: 10,
+          zIndex: 20,
           background: COLORS.surface,
           borderBottom: `1px solid ${COLORS.border}`,
         }}
@@ -189,16 +248,56 @@ export default function Landing({ theme }) {
           style={{
             maxWidth: MAX_WIDTH,
             margin: "0 auto",
-            padding: "12px 24px",
+            padding: "10px 24px",
             display: "flex",
             alignItems: "center",
-            gap: 12,
+            gap: 24,
           }}
         >
-          <Logo size={34} accent={COLORS.primary} radius={9} />
-          <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.2 }}>
-            verity.ai
-          </span>
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+            aria-label="verity.ai home"
+          >
+            <Logo size={34} showWordmark />
+          </button>
+
+          <nav
+            className="landing-nav"
+            style={{ display: "flex", gap: 20, alignItems: "center", marginLeft: 8 }}
+          >
+            {SUBJECT_AREAS.map((area) => (
+              <button
+                key={area.id}
+                type="button"
+                onClick={() => navigate(area.route)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  fontSize: 15,
+                  fontWeight: 500,
+                  color: COLORS.text,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                {area.heading}
+              </button>
+            ))}
+            <a
+              href="#faq"
+              style={{
+                fontSize: 15,
+                fontWeight: 500,
+                color: COLORS.text,
+                textDecoration: "none",
+              }}
+            >
+              FAQ
+            </a>
+          </nav>
 
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
             <button
@@ -207,37 +306,37 @@ export default function Landing({ theme }) {
               aria-label="Change theme"
               onClick={theme.cycle}
               style={{
-                width: 38,
-                height: 38,
+                width: 36,
+                height: 36,
                 display: "grid",
                 placeItems: "center",
-                background: COLORS.surface,
-                color: COLORS.text,
+                background: "transparent",
+                color: COLORS.muted,
                 border: `1px solid ${COLORS.border}`,
                 borderRadius: RADIUS.md,
-                fontSize: 16,
+                fontSize: 15,
                 cursor: "pointer",
               }}
             >
               {theme.preference === "dark" ? "☾" : theme.preference === "light" ? "☀" : "◐"}
             </button>
-            <PrimaryButton
+            <Button
               onClick={() => navigate("/chemistry")}
-              style={{ padding: "10px 20px", fontSize: 14, boxShadow: "none" }}
+              style={{ padding: "9px 18px", fontSize: 14 }}
             >
-              Try our product now
-            </PrimaryButton>
+              Get started
+            </Button>
           </div>
         </div>
       </header>
 
-      {/* ------------------------------------------------------------ hero */}
-      <Section style={{ paddingTop: 72, paddingBottom: 64 }}>
+      {/* -------------------------------------------------------------- hero */}
+      <Section style={{ paddingTop: 76, paddingBottom: 72 }}>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-            gap: 48,
+            gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))",
+            gap: 56,
             alignItems: "center",
           }}
         >
@@ -245,41 +344,44 @@ export default function Landing({ theme }) {
             <h1
               style={{
                 margin: 0,
-                fontSize: "clamp(38px, 5.6vw, 62px)",
-                lineHeight: 1.04,
-                letterSpacing: -1.6,
+                fontSize: "clamp(40px, 5.4vw, 60px)",
+                lineHeight: 1.05,
+                letterSpacing: -1.8,
+                fontWeight: 700,
               }}
             >
-              Homework that tells you
-              <br />
-              <span style={{ color: COLORS.primary }}>which line broke.</span>
+              Think it through.
             </h1>
             <p
               style={{
-                marginTop: 22,
+                marginTop: 20,
                 marginBottom: 0,
-                fontSize: "clamp(16px, 1.6vw, 19px)",
+                fontSize: "clamp(17px, 1.7vw, 20px)",
                 lineHeight: 1.6,
                 color: COLORS.muted,
-                maxWidth: 520,
+                maxWidth: 480,
               }}
             >
-              Write your working by hand with a stylus, exactly as you would on
-              paper. As you finish each line, verity.ai reads it, checks it, and
-              marks the first place the reasoning broke. Then it teaches you
-              through that step.
+              Write your homework by hand and find out which line broke, while
+              you still remember what you were thinking. verity.ai reads every
+              step you write, marks the first one that does not follow, and
+              helps you work it out yourself.
             </p>
 
-            <div style={{ marginTop: 32, display: "flex", flexWrap: "wrap", gap: 12 }}>
-              <PrimaryButton onClick={() => navigate("/chemistry")} accent={SUBJECTS.chemistry.accent}>
-                Try chemistry
-              </PrimaryButton>
-              <PrimaryButton onClick={() => navigate("/math")} accent={SUBJECTS.math.accent}>
-                Try math
-              </PrimaryButton>
+            <div style={{ marginTop: 30, display: "flex", flexWrap: "wrap", gap: 12 }}>
+              <Button onClick={() => navigate("/chemistry")} style={{ padding: "14px 26px" }}>
+                Get started with chemistry
+              </Button>
+              <Button
+                tone="outline"
+                onClick={() => navigate("/math")}
+                style={{ padding: "14px 26px" }}
+              >
+                Get started with math
+              </Button>
             </div>
-            <div style={{ marginTop: 14, fontSize: 13, color: COLORS.muted }}>
-              Free, nothing to install, works in a browser on a tablet.
+            <div style={{ marginTop: 16, fontSize: 14, color: COLORS.muted }}>
+              Free. No account, nothing to install.
             </div>
           </div>
 
@@ -289,332 +391,345 @@ export default function Landing({ theme }) {
         </div>
       </Section>
 
-      {/* --------------------------------------------------------- problem */}
+      {/* --------------------------------------------------- explore content */}
       <Section
         style={{
-          paddingTop: 56,
-          paddingBottom: 56,
+          paddingTop: 64,
+          paddingBottom: 64,
           background: COLORS.surface,
           borderTop: `1px solid ${COLORS.border}`,
           borderBottom: `1px solid ${COLORS.border}`,
         }}
       >
-        <Eyebrow>The gap</Eyebrow>
-        <Heading style={{ maxWidth: 760 }}>
-          Answer checkers tell you that you are wrong. Solvers tell you
-          everything. Neither tells you where you went wrong.
-        </Heading>
+        <SectionHeading>Explore our content</SectionHeading>
         <p
           style={{
-            marginTop: 18,
-            marginBottom: 0,
-            maxWidth: 760,
-            fontSize: 17,
-            lineHeight: 1.65,
+            marginTop: 12,
+            marginBottom: 36,
+            maxWidth: 620,
+            fontSize: 16.5,
+            lineHeight: 1.6,
             color: COLORS.muted,
           }}
         >
-          Photomath and its peers hand over the full solution, which is why
-          schools ban them. Chat tutors never see the written page at all. A
-          marked homework sheet comes back a day later, long after the thinking
-          has gone. Nobody today can look at a student's page and say: your
-          mistake is on line 3, and it is a sign error.
+          Two subjects today, and every topic below is something the app can
+          actually check rather than a heading with nothing behind it.
         </p>
-      </Section>
 
-      {/* ------------------------------------------------------ properties */}
-      <Section style={{ paddingTop: 64, paddingBottom: 64 }}>
-        <Eyebrow>How it works</Eyebrow>
-        <Heading style={{ marginBottom: 36 }}>Three things it does differently</Heading>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: 20,
-          }}
-        >
-          {PROPERTIES.map((property) => (
-            <div
-              key={property.title}
-              style={{
-                padding: 26,
-                background: COLORS.surface,
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: RADIUS.xl,
-              }}
-            >
-              <div
-                style={{
-                  width: 42,
-                  height: 42,
-                  display: "grid",
-                  placeItems: "center",
-                  borderRadius: RADIUS.md,
-                  background: COLORS.primaryLight,
-                  color: COLORS.primary,
-                  fontSize: 20,
-                  marginBottom: 16,
-                }}
-              >
-                {property.glyph}
-              </div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
-                {property.title}
-              </div>
-              <div style={{ fontSize: 14.5, lineHeight: 1.6, color: COLORS.muted }}>
-                {property.body}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      {/* --------------------------------------------------------- subjects */}
-      <Section style={{ paddingTop: 8, paddingBottom: 64 }}>
-        <Eyebrow>What it covers</Eyebrow>
-        <Heading style={{ marginBottom: 36 }}>Pick a subject and start writing</Heading>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-            gap: 20,
+            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            gap: 24,
           }}
         >
           {SUBJECT_AREAS.map((area) => (
             <div
-              key={area.heading}
+              key={area.id}
               style={{
-                padding: 30,
-                background: COLORS.surface,
+                padding: 28,
+                background: COLORS.background,
                 border: `1px solid ${COLORS.border}`,
-                borderRadius: RADIUS.xl,
+                borderRadius: RADIUS.lg,
                 display: "flex",
                 flexDirection: "column",
               }}
             >
-              <div
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <span style={{ color: SUBJECTS[area.id].accent, fontSize: 20 }}>
+                  {SUBJECTS[area.id].glyph}
+                </span>
+                <h3 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{area.heading}</h3>
+              </div>
+              <p
                 style={{
-                  alignSelf: "flex-start",
-                  padding: "5px 12px",
-                  borderRadius: RADIUS.pill,
-                  background: area.tint,
-                  color: area.accent,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  letterSpacing: 0.4,
-                  marginBottom: 16,
+                  margin: "0 0 18px",
+                  fontSize: 15,
+                  lineHeight: 1.55,
+                  color: COLORS.muted,
                 }}
               >
-                {area.heading}
-              </div>
-              <div style={{ fontSize: 19, fontWeight: 700, marginBottom: 18 }}>
                 {area.body}
-              </div>
-              <ul
-                style={{
-                  margin: 0,
-                  marginBottom: 26,
-                  padding: 0,
-                  listStyle: "none",
-                  display: "grid",
-                  gap: 9,
-                }}
-              >
+              </p>
+              <ul style={{ margin: "0 0 24px", padding: 0, listStyle: "none", display: "grid", gap: 10 }}>
                 {area.items.map((item) => (
                   <li
                     key={item}
                     style={{
-                      fontSize: 14.5,
-                      color: COLORS.muted,
                       display: "flex",
                       gap: 10,
+                      fontSize: 15,
                       lineHeight: 1.45,
+                      color: COLORS.text,
                     }}
                   >
-                    <span style={{ color: area.accent, fontWeight: 700 }}>›</span>
+                    <span style={{ color: SUBJECTS[area.id].accent, flexShrink: 0 }}>›</span>
                     {item}
                   </li>
                 ))}
               </ul>
-              <PrimaryButton
+              <Button
+                tone="outline"
                 onClick={() => navigate(area.route)}
-                accent={area.accent}
-                style={{ marginTop: "auto", alignSelf: "flex-start", boxShadow: "none" }}
+                style={{ marginTop: "auto", alignSelf: "flex-start" }}
               >
-                Open {area.heading.toLowerCase()}
-              </PrimaryButton>
+                Start {area.heading.toLowerCase()}
+              </Button>
             </div>
           ))}
         </div>
       </Section>
 
-      {/* -------------------------------------------------------- audiences */}
+      {/* --------------------------------------------------------- how it works */}
+      <Section style={{ paddingTop: 72, paddingBottom: 72 }}>
+        <SectionHeading>How it works</SectionHeading>
+        <div
+          style={{
+            marginTop: 34,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: 48,
+            alignItems: "center",
+          }}
+        >
+          <div style={{ display: "grid", gap: 26 }}>
+            {STEPS.map((step) => (
+              <div key={step.number} style={{ display: "flex", gap: 16 }}>
+                <span
+                  style={{
+                    flexShrink: 0,
+                    width: 34,
+                    height: 34,
+                    display: "grid",
+                    placeItems: "center",
+                    borderRadius: "50%",
+                    background: COLORS.primaryLight,
+                    color: COLORS.primary,
+                    fontWeight: 700,
+                    fontSize: 15,
+                  }}
+                >
+                  {step.number}
+                </span>
+                <div>
+                  <div style={{ fontSize: 17.5, fontWeight: 700, marginBottom: 5 }}>
+                    {step.title}
+                  </div>
+                  <div style={{ fontSize: 15.5, lineHeight: 1.6, color: COLORS.muted }}>
+                    {step.body}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* The gradient panel, with the mark reversed out of it. */}
+          <div
+            style={{
+              minHeight: 300,
+              borderRadius: RADIUS.xl,
+              display: "grid",
+              placeItems: "center",
+              padding: 32,
+              background:
+                "linear-gradient(150deg, var(--v-primary) 0%, var(--v-chem) 100%)",
+              boxShadow: SHADOW.card,
+              color: "#fff",
+              textAlign: "center",
+            }}
+          >
+            <div>
+              <span style={{ color: "#fff", display: "inline-block" }}>
+                <LogoMark size={72} strokeWidth={6} />
+              </span>
+              <div style={{ marginTop: 22, fontSize: 21, fontWeight: 700, lineHeight: 1.35 }}>
+                The engine solves it first
+              </div>
+              <div
+                style={{
+                  marginTop: 10,
+                  fontSize: 15,
+                  lineHeight: 1.6,
+                  opacity: 0.92,
+                  maxWidth: 300,
+                }}
+              >
+                Every verdict you see was decided by software that can prove the
+                chemistry or the algebra, not guessed at. When nothing can prove
+                a step, it says so instead of pretending.
+              </div>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      {/* ------------------------------------------------------------- who for */}
       <Section
         style={{
-          paddingTop: 60,
-          paddingBottom: 60,
+          paddingTop: 64,
+          paddingBottom: 64,
           background: COLORS.surface,
           borderTop: `1px solid ${COLORS.border}`,
           borderBottom: `1px solid ${COLORS.border}`,
         }}
       >
-        <Eyebrow>Who it is for</Eyebrow>
-        <Heading style={{ marginBottom: 34 }}>Built to survive a classroom</Heading>
+        <SectionHeading>Made to be allowed in class</SectionHeading>
         <div
           style={{
+            marginTop: 30,
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: 22,
+            gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+            gap: 28,
           }}
         >
-          {AUDIENCES.map((audience) => (
-            <div key={audience.who}>
-              <div
-                style={{
-                  fontSize: 16,
-                  fontWeight: 700,
-                  marginBottom: 9,
-                  color: COLORS.primary,
-                }}
-              >
-                {audience.who}
+          {[
+            [
+              "For students",
+              "Find the line that broke while the problem is still in your head, instead of the next morning in red pen.",
+            ],
+            [
+              "For teachers",
+              "A student who uses this still has to do the work. Every verdict shows which engine decided it, so a proven check never looks like a guess.",
+            ],
+            [
+              "For tutors",
+              "See where a method goes wrong, not just that a final answer is off. The mistake has a line number and a name.",
+            ],
+          ].map(([who, body]) => (
+            <div key={who}>
+              <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8, color: COLORS.primary }}>
+                {who}
               </div>
-              <div style={{ fontSize: 14.5, lineHeight: 1.65, color: COLORS.muted }}>
-                {audience.body}
-              </div>
+              <div style={{ fontSize: 15.5, lineHeight: 1.65, color: COLORS.muted }}>{body}</div>
             </div>
           ))}
         </div>
       </Section>
 
-      {/* ------------------------------------------------------------ stack */}
-      <Section style={{ paddingTop: 64, paddingBottom: 64 }}>
-        <Eyebrow>Under the hood</Eyebrow>
-        <Heading style={{ marginBottom: 14 }}>The stack</Heading>
-        <p
-          style={{
-            marginTop: 0,
-            marginBottom: 34,
-            maxWidth: 720,
-            fontSize: 16,
-            lineHeight: 1.65,
-            color: COLORS.muted,
-          }}
-        >
-          A model reads the handwriting. It never decides whether the work is
-          right. Where an exact engine can judge a step, the exact engine wins
-          and every verdict carries the name of whichever one spoke.
-        </p>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: 18,
-          }}
-        >
-          {STACK.map((group) => (
-            <div
-              key={group.heading}
-              style={{
-                padding: 22,
-                background: COLORS.surface,
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: RADIUS.lg,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: 1,
-                  textTransform: "uppercase",
-                  color: COLORS.muted,
-                  marginBottom: 12,
-                }}
-              >
-                {group.heading}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-                {group.items.map((item) => (
-                  <span
-                    key={item}
-                    style={{
-                      padding: "5px 11px",
-                      borderRadius: RADIUS.pill,
-                      background: COLORS.background,
-                      border: `1px solid ${COLORS.border}`,
-                      fontSize: 12.5,
-                      color: COLORS.text,
-                    }}
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
+      {/* ----------------------------------------------------------------- faq */}
+      <Section id="faq" style={{ paddingTop: 72, paddingBottom: 72 }} inner={{ maxWidth: 760 }}>
+        <div id="faq" />
+        <SectionHeading style={{ marginBottom: 8 }}>
+          Frequently asked questions
+        </SectionHeading>
+        <div style={{ marginTop: 20 }}>
+          {FAQ.map((item, index) => (
+            <FaqItem
+              key={item.q}
+              item={item}
+              open={openFaq === index}
+              onToggle={() => setOpenFaq(openFaq === index ? -1 : index)}
+            />
           ))}
         </div>
       </Section>
 
-      {/* -------------------------------------------------------------- cta */}
-      <Section style={{ paddingTop: 20, paddingBottom: 84 }}>
+      {/* ----------------------------------------------------------------- cta */}
+      <Section style={{ paddingBottom: 80 }}>
         <div
           style={{
-            padding: "56px 34px",
+            padding: "58px 32px",
             borderRadius: RADIUS.xl,
-            background: SURFACES.sidebar,
-            border: `1px solid ${COLORS.border}`,
+            background: "linear-gradient(150deg, var(--v-primary) 0%, var(--v-chem) 100%)",
+            color: "#fff",
             textAlign: "center",
           }}
         >
-          <Heading style={{ marginBottom: 14 }}>Open it and write something</Heading>
+          <h2 style={{ margin: 0, fontSize: "clamp(26px, 3vw, 34px)", fontWeight: 700 }}>
+            Open a page and write something
+          </h2>
           <p
             style={{
-              margin: "0 auto 28px",
-              maxWidth: 500,
-              fontSize: 16,
+              margin: "14px auto 26px",
+              maxWidth: 460,
+              fontSize: 16.5,
               lineHeight: 1.6,
-              color: COLORS.muted,
+              opacity: 0.94,
             }}
           >
-            No account, no install. A stylus and a tablet browser is the whole
-            setup.
+            A stylus and a browser is the whole setup.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-            <PrimaryButton onClick={() => navigate("/chemistry")} accent={SUBJECTS.chemistry.accent}>
-              Try chemistry
-            </PrimaryButton>
-            <PrimaryButton onClick={() => navigate("/math")} accent={SUBJECTS.math.accent}>
-              Try math
-            </PrimaryButton>
+            <Button
+              onClick={() => navigate("/chemistry")}
+              style={{ background: "#fff", color: COLORS.primary, padding: "14px 26px" }}
+            >
+              Get started with chemistry
+            </Button>
+            <Button
+              onClick={() => navigate("/math")}
+              style={{
+                background: "transparent",
+                color: "#fff",
+                border: "1px solid rgba(255,255,255,0.7)",
+                padding: "14px 26px",
+              }}
+            >
+              Get started with math
+            </Button>
           </div>
         </div>
       </Section>
 
+      {/* -------------------------------------------------------------- footer */}
       <footer
         style={{
-          padding: "26px 24px",
           borderTop: `1px solid ${COLORS.border}`,
           background: COLORS.surface,
+          padding: "48px 24px 32px",
         }}
       >
-        <div
-          style={{
-            maxWidth: MAX_WIDTH,
-            margin: "0 auto",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-            alignItems: "center",
-            fontSize: 13,
-            color: COLORS.muted,
-          }}
-        >
-          <Logo size={22} accent={COLORS.muted} radius={6} />
-          <span>verity.ai</span>
-          <span style={{ marginLeft: "auto" }}>
-            Built for the SAIL programme, 2026.
-          </span>
+        <div style={{ maxWidth: MAX_WIDTH, margin: "0 auto" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: 32,
+              marginBottom: 40,
+            }}
+          >
+            <div>
+              <Logo size={32} showWordmark showTagline />
+            </div>
+            {FOOTER.map((group) => (
+              <div key={group.heading}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    letterSpacing: 0.8,
+                    textTransform: "uppercase",
+                    color: COLORS.muted,
+                    marginBottom: 12,
+                  }}
+                >
+                  {group.heading}
+                </div>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 9 }}>
+                  {group.links.map((link) => (
+                    <li key={link}>
+                      <span style={{ fontSize: 14.5, color: COLORS.text }}>{link}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          <div
+            style={{
+              paddingTop: 22,
+              borderTop: `1px solid ${COLORS.border}`,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              fontSize: 13.5,
+              color: COLORS.muted,
+            }}
+          >
+            <span>verity.ai</span>
+            <span style={{ marginLeft: "auto" }}>Built for the SAIL programme, 2026.</span>
+          </div>
         </div>
       </footer>
     </div>

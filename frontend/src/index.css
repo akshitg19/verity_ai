@@ -10,25 +10,25 @@
 :root {
   color-scheme: light;
 
-  --v-bg: #f7f6f2;
+  --v-bg: #ffffff;
   --v-surface: #ffffff;
-  --v-primary: #315e54;
-  --v-primary-light: #e4f0ed;
-  --v-text: #1f2926;
-  --v-muted: #6f7a76;
-  --v-border: #d9dfdc;
+  --v-primary: #0F6E56;
+  --v-primary-light: #e6f2ee;
+  --v-text: #1b1c1a;
+  --v-muted: #5f5e5a;
+  --v-border: #e3e5e1;
   --v-danger: #c94b4b;
 
-  --v-paper: #faf8f2;
-  --v-sidebar: #f2f1ec;
-  --v-sidebar-active: #e6e9e5;
+  --v-paper: #fbfaf6;
+  --v-sidebar: #f6f6f3;
+  --v-sidebar-active: #eaeee9;
   --v-overlay: rgba(31, 41, 38, 0.35);
   --v-rule: rgba(120, 150, 190, 0.4);
 
-  --v-math: #315e54;
-  --v-math-light: #e4f0ed;
-  --v-chem: #3d5a80;
-  --v-chem-light: #e6edf5;
+  --v-math: #0F6E56;
+  --v-math-light: #e6f2ee;
+  --v-chem: #2E9E7B;
+  --v-chem-light: #e4f5ee;
 
   --v-valid: #267a55;
   --v-valid-bg: #edf8f2;
@@ -50,20 +50,20 @@
      --v-paper under the dark block. */
   --v-ink: #1f2926;
 
-  --v-shadow-card: 0 12px 30px rgba(31, 41, 38, 0.12);
-  --v-shadow-raised: 0 2px 10px rgba(0, 0, 0, 0.04);
-  --v-shadow-float: 0 8px 24px rgba(31, 41, 38, 0.16);
+  --v-shadow-card: 0 10px 30px rgba(27, 28, 26, 0.10);
+  --v-shadow-raised: 0 1px 3px rgba(27, 28, 26, 0.06);
+  --v-shadow-float: 0 8px 24px rgba(27, 28, 26, 0.14);
 
-  --v-focus: #4c8d7d;
+  --v-focus: #0F6E56;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --v-bg: #121614;
-  --v-surface: #1b2120;
-  --v-primary: #7fc3b1;
-  --v-primary-light: #24332f;
+  --v-bg: #0d0f0e;
+  --v-surface: #151917;
+  --v-primary: #4FCB9E;
+  --v-primary-light: #10261f;
   --v-text: #e8ecea;
   --v-muted: #9aa5a1;
   --v-border: #2e3735;
@@ -81,10 +81,10 @@
   --v-overlay: rgba(0, 0, 0, 0.55);
   --v-rule: rgba(90, 120, 160, 0.35);
 
-  --v-math: #7fc3b1;
-  --v-math-light: #24332f;
-  --v-chem: #8fb0d8;
-  --v-chem-light: #222d3a;
+  --v-math: #4FCB9E;
+  --v-math-light: #10261f;
+  --v-chem: #6FDCB4;
+  --v-chem-light: #0f2a22;
 
   /* Re-picked rather than darkened. The four outcomes must stay tellable
      apart -- that is a product rule, not a preference. */
@@ -110,13 +110,20 @@
   --v-shadow-raised: 0 2px 10px rgba(0, 0, 0, 0.35);
   --v-shadow-float: 0 8px 24px rgba(0, 0, 0, 0.5);
 
-  --v-focus: #7fc3b1;
+  --v-focus: #4FCB9E;
 }
 
 html,
 body {
   margin: 0;
   background: var(--v-bg);
+  /* One family everywhere. System UI stacks are what the education sites
+     this is modelled on use, and they render the same weight of text on a
+     Samsung tablet as on a laptop. */
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 /* The notebook disables Safari's text-selection loupe while drawing. Keep
@@ -178,5 +185,11 @@ textarea,
     right: 12px;
     max-width: calc(100vw - 24px) !important;
     box-sizing: border-box;
+  }
+}
+
+@media (max-width: 760px) {
+  .landing-nav {
+    display: none !important;
   }
 }

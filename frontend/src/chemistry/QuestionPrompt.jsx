@@ -36,7 +36,7 @@ export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismis
         border: `1px solid ${COLORS.border}`,
         borderRadius: RADIUS.lg,
         boxShadow: SHADOW.float,
-        fontFamily: "sans-serif",
+        fontFamily: "inherit",
       }}
     >
       <div
@@ -81,7 +81,7 @@ export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismis
             borderRadius: RADIUS.sm,
             fontSize: 13,
             fontWeight: 700,
-            fontFamily: "sans-serif",
+            fontFamily: "inherit",
             cursor: "pointer",
           }}
         >
@@ -98,7 +98,7 @@ export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismis
             border: `1px solid ${COLORS.border}`,
             borderRadius: RADIUS.sm,
             fontSize: 13,
-            fontFamily: "sans-serif",
+            fontFamily: "inherit",
             cursor: "pointer",
           }}
         >

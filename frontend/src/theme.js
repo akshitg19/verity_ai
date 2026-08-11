@@ -91,7 +91,7 @@ export const SHADOW = {
   float: "var(--v-shadow-float)",
 };
 export const FONT = {
-  sans: "sans-serif",
+  sans: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   mono: "ui-monospace, SFMono-Regular, Menlo, monospace",
 };
 

@@ -86,7 +86,7 @@ export default function FeedbackPanel({
             border: `1px solid ${COLORS.border}`,
             borderRadius: RADIUS.pill,
             boxShadow: SHADOW.float,
-            fontFamily: "sans-serif",
+            fontFamily: "inherit",
             fontSize: 13,
             fontWeight: 600,
             cursor: "pointer",
@@ -123,7 +123,7 @@ export default function FeedbackPanel({
             borderRadius: RADIUS.xl,
             boxShadow: SHADOW.card,
             boxSizing: "border-box",
-            fontFamily: "sans-serif",
+            fontFamily: "inherit",
             overflow: "hidden",
           }}
         >

@@ -1,8 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="verity.ai">
-  <!-- The mark is a V that is also a check: the product reads work and marks
-       the line. One shape, both meanings, and it stays legible at 16px. -->
-  <rect width="64" height="64" rx="15" fill="#315e54"/>
-  <path d="M15 25.5 L27.5 45 L49 16"
-        fill="none" stroke="#ffffff" stroke-width="7"
-        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- A radical sign that finishes as a check, with an electron orbit around
+       its vertex: maths and a verdict, and chemistry, in one shape. Reversed
+       out of the brand green so it holds up at 16px in a browser tab. -->
+  <rect width="64" height="64" rx="15" fill="#0F6E56"/>
+  <g transform="translate(32 32) scale(0.78) translate(-32 -32)">
+    <ellipse cx="21" cy="45" rx="16" ry="6.5" fill="none" stroke="#ffffff"
+             stroke-width="3.9" opacity="0.55" transform="rotate(-28 21 45)"/>
+    <path d="M8 34 L21 45 L40 12 L57 12" fill="none" stroke="#ffffff"
+          stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="21" cy="45" r="4.5" fill="#ffffff"/>
+  </g>
 </svg>
