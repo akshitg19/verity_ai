@@ -21,6 +21,14 @@ $SERVICE = "verity-ai"
 $SA_NAME = "verity-ai-run"
 $SA_EMAIL = "$SA_NAME@$PROJECT.iam.gserviceaccount.com"
 
+# The Vercel frontend calls this API cross-origin, so its exact origin has to
+# be allowed by name or every request from it fails preflight and the browser
+# reports nothing more useful than "Failed to fetch". `main.py` defaults this
+# to localhost only, which is right for development and wrong for the deployed
+# pair, and `--set-env-vars` below replaces the whole set rather than adding to
+# it, so leaving this out of the list silently un-fixes it on the next deploy.
+$CORS_ORIGINS = "https://verity-ai-lovat.vercel.app"
+
 # gcloud is a native executable, not a PowerShell cmdlet, so a failure sets
 # $LASTEXITCODE rather than throwing. $ErrorActionPreference does nothing for
 # it. Without this check the script cheerfully carries on after an error and
@@ -111,7 +119,7 @@ gcloud run deploy $SERVICE `
     --memory 1Gi `
     --cpu 1 `
     --timeout 300 `
-    --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=$REGION,GEMINI_MODEL=gemini-2.5-flash"
+    --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=$REGION,GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=$CORS_ORIGINS"
 Assert-Ok "deploying to Cloud Run"
 
 $URL = gcloud run services describe $SERVICE --region $REGION --format="value(status.url)"
