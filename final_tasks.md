@@ -1657,6 +1657,45 @@ including one asserting an unrelated origin is still refused.
 - Vertex AI quota is shared across the whole `cs-sail-2b08` project, which
   is the programme's project, not ours. Unmeasured, and outside our control
 
+### Deploying itself on a push — Aug 11
+
+The gap nobody had written down: **Vercel redeploys the frontend on every
+merge and Cloud Run did not.** So any pull request touching `backend/` was
+live only if somebody remembered to run a script, and "the site is broken"
+and "nobody ran the script" look identical from the outside. That is what
+made this feel like a recurring bug rather than a missing step.
+
+`cloudbuild.yaml` is now the single definition of a deploy, and `deploy.ps1`
+submits it rather than carrying its own copy of the flags. Running the
+script by hand and pushing to main therefore produce an identical revision.
+Two copies of a deploy configuration drift silently until the day they
+matter, so there is only one.
+
+**One-time setup, and it needs a browser once.** The GitHub connection
+cannot be made from the CLI:
+
+1. <https://console.cloud.google.com/cloud-build/triggers?project=cs-sail-2b08>
+2. Connect Repository, pick GitHub, authorise, choose `akshitg19/verity_ai`
+3. Then, from a terminal:
+
+```powershell
+gcloud builds triggers create github `
+    --name verity-ai-main `
+    --region us-central1 `
+    --repo-owner akshitg19 `
+    --repo-name verity_ai `
+    --branch-pattern "^main$" `
+    --build-config cloudbuild.yaml `
+    --substitutions _TAG='$SHORT_SHA'
+```
+
+After that, a merge to main deploys the backend by itself and nobody needs
+`gcloud` on a laptop for anything.
+
+- [ ] GitHub connected in the Cloud Build console
+- [ ] Trigger created and seen to fire once
+- [ ] Confirm the deployed revision matches the merge commit
+
 ### Known deployment caveats
 
 - **Sessions are in-memory.** Fine at `--max-instances 1`. If that ever rises,
