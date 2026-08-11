@@ -94,7 +94,7 @@ def math_request_for(session, level: int, **overrides) -> HintRequest:
 # ---------------------------------------------------------------------------
 
 
-def test_math_hints_still_come_from_the_templates(monkeypatch):
+def test_math_without_a_session_uses_static_fallback(monkeypatch):
     monkeypatch.setattr(
         hints, "is_configured", lambda: pytest.fail("math must not call a model")
     )
@@ -133,6 +133,7 @@ def test_hint_request_accepts_math_topic():
 
     assert request.subject == "math"
     assert request.topic == "algebra"
+
 
 # ---------------------------------------------------------------------------
 # Falling back rather than failing
