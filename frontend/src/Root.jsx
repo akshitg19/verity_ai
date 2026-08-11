@@ -1,4 +1,5 @@
 import App from "./App";
+import ErrorBoundary from "./ErrorBoundary";
 import Landing from "./landing/Landing";
 import useRoute from "./router";
 import useTheme from "./useTheme";
@@ -12,13 +13,24 @@ export default function Root() {
   const theme = useTheme();
 
   useEffect(() => {
+    // No em dashes. Standing rule in this repo for anything a student reads,
+    // and a browser tab is read more often than most of the app.
     document.title = route === "/"
-      ? "verity.ai — Homework, thought through"
+      ? "verity.ai: homework, thought through"
       : route === "/math"
-      ? "Math workspace — verity.ai"
-      : "Chemistry workspace — verity.ai";
+      ? "Math workspace: verity.ai"
+      : "Chemistry workspace: verity.ai";
   }, [route]);
 
-  if (route === "/") return <Landing theme={theme} />;
-  return <App theme={theme} subject={route === "/math" ? "math" : "chemistry"} />;
+  // Wrapping both routes, because a crash on the landing page and a crash in
+  // the workspace are equally invisible without it.
+  return (
+    <ErrorBoundary>
+      {route === "/" ? (
+        <Landing theme={theme} />
+      ) : (
+        <App theme={theme} subject={route === "/math" ? "math" : "chemistry"} />
+      )}
+    </ErrorBoundary>
+  );
 }
