@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { COLORS, FONT, RADIUS, SHADOW, SUBJECTS, SURFACES } from "../theme";
+import PageThumbnail from "./PageThumbnail";
 import RowMenu from "./RowMenu";
 
 // The notes shelf, built the way a notes app is built.
@@ -94,6 +95,13 @@ function NoteRow({
   return (
     <div
       onClick={() => !editing && onOpen(note.id)}
+      // Dragging a note onto a folder is what people try before they find the
+      // menu, so the menu stays and this is the shortcut on top of it.
+      draggable={!editing}
+      onDragStart={(event) => {
+        event.dataTransfer.setData("text/verity-note", note.id);
+        event.dataTransfer.effectAllowed = "move";
+      }}
       style={{
         display: "flex",
         alignItems: "center",
@@ -182,20 +190,38 @@ function NoteRow({
   );
 }
 
-function FolderRow({ folder, children, count, onRename, onDelete, onCreateIn }) {
+function FolderRow({ folder, children, count, onRename, onDelete, onCreateIn, onDropNote }) {
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [over, setOver] = useState(false);
 
   return (
     <div style={{ marginBottom: 2 }}>
       <div
         onClick={() => !editing && setOpen((value) => !value)}
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes("text/verity-note")) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(event) => {
+          const noteId = event.dataTransfer.getData("text/verity-note");
+          setOver(false);
+          if (!noteId) return;
+          event.preventDefault();
+          onDropNote(noteId, folder.id);
+          setOpen(true);
+        }}
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
           padding: "8px 8px 8px 6px",
           borderRadius: RADIUS.md,
+          background: over ? COLORS.primaryLight : "transparent",
+          outline: over ? `2px dashed ${COLORS.primary}` : "none",
           cursor: "pointer",
         }}
       >
@@ -462,6 +488,7 @@ export default function NotebookSidebar({
               onRename={renameFolder}
               onDelete={deleteFolder}
               onCreateIn={(folderId) => createNote(subject, undefined, folderId)}
+              onDropNote={moveNoteToFolder}
             >
               {folder.notes.length ? (
                 folder.notes.map((note) => (
@@ -560,21 +587,22 @@ export default function NotebookSidebar({
                     type="button"
                     aria-label={`Open page ${index + 1}`}
                     aria-current={current ? "page" : undefined}
+                    title={`Page ${index + 1}`}
                     onClick={() => openPage(page.id)}
                     style={{
-                      width: 32,
-                      height: 40,
+                      width: 38,
+                      height: 48,
+                      padding: 2,
                       borderRadius: 6,
                       border: `1px solid ${current ? meta.accent : COLORS.border}`,
                       background: current ? COLORS.surface : COLORS.background,
                       color: current ? meta.accent : COLORS.muted,
-                      fontSize: 11,
-                      fontWeight: current ? 700 : 500,
                       cursor: "pointer",
                       boxShadow: current ? SHADOW.raised : "none",
+                      overflow: "hidden",
                     }}
                   >
-                    {index + 1}
+                    <PageThumbnail strokes={page.strokes} label={index + 1} />
                   </button>
                   {activeNote.pages.length > 1 && (
                     <button

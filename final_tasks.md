@@ -766,13 +766,13 @@ and undocks rather than permanently owning a column.
 | [x] | Empty page says what to do, and stops once you write | The first screen a student sees was a blank sheet with no invitation |
 | [x] | Keyboard shortcuts: undo, redo, toggle the shelf | Teachers will look at this on a laptop |
 | [x] | Panel prose cut back | Six status strings and two paragraphs that said what the screen already showed |
+| [x] | Page thumbnails instead of numbered squares | "The one with the long division on it" is how people pick a page |
+| [x] | Drag a note onto a folder | What people try before they find the menu |
 
 ### Next, in rough order of how much they are worth
 
 | Done | Change | Detail |
 |------|---|---|
-| [ ] | Drag a note into a folder | The menu covers it; dragging is what people try first |
-| [ ] | Page thumbnails instead of numbered squares | Render the strokes small. A student picks a page by what is on it |
 | [ ] | Undo and redo as a two-finger tap and a three-finger tap | The iPad gesture. Undo already exists, only the gesture is missing |
 | [ ] | Pinch to zoom the page | The single most requested thing in every notes app review |
 | [ ] | A highlighter | Pen, highlighter, eraser is the whole toolset the research says to offer |
