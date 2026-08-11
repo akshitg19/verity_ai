@@ -1636,8 +1636,23 @@ Fixed with `CORS_ORIGIN_REGEX` in `main.py`, defaulting to
 survives redeploys, and pinned by five tests in `tests/test_api.py`
 including one asserting an unrelated origin is still refused.
 
-**Requires a redeploy to take effect.** Until `.\deploy.ps1` runs, only
-`verity-ai-lovat.vercel.app` works.
+**Deployed and verified Aug 11**, revision `verity-ai-00013-pzm`. Preflights
+re-sent against the live service afterwards:
+
+| Origin | Before | After |
+|---|---|---|
+| `verity-ai-lovat.vercel.app` | 200 | 200 |
+| `verity-ai-git-main-akshitg19.vercel.app` | 400 | 200 |
+| `verity-ai-<hash>-akshitg19.vercel.app` | 400 | 200 |
+| an unrelated origin | 400 | 400, still refused |
+
+A real `/chemistry/stoichiometry` call from a preview origin now succeeds,
+and level 1 hints still generate, so nothing regressed alongside the fix.
+
+Note the deploy printed a second hostname, `verity-ai-ypyvehasxq-uc.a.run.app`.
+Cloud Run serves both that and the `verity-ai-389644353290.us-central1.run.app`
+form for the same service; both were checked and both answer. Everything in
+this repo references the second, which is fine and needs no change.
 
 ### Standing settings for a link that is always up — Aug 11
 
