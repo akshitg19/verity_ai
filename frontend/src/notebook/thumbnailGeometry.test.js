@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { thumbnailPaths } from "./pageThumbnail";
+import { thumbnailPaths } from "./thumbnailGeometry";
 
 const stroke = (points, color) => ({ points, color });
 

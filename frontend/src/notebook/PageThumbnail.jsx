@@ -1,5 +1,5 @@
 import { COLORS } from "../theme";
-import { thumbnailPaths, VIEW_HEIGHT, VIEW_WIDTH } from "./pageThumbnail";
+import { thumbnailPaths, VIEW_HEIGHT, VIEW_WIDTH } from "./thumbnailGeometry";
 
 // A page, drawn small.
 //
