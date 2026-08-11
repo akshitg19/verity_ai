@@ -69,6 +69,18 @@ const field = (name, label, extra = {}) => ({
   ...extra,
 });
 
+// A field a student can write on the page instead of typing into the panel.
+//
+// `ink` is the verb the popover offers, so it reads as the thing they just
+// wrote: "Use as formula" beside a formula, "Use as equation" beside an
+// equation. A generic "Use as question" everywhere was the old behaviour and
+// it is vague exactly where the student needs to be sure.
+//
+// The panel field stays either way. It stops being the way in and becomes the
+// correction surface for when the handwriting was misread.
+const inkField = (name, label, ink, extra = {}) =>
+  field(name, label, { ...extra, ink });
+
 // Each problem type declares the fields its judge needs, how to turn those
 // fields into a check request, and -- where the backend can solve it -- how
 // to open a session so the hint ladder gets an answer vault.
@@ -84,37 +96,42 @@ export const TOPICS = [
       {
         id: "molar_mass",
         label: "Molar mass",
-        fields: [field("formula", "Formula", { placeholder: "H2SO4" })],
+        answerUnit: "g/mol",
+        fields: [inkField("formula", "Formula", "formula", { placeholder: "H2SO4" })],
       },
       {
         id: "percent_composition",
         label: "Percent composition",
+        answerUnit: "%",
         fields: [
-          field("formula", "Formula", { placeholder: "C6H12O6" }),
-          field("element", "Element (optional)", { placeholder: "C" }),
+          inkField("formula", "Formula", "formula", { placeholder: "C6H12O6" }),
+          inkField("element", "Element (optional)", "element", { placeholder: "C" }),
         ],
       },
       {
         id: "moles_from_mass",
         label: "Moles from mass",
+        answerUnit: "mol",
         fields: [
-          field("formula", "Formula", { placeholder: "H2O" }),
-          field("mass_g", "Mass (g)", { placeholder: "36.03" }),
+          inkField("formula", "Formula", "formula", { placeholder: "H2O" }),
+          inkField("mass_g", "Mass (g)", "mass", { placeholder: "36.03" }),
         ],
       },
       {
         id: "mass_from_moles",
         label: "Mass from moles",
+        answerUnit: "g",
         fields: [
-          field("formula", "Formula", { placeholder: "NaCl" }),
-          field("moles", "Moles", { placeholder: "0.25" }),
+          inkField("formula", "Formula", "formula", { placeholder: "NaCl" }),
+          inkField("moles", "Moles", "amount in moles", { placeholder: "0.25" }),
         ],
       },
       {
         id: "empirical_formula",
         label: "Empirical formula",
+        // No unit: the answer is a formula, not a quantity.
         fields: [
-          field("composition", "Composition by mass %", {
+          inkField("composition", "Composition by mass %", "composition", {
             placeholder: "C: 40.0, H: 6.7, O: 53.3",
           }),
         ],
@@ -123,37 +140,44 @@ export const TOPICS = [
         id: "molecular_formula",
         label: "Molecular formula",
         fields: [
-          field("composition", "Composition by mass %", {
+          inkField("composition", "Composition by mass %", "composition", {
             placeholder: "C: 40.0, H: 6.7, O: 53.3",
           }),
-          field("target_molar_mass", "Molar mass (g/mol)", { placeholder: "180" }),
+          inkField("target_molar_mass", "Molar mass (g/mol)", "molar mass", {
+            placeholder: "180",
+          }),
         ],
       },
       {
         id: "limiting_reagent",
         label: "Limiting reagent",
+        // No unit: the answer is a species.
         fields: [
-          field("equation", "Equation", { placeholder: "N2 + H2 -> NH3" }),
-          field("amounts", "Amounts (g)", { placeholder: "N2: 28.0, H2: 6.0" }),
+          inkField("equation", "Equation", "equation", { placeholder: "N2 + H2 -> NH3" }),
+          inkField("amounts", "Amounts (g)", "amounts", { placeholder: "N2: 28.0, H2: 6.0" }),
         ],
       },
       {
         id: "theoretical_yield",
         label: "Theoretical yield",
+        answerUnit: "g",
         fields: [
-          field("equation", "Equation", { placeholder: "N2 + H2 -> NH3" }),
-          field("amounts", "Amounts (g)", { placeholder: "N2: 28.0, H2: 6.0" }),
-          field("product", "Product", { placeholder: "NH3" }),
+          inkField("equation", "Equation", "equation", { placeholder: "N2 + H2 -> NH3" }),
+          inkField("amounts", "Amounts (g)", "amounts", { placeholder: "N2: 28.0, H2: 6.0" }),
+          inkField("product", "Product", "product", { placeholder: "NH3" }),
         ],
       },
       {
         id: "percent_yield",
         label: "Percent yield",
+        answerUnit: "%",
         fields: [
-          field("equation", "Equation", { placeholder: "N2 + H2 -> NH3" }),
-          field("amounts", "Amounts (g)", { placeholder: "N2: 28.0, H2: 6.0" }),
-          field("product", "Product", { placeholder: "NH3" }),
-          field("actual_yield_g", "Actual yield (g)", { placeholder: "25.0" }),
+          inkField("equation", "Equation", "equation", { placeholder: "N2 + H2 -> NH3" }),
+          inkField("amounts", "Amounts (g)", "amounts", { placeholder: "N2: 28.0, H2: 6.0" }),
+          inkField("product", "Product", "product", { placeholder: "NH3" }),
+          inkField("actual_yield_g", "Actual yield (g)", "actual yield", {
+            placeholder: "25.0",
+          }),
         ],
       },
     ],
@@ -585,22 +609,51 @@ export function describeProblem(topic, type, values) {
   return `${topic.label} - ${type.label}${parts.length ? ` (${parts.join(", ")})` : ""}`;
 }
 
-// Which field a question written on the page fills in.
+// Which field a line written on the page fills in.
 //
-// Deliberately narrow. For an equation topic the transcribed line *is* the
-// question, so this is a direct assignment and nothing has to be parsed. The
-// numeric topics need "What is the pH of 0.100 M acetic acid, Ka = 1.8e-5"
-// turned into {task, concentration_m, ka}, which is a different and much
-// larger problem; until that is solved they keep the typed fields and this
-// returns null, so the popover never offers something that cannot work.
+// This used to be two field names on equation topics only, on the reasoning
+// that a numeric topic would need "What is the pH of 0.100 M acetic acid,
+// Ka = 1.8e-5" parsed into {task, concentration_m, ka}, which is a much
+// larger problem. That reasoning was wrong about what a student writes. They
+// do not write a sentence, they write `H2SO4`, and the topic is already
+// chosen from the selector, so the line maps to one field with nothing to
+// parse. Prose parsing is still unsolved and still not needed here.
+//
+// Every field carrying an `ink` verb is offered, **in declaration order, and
+// only while it is still empty**. A student writes the equation on one line
+// and the amounts on the next, so the popover has to offer the field that is
+// still missing rather than always the first one.
 const WRITTEN_QUESTION_FIELDS = ["reference_equation", "molecular_equation"];
 
-export function questionFieldFor(topic, type) {
-  if (inputModeFor(topic, type) !== "equation") return null;
-  const match = type.fields.find((entry) =>
-    WRITTEN_QUESTION_FIELDS.includes(entry.name)
+export function questionFieldFor(topic, type, values = {}) {
+  // Equation topics keep working exactly as they did, by field name, so the
+  // behaviour that has been in front of students is not disturbed by the
+  // widening below.
+  if (inputModeFor(topic, type) === "equation") {
+    const match = type.fields.find((entry) =>
+      WRITTEN_QUESTION_FIELDS.includes(entry.name)
+    );
+    return match?.name ?? null;
+  }
+  const next = type.fields.find(
+    (entry) => entry.ink && !String(values[entry.name] ?? "").trim()
   );
-  return match?.name ?? null;
+  return next?.name ?? null;
+}
+
+// The verb the popover offers for whichever field is next, so the offer names
+// the thing the student just wrote rather than saying "question" every time.
+export function questionVerbFor(topic, type, values = {}) {
+  const name = questionFieldFor(topic, type, values);
+  if (!name) return null;
+  const match = type.fields.find((entry) => entry.name === name);
+  return match?.ink ?? "question";
+}
+
+// The unit printed beside the answer box rather than typed into it. Null
+// where the answer genuinely has no unit: a formula, a species, a pH.
+export function answerUnitFor(type) {
+  return type?.answerUnit ?? null;
 }
 
 export function isProblemReady(type, values) {

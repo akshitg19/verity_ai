@@ -18,9 +18,23 @@ export function buildChemistrySteps(lines) {
   }));
 }
 
-export function chemistryStepLines(lines, questionRow = null) {
+// The working, which is every readable row that is not part of the question.
+//
+// `questionRows` takes a single row or several. A one-field type like molar
+// mass consumes one written row; percent yield consumes four, because the
+// equation, the amounts, the product and the actual yield are each written on
+// their own line. All of them are the question and none of them are working.
+export function chemistryStepLines(lines, questionRows = null) {
+  const excluded =
+    questionRows instanceof Set
+      ? questionRows
+      : new Set(
+          (Array.isArray(questionRows) ? questionRows : [questionRows]).filter(
+            (row) => row !== null && row !== undefined
+          )
+        );
   return readableChemistryLines(
-    orderedChemistryLines(lines).filter((line) => line.row !== questionRow)
+    orderedChemistryLines(lines).filter((line) => !excluded.has(line.row))
   );
 }
 

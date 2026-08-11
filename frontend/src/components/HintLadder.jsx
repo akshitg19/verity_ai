@@ -45,6 +45,16 @@ const NEXT_LABELS = {
   2: "Walk me through my step",
 };
 
+// How many hints remain on this line, keyed by the level already taken. The
+// wording gets shorter and firmer as they run out, because the point is that
+// the help is finite and the student is going to finish this themselves.
+const HINTS_LEFT = {
+  0: "3 hints for this line",
+  1: "2 more hints",
+  2: "Last hint",
+  3: "That was the last hint. The rest is yours",
+};
+
 // What is being fetched, by the level being fetched. This used to be the one
 // string "Working through a fresh example", which announced level 2 while
 // level 1 was still loading and told the student the wrong thing about what
@@ -60,7 +70,6 @@ export default function HintLadder({
   hint,
   workedExample,
   terminalStep,
-  levelThreeRemaining,
   source,
   resource,
   error,
@@ -71,7 +80,6 @@ export default function HintLadder({
 }) {
   const atTop = level >= 3;
   const nextLabel = NEXT_LABELS[level] ?? "Show another hint";
-  const spendsBudget = level === 2 && !terminalStep;
   const [open, setOpen] = useState(readHintsOpen);
   const hintRef = useRef(null);
   const safeResource = safeHintResourceUrl(resource);
@@ -318,25 +326,31 @@ export default function HintLadder({
         </button>
       )}
 
-      {typeof levelThreeRemaining === "number" && (
-        // Shown before it is spent, not after. A student deciding whether to
-        // escalate should know what it costs.
-        <div
-          style={{
-            marginTop: 8,
-            fontSize: 11,
-            color: COLORS.muted,
-            textAlign: "center",
-          }}
-        >
-          {levelThreeRemaining > 0
-            ? `${levelThreeRemaining} walk-through${
-                levelThreeRemaining === 1 ? "" : "s"
-              } left for this problem`
-            : "No walk-throughs left for this problem"}
-          {spendsBudget && levelThreeRemaining > 0 && " · the next one uses one"}
-        </div>
-      )}
+      {/* How many hints are left on this line.
+       *
+       * This used to print `level_3_remaining` from the session, which is a
+       * real server-side counter for a mechanism that is currently switched
+       * off: `hints.spend_level_3` only runs when WITHHOLD_ANSWER is on, and
+       * it is not. So it sat at "3 walk-throughs left for this problem" and
+       * never moved, including after the student had taken all three hints.
+       * A counter that does not count is worse than no counter, because it
+       * teaches the student to ignore the one place we warn them.
+       *
+       * So this counts the ladder itself, which is enforced and visible:
+       * three hints per line, each a different kind of help, and the last one
+       * is the last one. If the budget is ever re-armed, this is the place to
+       * bring `levelThreeRemaining` back, and it will mean something then. */}
+      <div
+        style={{
+          marginTop: 8,
+          fontSize: 12,
+          fontWeight: atTop ? 700 : 600,
+          color: atTop ? "var(--v-unsupported)" : COLORS.muted,
+          textAlign: "center",
+        }}
+      >
+        {HINTS_LEFT[level] ?? HINTS_LEFT[0]}
+      </div>
     </div>
   );
 }

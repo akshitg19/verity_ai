@@ -192,6 +192,7 @@ export default function App({ theme: themeFromRoute, subject }) {
                 (line) => line.row === chemistry.questionCandidateRow
               )?.text
             }
+            verb={chemistry.questionVerb}
             onUseAsQuestion={() =>
               chemistry.useRowAsQuestion(chemistry.questionCandidateRow)
             }

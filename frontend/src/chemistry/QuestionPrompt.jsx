@@ -12,7 +12,17 @@ const GAP = 12;
 // A student's first instinct is to write the question on the page, and making
 // them type it into a panel instead puts a seam down the middle of a
 // handwriting app.
-export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismiss }) {
+export default function QuestionPrompt({
+  bounds,
+  text,
+  // The verb for whichever field this line would fill: "formula",
+  // "equation", "amounts". It used to say "question" for everything, which
+  // is vague exactly where the student needs to be sure what they are
+  // agreeing to, and wrong on a type that takes several written lines.
+  verb = "question",
+  onUseAsQuestion,
+  onDismiss,
+}) {
   const promptRef = useRef(null);
   const restoreFocusRef = useRef(null);
   const [position, setPosition] = useState({ top: 8, left: 8 });
@@ -60,7 +70,7 @@ export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismis
       role="dialog"
       aria-modal="false"
       aria-describedby="question-prompt-copy"
-      aria-label="Use this line as the question"
+      aria-label={`Use this line as the ${verb}`}
       style={{
         position: "absolute",
         top: position.top,
@@ -90,7 +100,7 @@ export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismis
           marginBottom: 5,
         }}
       >
-        Is this the question?
+        {verb === "question" ? "Is this the question?" : `Is this the ${verb}?`}
       </div>
       <div
         style={{
@@ -126,7 +136,7 @@ export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismis
             cursor: "pointer",
           }}
         >
-          Use as question
+          {verb === "question" ? "Use as question" : `Use as ${verb}`}
         </button>
         <button
           type="button"
