@@ -28,6 +28,20 @@ substitutions:
   # which the browser reports only as "Failed to fetch". Single-quoted so YAML
   # leaves the backslashes alone.
   _CORS_ORIGIN_REGEX: 'https://verity-ai[a-z0-9-]*\.vercel\.app'
+  # Optional shared-secret header, empty and therefore off. It has to live in
+  # the deploy config rather than being set out of band, because the deploy
+  # below uses --set-env-vars, which replaces the whole environment: a value
+  # applied by hand would be wiped by the next push, which is exactly the
+  # class of bug this file exists to end.
+  #
+  # To turn it on, set _API_SECRET on the trigger and VITE_API_SECRET on the
+  # Vercel build to the same value. Note that a substitution is readable by
+  # anyone who can read the trigger in this shared project, and that the value
+  # also ships inside the frontend bundle, so this is a speed bump against
+  # crawlers and forwarded links, not authentication. If it ever needs to be
+  # a real secret, move it to Secret Manager and use --set-secrets, which is
+  # a separate flag and so is not wiped by --set-env-vars.
+  _API_SECRET: ''
 
 options:
   # Required when the build runs as a service account rather than the legacy
@@ -39,9 +53,11 @@ options:
 # 10 minute default is not enough for a cold one.
 timeout: 1800s
 
-images:
-  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${_TAG}'
-  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest'
+# Note there is deliberately no top-level `images:` block. That field pushes
+# after every step has finished, which is too late: the deploy step below
+# needs the image to already be in the registry, and the first run of this
+# file failed for exactly that reason. The push is its own step instead, so
+# the ordering is visible rather than implied.
 
 steps:
   - id: build
@@ -53,6 +69,13 @@ steps:
       - '-t'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest'
       - '.'
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}'
 
   # Deploying by image digest rather than `--source` keeps the built artifact
   # and the deployed revision provably the same thing.
@@ -85,4 +108,4 @@ steps:
       - '--timeout=300'
       # This replaces the whole environment rather than adding to it, so every
       # variable the service needs has to be named here every time.
-      - '--set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=${_CORS_ORIGINS},CORS_ORIGIN_REGEX=${_CORS_ORIGIN_REGEX}'
+      - '--set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=${_CORS_ORIGINS},CORS_ORIGIN_REGEX=${_CORS_ORIGIN_REGEX},VERITY_API_SECRET=${_API_SECRET}'

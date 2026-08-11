@@ -1636,8 +1636,23 @@ Fixed with `CORS_ORIGIN_REGEX` in `main.py`, defaulting to
 survives redeploys, and pinned by five tests in `tests/test_api.py`
 including one asserting an unrelated origin is still refused.
 
-**Requires a redeploy to take effect.** Until `.\deploy.ps1` runs, only
-`verity-ai-lovat.vercel.app` works.
+**Deployed and verified Aug 11**, revision `verity-ai-00013-pzm`. Preflights
+re-sent against the live service afterwards:
+
+| Origin | Before | After |
+|---|---|---|
+| `verity-ai-lovat.vercel.app` | 200 | 200 |
+| `verity-ai-git-main-akshitg19.vercel.app` | 400 | 200 |
+| `verity-ai-<hash>-akshitg19.vercel.app` | 400 | 200 |
+| an unrelated origin | 400 | 400, still refused |
+
+A real `/chemistry/stoichiometry` call from a preview origin now succeeds,
+and level 1 hints still generate, so nothing regressed alongside the fix.
+
+Note the deploy printed a second hostname, `verity-ai-ypyvehasxq-uc.a.run.app`.
+Cloud Run serves both that and the `verity-ai-389644353290.us-central1.run.app`
+form for the same service; both were checked and both answer. Everything in
+this repo references the second, which is fine and needs no change.
 
 ### Standing settings for a link that is always up — Aug 11
 
@@ -1695,6 +1710,38 @@ After that, a merge to main deploys the backend by itself and nobody needs
 - [ ] GitHub connected in the Cloud Build console
 - [ ] Trigger created and seen to fire once
 - [ ] Confirm the deployed revision matches the merge commit
+
+### The shared-secret header — built Aug 11, off
+
+`VERITY_API_SECRET` on the service and `VITE_API_SECRET` on the Vercel build.
+When both are set to the same value, every API call must carry it in
+`X-Verity-Key` or the request is a 401. Unset, which is how it ships, nothing
+changes at all.
+
+Deliberately not protected, and each for a reason that bites if forgotten:
+`/health`, because Cloud Run probes it with no headers of ours and would kill
+the revision; `OPTIONS`, because a preflight carries no custom headers by
+definition and rejecting it makes the browser report a CORS failure instead
+of the real one; and the frontend itself, which is served from the same
+process and must stay reachable. `tests/test_api_secret.py` pins all three.
+
+The protected set is built from the app's own routes rather than a hand
+written list, so a new endpoint is covered the day it is added.
+
+**What it is worth, plainly.** The frontend has to know the value to send it,
+and the frontend is JavaScript delivered to a browser, so anyone who opens
+developer tools can read it. It stops a crawler and a casually forwarded
+link from spending Vertex AI quota on the shared programme project. It is
+not authentication and must never be described as any. Real authentication
+means accounts.
+
+It lives in `cloudbuild.yaml` as the `_API_SECRET` substitution rather than
+being applied by hand, because the deploy uses `--set-env-vars`, which
+replaces the whole environment: a value set out of band would be wiped by the
+next push. If it ever needs to be a real secret, move it to Secret Manager
+and use `--set-secrets`, which is a separate flag and is not wiped.
+
+- [ ] Decide whether to turn it on before the link goes anywhere public
 
 ### Known deployment caveats
 
