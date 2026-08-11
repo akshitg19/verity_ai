@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { COLORS, FONT, RADIUS, SHADOW, SUBJECTS, SURFACES } from "../theme";
+import { exportPage } from "../canvas/exportPage";
 import PageThumbnail from "./PageThumbnail";
 import RowMenu from "./RowMenu";
 
@@ -574,9 +575,42 @@ export default function NotebookSidebar({
             }}
           >
             Pages
-            <span style={{ marginLeft: "auto", textTransform: "none", fontWeight: 500 }}>
+            <span
+              style={{
+                marginLeft: "auto",
+                maxWidth: 120,
+                textTransform: "none",
+                fontWeight: 500,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
               {activeNote.title}
             </span>
+            <button
+              type="button"
+              title="Save this page as a picture"
+              aria-label="Save this page as a picture"
+              onClick={() =>
+                exportPage(
+                  activePage.strokes,
+                  activeNote.title,
+                  activeNote.pages.findIndex((page) => page.id === activePage.id) + 1
+                )
+              }
+              style={{
+                border: "none",
+                background: "transparent",
+                color: COLORS.muted,
+                fontSize: 13,
+                lineHeight: 1,
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              ⤓
+            </button>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
             {activeNote.pages.map((page, index) => {

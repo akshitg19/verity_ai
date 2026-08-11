@@ -770,6 +770,7 @@ and undocks rather than permanently owning a column.
 | [x] | Drag a note onto a folder | What people try before they find the menu |
 | [x] | The worked example is its own card, not nested in the hint bubble | A stepper, an equation and a row of atom counts were squeezed into a box sized for two sentences |
 | [x] | Step progress is a bar, and each step arrives rather than swapping | The dots duplicated the counter and nothing moved between steps |
+| [x] | Save a page as a picture | The reason students screenshot their notes, and a screenshot of a scrolling canvas is always the wrong crop |
 
 ### Next, in rough order of how much they are worth
 
@@ -780,7 +781,7 @@ and undocks rather than permanently owning a column.
 | [ ] | A highlighter | Pen, highlighter, eraser is the whole toolset the research says to offer |
 | [ ] | Ruled, squared and blank paper | One CSS-variable swap plus the canvas grid draw |
 | [ ] | Swipe left on a note row to delete | Standard on both platforms |
-| [ ] | Export a page as PNG or PDF | The reason students screenshot their notes |
+| [ ] | Export a whole note as a PDF | The page export exists; a multi-page one does not |
 | [ ] | The drawer resizable by dragging its edge | The stylus research calls out dockable, resizable result panels by name |
 | [ ] | More keyboard shortcuts: new note, search, next page | Three exist; these are the next three |
 | [ ] | Make the tab draggable, not only tappable | Half a swipe should half-open the drawer |
