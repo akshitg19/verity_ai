@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { COLORS, RADIUS, SHADOW, SUBJECTS } from "../theme";
 import Logo from "./Logo";
 import PageStrip from "../notebook/PageStrip";
+import { navigate } from "../router";
 
 const PEN_WIDTHS = [
   { label: "Extra thin", value: 1.5 },
@@ -230,7 +231,21 @@ export default function WorkspaceToolbar({
       </button>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 150 }}>
-        <Logo size={34} accent={SUBJECTS[mode].accent} />
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          title="Back to verity.ai"
+          aria-label="Back to the verity.ai home page"
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            display: "flex",
+            cursor: "pointer",
+          }}
+        >
+          <Logo size={34} accent={SUBJECTS[mode].accent} />
+        </button>
         <div style={{ minWidth: 0 }}>
           <div
             title={notebook.activeNote.title}
