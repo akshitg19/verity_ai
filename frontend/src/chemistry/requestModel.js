@@ -1,8 +1,6 @@
 import { openSession, transcribeStructure } from "../api";
 import { renderLineToPng } from "../canvas/render";
 
-const sessionPromises = new Map();
-
 function sessionFingerprint(payload) {
   return JSON.stringify(payload ?? {});
 }
@@ -27,19 +25,18 @@ export async function openCurrentSession(
   isCurrent,
   { open = openSession, signal } = {}
 ) {
-  const key = sessionFingerprint(payload);
-  let promise = sessionPromises.get(key);
-  if (!promise) {
-    promise = Promise.resolve().then(() => open(payload, { signal }));
-    sessionPromises.set(key, promise);
-    void promise.then(() => undefined, () => undefined).then(() => {
-      if (sessionPromises.get(key) === promise) sessionPromises.delete(key);
-    });
-  }
-  const result = await promise;
+  // Session ownership belongs to the page-level hook. A module-global promise
+  // cannot know which page owns its AbortSignal: a second page could abort the
+  // first page's request and then receive the already-aborted promise. The
+  // hook may still share one in-flight request for identical inputs, but this
+  // low-level helper always creates an independently cancellable request.
+  const result = await Promise.resolve().then(() => open(payload, { signal }));
   return isCurrent() ? result : null;
 }
 
 export function clearSessionCache() {
-  sessionPromises.clear();
+  // Kept as a compatibility no-op for callers that used to clear the global
+  // cache. There is intentionally no process-wide session cache now.
 }
+
+export { sessionFingerprint };

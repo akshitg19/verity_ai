@@ -141,6 +141,91 @@ textarea,
   outline-offset: 2px;
 }
 
+/* On wide screens the feedback column is a real layout column. The canvas
+   receives the remaining rectangle, so feedback cannot cover the writing
+   surface or alter pointer coordinates after a resize. */
+@media (min-width: 1101px) {
+  .workspace-app {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 376px;
+    align-items: stretch;
+  }
+
+  .workspace-app .canvas-surface {
+    grid-column: 1;
+    width: auto !important;
+    min-width: 0;
+  }
+
+  .feedback-dock {
+    grid-column: 2;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+    padding: 88px 16px 16px 0;
+  }
+
+  .feedback-dock .feedback-panel {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-height: calc(100dvh - 104px) !important;
+    height: calc(100dvh - 104px);
+    transform: none !important;
+    transition: opacity 180ms ease !important;
+  }
+
+  .feedback-dock .feedback-panel[aria-hidden="true"] {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden;
+  }
+}
+
+.workspace-toolbar button,
+.page-actions button,
+.feedback-panel button,
+.feedback-tab,
+.feedback-status button {
+  min-height: 44px;
+}
+
+.workspace-save-status {
+  position: fixed;
+  top: 78px;
+  left: 12px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(90vw, 420px);
+  box-sizing: border-box;
+  padding: 6px 10px;
+  color: var(--v-muted);
+  background: color-mix(in srgb, var(--v-surface) 92%, transparent);
+  border: 1px solid var(--v-border);
+  border-radius: 999px;
+  font-size: 11px;
+  box-shadow: var(--v-shadow-raised);
+}
+
+.workspace-save-status[role="alert"] {
+  color: var(--v-danger);
+}
+
+.workspace-save-status button {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 4px 8px;
+  color: var(--v-primary);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .sr-only {
   position: absolute !important;
   width: 1px !important;
@@ -177,6 +262,14 @@ textarea,
    no way to reach it. dvh is the viewport actually being shown. The vh line
    above each dvh line is the fallback for browsers without it. */
 @media (max-width: 1100px) {
+  .workspace-app {
+    display: block !important;
+  }
+
+  .feedback-dock {
+    display: block;
+  }
+
   .workspace-toolbar {
     height: 124px !important;
     flex-wrap: wrap !important;
@@ -194,17 +287,21 @@ textarea,
 
   .canvas-surface {
     margin-top: 124px !important;
+    min-height: calc(100dvh - 124px) !important;
   }
 
   .feedback-panel {
-    top: auto !important;
-    right: 12px !important;
-    bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
-    left: 12px !important;
+    position: relative !important;
+    inset: auto !important;
     width: auto !important;
+    margin: 12px;
     max-height: 42vh !important;
     max-height: 42dvh !important;
     border-radius: var(--v-radius-xl, 18px) !important;
+  }
+
+  .feedback-panel[aria-hidden="true"] {
+    display: none !important;
   }
 
   /* The tab rides the panel's edge on a wide screen. Where the panel is a
@@ -232,14 +329,10 @@ textarea,
 
   .canvas-surface {
     margin-top: 220px !important;
+    min-height: calc(100dvh - 220px) !important;
   }
 
   .feedback-panel {
-    top: auto !important;
-    right: 12px !important;
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
-    left: 12px !important;
-    width: auto !important;
     max-height: 48vh !important;
     max-height: 48dvh !important;
   }

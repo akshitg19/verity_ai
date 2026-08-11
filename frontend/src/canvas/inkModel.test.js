@@ -8,6 +8,8 @@ import {
   getCanvasBackingSize,
   getStrokeBounds,
   mergeBounds,
+  rowsNearBounds,
+  strokesNearBounds,
 } from "./inkModel";
 
 const stroke = (...points) => ({ points });
@@ -72,6 +74,16 @@ describe("ink index", () => {
 
     expect([...index.rows.keys()]).toEqual([0, 1]);
     expect(index.rows.get(1)).toEqual([nextRow]);
+  });
+
+  it("narrows eraser candidates to strokes and rows touching the swept bounds", () => {
+    const near = stroke({ x: 20, y: 20 }, { x: 30, y: 30 });
+    const far = stroke({ x: 700, y: 700 }, { x: 720, y: 720 });
+    const index = buildInkIndex([near, far]);
+    const bounds = { minX: 0, maxX: 80, minY: 0, maxY: 80 };
+
+    expect(strokesNearBounds(index, bounds)).toEqual(new Set([near]));
+    expect(rowsNearBounds(index, bounds)).toEqual(new Set([0]));
   });
 });
 

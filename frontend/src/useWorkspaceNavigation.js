@@ -9,36 +9,44 @@ export default function useWorkspaceNavigation({ notebook, canvas, mode, chemist
     const snapshot = mode === "chemistry"
       ? chemistry.getWorkflowSnapshot()
       : math.getWorkflowSnapshot();
-    notebook.saveWorkflow(snapshot, notebook.activePage.id);
+    notebook.saveWorkflow(snapshot, notebook.activePage.id, notebook.activeNote.id);
   }, [chemistry, math, mode, notebook]);
+
+  const saveActivePage = useCallback(() => {
+    notebook.saveStrokes(
+      canvas.getStrokesSnapshot(),
+      notebook.activePage.id,
+      notebook.activeNote.id
+    );
+    saveActiveWorkflow();
+  }, [canvas, notebook, saveActiveWorkflow]);
 
   const handleOpenPage = useCallback((nextPageId) => {
     if (nextPageId === notebook.activePage.id) return;
-    saveActiveWorkflow();
+    saveActivePage();
     void notebook.flushWrites().then(() => notebook.openPage(nextPageId));
-  }, [notebook, saveActiveWorkflow]);
+  }, [notebook, saveActivePage]);
 
   const handleOpenNote = useCallback((nextNoteId) => {
     if (nextNoteId === notebook.activeNote.id) return;
-    saveActiveWorkflow();
+    saveActivePage();
     void notebook.flushWrites().then(() => notebook.openNote(nextNoteId));
-  }, [notebook, saveActiveWorkflow]);
+  }, [notebook, saveActivePage]);
 
   const handleCreateNote = useCallback((nextMode, title, folderId) => {
-    saveActiveWorkflow();
+    saveActivePage();
     void notebook.flushWrites().then(() => notebook.createNote(nextMode, title, folderId));
-  }, [notebook, saveActiveWorkflow]);
+  }, [notebook, saveActivePage]);
 
   const handleAddPage = useCallback(() => {
-    saveActiveWorkflow();
+    saveActivePage();
     void notebook.flushWrites().then(() => notebook.addPage());
-  }, [notebook, saveActiveWorkflow]);
+  }, [notebook, saveActivePage]);
 
   const handleDeletePage = useCallback((targetPageId) => {
-    notebook.saveStrokes(canvas.getStrokesSnapshot());
-    saveActiveWorkflow();
+    saveActivePage();
     void notebook.flushWrites().then(() => notebook.deletePage(targetPageId));
-  }, [canvas, notebook, saveActiveWorkflow]);
+  }, [notebook, saveActivePage]);
 
   const workspaceNotebook = {
     ...notebook,
@@ -47,16 +55,22 @@ export default function useWorkspaceNavigation({ notebook, canvas, mode, chemist
     createNote: handleCreateNote,
     addPage: handleAddPage,
     deletePage: handleDeletePage,
+    duplicateNote: (noteId) => {
+      if (noteId === notebook.activeNote.id) saveActivePage();
+      void notebook.flushWrites().then(() => notebook.duplicateNote(noteId));
+    },
+    deleteNote: (noteId) => {
+      if (noteId === notebook.activeNote.id) saveActivePage();
+      void notebook.flushWrites().then(() => notebook.deleteNote(noteId));
+    },
   };
-
-  const handleClear = useCallback(() => {
-    if (canvas.strokes.length > 0) setActionDialog({ type: "clear" });
-  }, [canvas.strokes.length]);
 
   const confirmClear = useCallback(() => {
     setActionDialog(null);
     canvas.clearPage();
-  }, [canvas]);
+    if (mode === "chemistry") chemistry.resetProblem();
+    else math.clear();
+  }, [canvas, chemistry, math, mode]);
 
   const handleNewQuestion = useCallback(() => {
     if (canvas.strokes.length === 0) {
@@ -66,6 +80,12 @@ export default function useWorkspaceNavigation({ notebook, canvas, mode, chemist
     }
     setActionDialog({ type: "new-question" });
   }, [canvas.strokes.length, chemistry, math, mode]);
+
+  // Kept as an alias for older toolbar callers. There is one New Question
+  // workflow, regardless of which visible button invokes it.
+  const handleClear = useCallback(() => {
+    handleNewQuestion();
+  }, [handleNewQuestion]);
 
   const keepInkAndResetProblem = useCallback(() => {
     if (mode === "chemistry") chemistry.resetProblem();
@@ -82,10 +102,9 @@ export default function useWorkspaceNavigation({ notebook, canvas, mode, chemist
 
   const handleModeChange = useCallback((nextMode) => {
     if (nextMode === mode) return;
-    notebook.saveStrokes(canvas.getStrokesSnapshot());
-    saveActiveWorkflow();
+    saveActivePage();
     navigate(nextMode === "math" ? "/math" : "/chemistry");
-  }, [canvas, mode, notebook, saveActiveWorkflow]);
+  }, [mode, saveActivePage]);
 
   return {
     actionDialog,

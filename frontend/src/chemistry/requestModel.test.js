@@ -77,4 +77,27 @@ describe("chemistry request ownership", () => {
 
     await expect(request).resolves.toBe(null);
   });
+
+  it("does not share cancellation between identical session requests", async () => {
+    const first = deferred();
+    const second = deferred();
+    const opened = [];
+    const open = vi.fn((_payload, { signal }) => {
+      opened.push(signal);
+      return opened.length === 1 ? first.promise : second.promise;
+    });
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const one = openCurrentSession({ topic: "balance", reference_equation: "H2 + O2" }, () => true, { open, signal: firstController.signal });
+    const two = openCurrentSession({ topic: "balance", reference_equation: "H2 + O2" }, () => true, { open, signal: secondController.signal });
+
+    firstController.abort();
+    first.reject(Object.assign(new Error("cancelled"), { name: "AbortError" }));
+    second.resolve({ session_id: "valid" });
+
+    await expect(one).rejects.toMatchObject({ name: "AbortError" });
+    await expect(two).resolves.toEqual({ session_id: "valid" });
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(opened[1].aborted).toBe(false);
+  });
 });

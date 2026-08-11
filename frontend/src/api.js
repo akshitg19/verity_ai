@@ -23,6 +23,13 @@ export class ApiTimeoutError extends ApiError {
   }
 }
 
+export class ApiCancelledError extends ApiError {
+  constructor(path) {
+    super(`The request to ${path} was cancelled.`, 499);
+    this.name = "ApiCancelledError";
+  }
+}
+
 function errorMessage(payload, fallback) {
   if (typeof payload === "string") return payload;
   if (typeof payload?.detail === "string") return payload.detail;
@@ -32,54 +39,84 @@ function errorMessage(payload, fallback) {
   return fallback;
 }
 
+function abortable(promise, signal) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      callback(value);
+    };
+    const onAbort = () => finish(reject, signal.reason ?? new Error("Request aborted"));
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    Promise.resolve(promise).then(
+      (value) => finish(resolve, value),
+      (error) => finish(reject, error)
+    );
+  });
+}
+
 async function request(path, options = {}) {
   const { signal: externalSignal, timeoutMs = DEFAULT_TIMEOUT_MS, ...fetchOptions } = options;
   const controller = new AbortController();
+  let timedOut = false;
   const abort = () => controller.abort(externalSignal?.reason);
   if (externalSignal) {
     if (externalSignal.aborted) abort();
     else externalSignal.addEventListener("abort", abort, { once: true });
   }
-  const timeout = setTimeout(() => controller.abort("timeout"), timeoutMs);
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort("timeout");
+  }, timeoutMs);
 
-  let response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    const response = await abortable(fetch(`${API_BASE}${path}`, {
       ...fetchOptions,
       signal: controller.signal,
-    });
+    }), controller.signal);
+    // Keep the timeout alive until the body has been consumed. A fetch can
+    // resolve headers immediately while a streaming response stalls.
+    const text = await abortable(response.text(), controller.signal);
+    let payload = null;
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = text;
+      }
+    }
+
+    if (!response.ok) {
+      throw new ApiError(
+        errorMessage(payload, `${response.status} ${response.statusText}`),
+        response.status,
+        payload
+      );
+    }
+
+    if (payload?.error && !payload?.verdicts && !payload?.status) {
+      throw new ApiError(errorMessage(payload, "The server returned an error."), response.status, payload);
+    }
+    return payload;
   } catch (error) {
-    if (controller.signal.aborted && controller.signal.reason === "timeout") {
+    if (timedOut || controller.signal.reason === "timeout") {
       throw new ApiTimeoutError(path);
+    }
+    if (externalSignal?.aborted) throw error;
+    if (controller.signal.aborted && error?.name === "AbortError") {
+      throw new ApiCancelledError(path);
     }
     throw error;
   } finally {
     clearTimeout(timeout);
     externalSignal?.removeEventListener?.("abort", abort);
   }
-
-  const text = await response.text();
-  let payload = null;
-  if (text) {
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = text;
-    }
-  }
-
-  if (!response.ok) {
-    throw new ApiError(
-      errorMessage(payload, `${response.status} ${response.statusText}`),
-      response.status,
-      payload
-    );
-  }
-
-  if (payload?.error && !payload?.verdicts && !payload?.status) {
-    throw new ApiError(errorMessage(payload, "The server returned an error."), response.status, payload);
-  }
-  return payload;
 }
 
 async function post(path, body, options = {}) {

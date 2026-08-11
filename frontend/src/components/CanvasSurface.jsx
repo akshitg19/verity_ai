@@ -46,9 +46,9 @@ export default function CanvasSurface({ canvas, mode, children }) {
   useEffect(() => {
     const surface = surfaceRef.current;
     if (!surface) return undefined;
-    const resize = () => {
-      const rect = surface.getBoundingClientRect();
-      setViewportSize(rect.width, Math.max(rect.height, window.innerHeight - 72));
+    const resize = (entry) => {
+      const rect = entry?.contentRect ?? surface.getBoundingClientRect();
+      setViewportSize(rect.width, rect.height);
     };
     resize();
     if (typeof ResizeObserver === "undefined") {

@@ -1,192 +1,144 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { createNotebookRepository, readLegacyNotebook } from "./notebookRepository";
-
-// The notebook model: folders by subject, notes inside them, pages inside
-// notes, persisted locally.
-//
-// The bar here is Apple Notes or Samsung Notes, because that is what
-// students already use. A single canvas that grows forever is a demo; a
-// place you would keep a term's homework is a product.
-//
-// Local-first on purpose. Strokes are already serialisable, so persistence
-// is a JSON round-trip and needs no backend, no account, and no network.
+import {
+  createDefaultNotebookState,
+  createNotebookRepository,
+  normalizeNotebookState,
+  readLegacyNotebook,
+} from "./notebookRepository";
+import {
+  createBlankNote,
+  createBlankPage,
+  createNotebookId,
+  duplicateNoteRecord,
+} from "./notebookModel";
 
 const MAX_FOLDERS = 40;
 const MAX_NOTES = 200;
 
 const now = () => Date.now();
-const newId = () =>
-  `${now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-
-function blankPage() {
-  return { id: newId(), strokes: [], workflowSnapshot: null };
-}
-
 function blankFolder(subject, name) {
-  return { id: newId(), subject, name: name || "New folder", createdAt: now() };
-}
-
-function blankNote(subject, title, folderId = null) {
-  return {
-    id: newId(),
-    subject,
-    folderId,
-    title: title || (subject === "chemistry" ? "Chemistry" : "Math"),
-    pages: [blankPage()],
-    activePageId: null,
-    createdAt: now(),
-    updatedAt: now(),
-    // Kept per note so reopening a page shows what was flagged last time.
-    lastVerdict: null,
-    hintsUsed: 0,
-  };
-}
-
-// The two names the app used to seed a new notebook with. They were only ever
-// generated, never typed by a student, so renaming them is safe. Without this
-// the new naming only reached people who had never opened the app: everyone
-// else kept looking at a note called "First structure", which is exactly the
-// name the change existed to get rid of.
-const SEEDED_TITLES = { "First problem": "Math 1", "First structure": "Chemistry 1" };
-
-function migrateTitle(note) {
-  const renamed = SEEDED_TITLES[note.title];
-  return renamed ? { ...note, title: renamed } : note;
+  return { id: createNotebookId("folder"), subject, name: name || "New folder", createdAt: now() };
 }
 
 function initial() {
-  const stored = (() => {
-    try {
-      return readLegacyNotebook().state;
-    } catch {
-      // IndexedDB reports the durable storage failure to the UI. This synchronous
-      // fallback keeps the workspace usable while that report is rendered.
-      return null;
-    }
-  })();
-  if (stored) {
-    // Migration: notes written before folders existed have no folderId, and
-    // null means "loose in this subject", which is exactly where they were.
-    return {
-      folders: [],
-      ...stored,
-      notes: stored.notes.map((note) =>
-        migrateTitle({
-          folderId: null,
-          ...note,
-          pages: (note.pages ?? []).map((page) => ({
-            workflowSnapshot: null,
-            ...page,
-          })),
-        })
-      ),
-    };
+  try {
+    const legacy = readLegacyNotebook();
+    if (legacy.state) return normalizeNotebookState(legacy.state, { migrateSeededTitles: true });
+  } catch {
+    // The repository reports the durable storage failure after mount. A
+    // canonical in-memory notebook keeps the workspace usable meanwhile.
   }
-  const math = blankNote("math", "Math 1");
-  const chemistry = blankNote("chemistry", "Chemistry 1");
-  return { folders: [], notes: [math, chemistry], activeNoteId: math.id };
+  return createDefaultNotebookState();
 }
 
-function metadataOnly(state) {
-  return {
-    activeNoteId: state.activeNoteId,
-    folders: state.folders ?? [],
-    notes: (state.notes ?? []).map((note) => ({
-      ...note,
-      pages: (note.pages ?? []).map((page) => {
-        const metadata = { ...page };
-        delete metadata.strokes;
-        delete metadata.workflowSnapshot;
-        return metadata;
-      }),
-    })),
-  };
+function clone(value) {
+  if (value === undefined) return undefined;
+  if (typeof structuredClone === "function") return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
+function metadataFor(note) {
+  return { ...note, updatedAt: now() };
 }
 
 export default function useNotebook() {
   const [state, setState] = useState(initial);
   const stateRef = useRef(state);
   const repositoryRef = useRef(null);
+  const repositoryReadyRef = useRef(Promise.resolve(null));
   const writesRef = useRef(Promise.resolve());
-  const hydratedRef = useRef(false);
+  const mountedRef = useRef(true);
+  const trackerRef = useRef({ nextRevision: 0, pending: new Set(), error: null });
+  const [hydrated, setHydrated] = useState(false);
   const [saveStatus, setSaveStatus] = useState("saving");
   const [saveError, setSaveError] = useState(null);
 
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
-
-  const enqueueWrite = useCallback((operation) => {
-    const repository = repositoryRef.current;
-    if (!repository) return Promise.resolve();
-    setSaveStatus("saving");
-    setSaveError(null);
-    const next = writesRef.current.then(operation, operation);
-    writesRef.current = next.catch(() => undefined);
-    next.then(
-      () => setSaveStatus("saved"),
-      (error) => {
-        setSaveStatus("error");
-        setSaveError(error instanceof Error ? error.message : "Notebook could not be saved.");
-      }
-    );
-    return next;
+  const commitState = useCallback((nextState) => {
+    stateRef.current = nextState;
+    setState(nextState);
+    return nextState;
   }, []);
 
-  const persistMetadata = useCallback(
-    () => enqueueWrite(() => repositoryRef.current?.saveMetadata(metadataOnly(stateRef.current))),
-    [enqueueWrite]
-  );
+  const settleWrite = useCallback((revision, error = null) => {
+    const tracker = trackerRef.current;
+    tracker.pending.delete(revision);
+    if (error) {
+      tracker.error = { error, revision };
+      const message = error instanceof Error ? error.message : "Notebook could not be saved.";
+      setSaveError(message);
+    }
+    if (tracker.pending.size > 0) {
+      setSaveStatus("saving");
+    } else if (tracker.error) {
+      setSaveStatus("error");
+    } else {
+      setSaveStatus("saved");
+    }
+  }, []);
+
+  // Every operation captures its target IDs before entering this queue. The
+  // queue serialises IndexedDB transactions, while the revision tracker keeps
+  // an older resolution from announcing "Saved" over a newer write.
+  const enqueueWrite = useCallback((operation) => {
+    const revision = ++trackerRef.current.nextRevision;
+    trackerRef.current.pending.add(revision);
+    setSaveStatus("saving");
+
+    const run = writesRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const repository = await repositoryReadyRef.current;
+        if (!repository || !mountedRef.current) return undefined;
+        return operation(repository);
+      });
+    writesRef.current = run;
+    run.then(
+      () => settleWrite(revision),
+      (error) => settleWrite(revision, error)
+    );
+    return run;
+  }, [settleWrite]);
 
   useEffect(() => {
-    let cancelled = false;
+    mountedRef.current = true;
     const repository = createNotebookRepository();
-    repository
+    const ready = repository
       .open()
       .then(() => repository.load())
       .then((stored) => {
-        if (cancelled) return;
+        if (!mountedRef.current) return null;
         repositoryRef.current = repository;
-        hydratedRef.current = true;
-        if (stored) {
-          stateRef.current = stored;
-          setState(stored);
-        }
+        if (stored) commitState(stored);
+        setHydrated(true);
+        setSaveError(null);
         setSaveStatus("saved");
-        return repository.saveMetadata(metadataOnly(stored ?? stateRef.current));
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        setSaveStatus("error");
-        setSaveError(error instanceof Error ? error.message : "Notebook storage could not be opened.");
+        return repository;
       });
+    repositoryReadyRef.current = ready;
+    ready.catch((error) => {
+      if (!mountedRef.current) return;
+      setHydrated(true);
+      setSaveStatus("error");
+      setSaveError(error instanceof Error ? error.message : "Notebook storage could not be opened.");
+    });
+
     return () => {
-      cancelled = true;
-      void writesRef.current;
+      mountedRef.current = false;
+      const closeWhenIdle = Promise.allSettled([writesRef.current, ready]).then(() => repository.close());
+      void closeWhenIdle;
     };
-  }, []);
+  }, [commitState]);
 
-  useEffect(() => {
-    if (!hydratedRef.current) return;
-    void persistMetadata();
-  }, [state, persistMetadata]);
-
-  const notes = state.notes;
-  const activeNote =
-    notes.find((note) => note.id === state.activeNoteId) ?? notes[0];
+  const notes = useMemo(() => state.notes ?? [], [state.notes]);
+  const activeNote = notes.find((note) => note.id === state.activeNoteId) ?? notes[0];
   const activePage =
-    activeNote.pages.find((page) => page.id === activeNote.activePageId) ??
-    activeNote.pages[0];
+    activeNote?.pages.find((page) => page.id === activeNote.activePageId) ??
+    activeNote?.pages[0];
 
-  // `folders` keeps its old shape, notes grouped by subject, because App and
-  // the toolbar both index it by subject. The user-created folders are a
-  // separate structure layered on top.
   const folders = useMemo(() => {
     const grouped = { math: [], chemistry: [] };
-    for (const note of notes) {
-      (grouped[note.subject] ?? grouped.math).push(note);
-    }
+    for (const note of notes) (grouped[note.subject] ?? grouped.math).push(note);
     for (const key of Object.keys(grouped)) {
       grouped[key].sort(
         (a, b) =>
@@ -197,11 +149,9 @@ export default function useNotebook() {
     return grouped;
   }, [notes]);
 
-  // What the sidebar renders for one subject: the folders a student made,
-  // each with its notes, plus whatever is still loose at the top level.
   const treeFor = useCallback(
     (subject) => {
-      const subjectNotes = (folders[subject] ?? []);
+      const subjectNotes = folders[subject] ?? [];
       const subjectFolders = (state.folders ?? [])
         .filter((folder) => folder.subject === subject)
         .sort((a, b) => a.createdAt - b.createdAt)
@@ -212,362 +162,326 @@ export default function useNotebook() {
       const known = new Set(subjectFolders.map((folder) => folder.id));
       return {
         folders: subjectFolders,
-        // A note whose folder was deleted falls back to loose rather than
-        // disappearing from the sidebar entirely.
-        loose: subjectNotes.filter(
-          (note) => !note.folderId || !known.has(note.folderId)
-        ),
+        loose: subjectNotes.filter((note) => !note.folderId || !known.has(note.folderId)),
       };
     },
     [folders, state.folders]
   );
 
-  const update = useCallback((noteId, change) => {
-    setState((current) => ({
-      ...current,
-      notes: current.notes.map((note) =>
-        note.id === noteId ? { ...note, ...change, updatedAt: now() } : note
-      ),
-    }));
-  }, []);
-
-  const saveStrokes = useCallback(
-    (strokes) => {
+  const updateNote = useCallback(
+    (noteId, change, persist = true) => {
       const current = stateRef.current;
-      const note = current.notes.find((entry) => entry.id === current.activeNoteId);
-      if (!note) return;
-      const pageId = note.activePageId ?? note.pages[0].id;
-      const page = note.pages.find((entry) => entry.id === pageId);
-      if (!page) return;
-      const nextPage = { ...page, strokes: [...(strokes ?? [])] };
+      const note = current.notes.find((entry) => entry.id === noteId);
+      if (!note) return Promise.resolve();
+      const nextNote = metadataFor({ ...note, ...change });
       const nextState = {
         ...current,
-        notes: current.notes.map((entry) =>
-          entry.id !== note.id
-            ? entry
-            : {
-                ...entry,
-                updatedAt: now(),
-                pages: entry.pages.map((entryPage) =>
-                  entryPage.id === pageId ? nextPage : entryPage
-                ),
-              }
-        ),
+        notes: current.notes.map((entry) => (entry.id === noteId ? nextNote : entry)),
       };
-      stateRef.current = nextState;
-      setState(nextState);
-      void enqueueWrite(() =>
-        repositoryRef.current?.savePage({ noteId: note.id, page: nextPage })
+      commitState(nextState);
+      return persist ? enqueueWrite((repository) => repository.saveNoteMetadata(nextNote)) : Promise.resolve();
+    },
+    [commitState, enqueueWrite]
+  );
+
+  const saveStrokes = useCallback(
+    (strokes, targetPageId = null, targetNoteId = null) => {
+      const current = stateRef.current;
+      const note = current.notes.find((entry) => entry.id === (targetNoteId ?? current.activeNoteId));
+      const pageId = targetPageId ?? note?.activePageId ?? note?.pages[0]?.id;
+      const page = note?.pages.find((entry) => entry.id === pageId);
+      if (!note || !page) return Promise.resolve();
+      const nextPage = { ...page, strokes: clone(strokes ?? []) };
+      const nextNote = metadataFor({
+        ...note,
+        pages: note.pages.map((entry) => (entry.id === pageId ? nextPage : entry)),
+      });
+      const nextState = {
+        ...current,
+        notes: current.notes.map((entry) => (entry.id === note.id ? nextNote : entry)),
+      };
+      commitState(nextState);
+      const capturedNoteId = note.id;
+      const capturedPageId = pageId;
+      return enqueueWrite((repository) =>
+        repository.savePage({ noteId: capturedNoteId, page: { ...nextPage, id: capturedPageId } })
       );
     },
-    [enqueueWrite]
+    [commitState, enqueueWrite]
   );
 
   const saveWorkflow = useCallback(
-    (workflowSnapshot, pageId = null) => {
+    (workflowSnapshot, pageId = null, noteId = null) => {
       const current = stateRef.current;
-      const note = current.notes.find((entry) => entry.id === current.activeNoteId);
+      const note = current.notes.find((entry) => entry.id === (noteId ?? current.activeNoteId));
       const targetPageId = pageId ?? note?.activePageId ?? note?.pages[0]?.id;
-      if (!note || !targetPageId) return;
-      const page = note.pages.find((entry) => entry.id === targetPageId);
-      if (!page) return;
-      const nextPage = { ...page, workflowSnapshot };
-      const nextState = {
+      const page = note?.pages.find((entry) => entry.id === targetPageId);
+      if (!note || !page) return Promise.resolve();
+      const nextPage = { ...page, workflowSnapshot: clone(workflowSnapshot) };
+      const nextNote = metadataFor({
+        ...note,
+        pages: note.pages.map((entry) => (entry.id === targetPageId ? nextPage : entry)),
+      });
+      commitState({
         ...current,
-        notes: current.notes.map((entry) =>
-          entry.id !== note.id
-            ? entry
-            : {
-                ...entry,
-                updatedAt: now(),
-                pages: entry.pages.map((entryPage) =>
-                  entryPage.id === targetPageId ? nextPage : entryPage
-                ),
-              }
-        ),
-      };
-      stateRef.current = nextState;
-      setState(nextState);
-      void enqueueWrite(() =>
-        repositoryRef.current?.savePage({ noteId: note.id, page: nextPage })
-      );
+        notes: current.notes.map((entry) => (entry.id === note.id ? nextNote : entry)),
+      });
+      return enqueueWrite((repository) => repository.savePage({ noteId: note.id, page: nextPage }));
     },
-    [enqueueWrite]
+    [commitState, enqueueWrite]
   );
 
-  const flushWrites = useCallback(() => writesRef.current, []);
+  const flushWrites = useCallback(async () => {
+    await writesRef.current.catch(() => undefined);
+    const failure = trackerRef.current.error;
+    if (failure) throw failure.error;
+  }, []);
+
+  const retrySave = useCallback(() => {
+    trackerRef.current.error = null;
+    setSaveError(null);
+    return enqueueWrite((repository) => repository.replaceAll(stateRef.current));
+  }, [enqueueWrite]);
 
   const createNote = useCallback(
     (forSubject = "math", title, folderId = null) => {
-      let created;
-      setState((current) => {
-        // Numbered rather than all called the same thing. "Chemistry 3" is
-        // something a student can find again; three rows reading "Chemistry"
-        // is a list they have to open one at a time.
-        const used = current.notes.filter((note) => note.subject === forSubject);
-        const label = forSubject === "chemistry" ? "Chemistry" : "Math";
-        const fallback = `${label} ${used.length + 1}`;
-        created = blankNote(forSubject, title || fallback, folderId);
-        return {
-          ...current,
-          notes: [created, ...current.notes].slice(0, MAX_NOTES),
-          activeNoteId: created.id,
-        };
-      });
-      return created;
+      const current = stateRef.current;
+      const subjectNotes = current.notes.filter((note) => note.subject === forSubject);
+      const label = forSubject === "chemistry" ? "Chemistry" : "Math";
+      const created = createBlankNote(forSubject, title || `${label} ${subjectNotes.length + 1}`, folderId);
+      const nextState = {
+        ...current,
+        notes: [created, ...current.notes].slice(0, MAX_NOTES),
+        activeNoteId: created.id,
+      };
+      commitState(nextState);
+      return enqueueWrite(async (repository) => {
+        await repository.saveNoteTree(created);
+        await repository.saveRoot(created.id);
+      }).then(() => created);
     },
-    []
+    [commitState, enqueueWrite]
   );
 
-  // A copy of a note, ink and all, which is how a student reuses a page of
-  // working as the starting point for the next question.
-  const duplicateNote = useCallback((noteId) => {
-    setState((current) => {
+  const duplicateNote = useCallback(
+    (noteId) => {
+      const current = stateRef.current;
       const source = current.notes.find((note) => note.id === noteId);
-      if (!source) return current;
-      const copy = {
-        ...source,
-        id: newId(),
-        title: `${source.title} copy`.slice(0, 80),
-        createdAt: now(),
-        updatedAt: now(),
-        pages: source.pages.map((page) => ({ ...page, id: newId() })),
-        activePageId: null,
-        lastVerdict: null,
-      };
-      return {
+      if (!source) return Promise.resolve(null);
+      const copy = duplicateNoteRecord(source);
+      const nextState = {
         ...current,
         notes: [copy, ...current.notes].slice(0, MAX_NOTES),
         activeNoteId: copy.id,
       };
-    });
-  }, []);
+      commitState(nextState);
+      return enqueueWrite(async (repository) => {
+        await repository.saveNoteTree(copy);
+        await repository.saveRoot(copy.id);
+      }).then(() => copy);
+    },
+    [commitState, enqueueWrite]
+  );
 
-  const createFolder = useCallback((subject, name) => {
-    const folder = blankFolder(subject, name);
-    setState((current) => ({
-      ...current,
-      folders: [...(current.folders ?? []), folder].slice(0, MAX_FOLDERS),
-    }));
-    return folder;
-  }, []);
+  const createFolder = useCallback(
+    (subject, name) => {
+      const folder = blankFolder(subject, name);
+      commitState({
+        ...stateRef.current,
+        folders: [...(stateRef.current.folders ?? []), folder].slice(0, MAX_FOLDERS),
+      });
+      return enqueueWrite((repository) => repository.saveFolder(folder)).then(() => folder);
+    },
+    [commitState, enqueueWrite]
+  );
 
-  const renameFolder = useCallback((folderId, name) => {
-    setState((current) => ({
-      ...current,
-      folders: (current.folders ?? []).map((folder) =>
-        folder.id === folderId ? { ...folder, name: name.slice(0, 60) } : folder
-      ),
-    }));
-  }, []);
+  const renameFolder = useCallback(
+    (folderId, name) => {
+      const current = stateRef.current;
+      const folder = current.folders.find((entry) => entry.id === folderId);
+      if (!folder) return Promise.resolve();
+      const nextFolder = { ...folder, name: name.slice(0, 60) };
+      commitState({ ...current, folders: current.folders.map((entry) => entry.id === folderId ? nextFolder : entry) });
+      return enqueueWrite((repository) => repository.saveFolder(nextFolder));
+    },
+    [commitState, enqueueWrite]
+  );
 
-  // Deleting a folder keeps its notes. Losing a term of homework because a
-  // folder was tidied away is not a trade worth offering.
-  const deleteFolder = useCallback((folderId) => {
-    setState((current) => ({
-      ...current,
-      folders: (current.folders ?? []).filter((folder) => folder.id !== folderId),
-      notes: current.notes.map((note) =>
-        note.folderId === folderId ? { ...note, folderId: null } : note
-      ),
-    }));
-  }, []);
+  const deleteFolder = useCallback(
+    (folderId) => {
+      const current = stateRef.current;
+      const nextNotes = current.notes.map((note) => note.folderId === folderId ? metadataFor({ ...note, folderId: null }) : note);
+      const nextState = {
+        ...current,
+        folders: (current.folders ?? []).filter((folder) => folder.id !== folderId),
+        notes: nextNotes,
+      };
+      commitState(nextState);
+      return enqueueWrite(async (repository) => {
+        await repository.deleteFolder(folderId);
+        for (const note of nextNotes) {
+          const previous = current.notes.find((entry) => entry.id === note.id);
+          if (previous?.folderId === folderId) await repository.saveNoteMetadata(note);
+        }
+      });
+    },
+    [commitState, enqueueWrite]
+  );
 
   const moveNoteToFolder = useCallback(
-    (noteId, folderId) => update(noteId, { folderId: folderId ?? null }),
-    [update]
+    (noteId, folderId) => updateNote(noteId, { folderId: folderId ?? null }),
+    [updateNote]
   );
 
-  const openNote = useCallback((noteId) => {
-    setState((current) => ({ ...current, activeNoteId: noteId }));
-  }, []);
-
-  const renameNote = useCallback(
-    (noteId, title) => update(noteId, { title: title.slice(0, 80) }),
-    [update]
+  const openNote = useCallback(
+    (noteId) => {
+      const current = stateRef.current;
+      if (!current.notes.some((note) => note.id === noteId) || current.activeNoteId === noteId) return Promise.resolve();
+      commitState({ ...current, activeNoteId: noteId });
+      return enqueueWrite((repository) => repository.saveRoot(noteId));
+    },
+    [commitState, enqueueWrite]
   );
 
-  // Deleting is undoable for as long as the shelf is open. A term of homework
-  // behind a single tap with no way back is the one failure mode of this
-  // model that would actually matter to a student.
+  const renameNote = useCallback((noteId, title) => updateNote(noteId, { title: title.slice(0, 80) }), [updateNote]);
+
   const [deleted, setDeleted] = useState(null);
   const [deletedPage, setDeletedPage] = useState(null);
 
-  const deleteNote = useCallback((noteId) => {
-    setState((current) => {
+  const deleteNote = useCallback(
+    (noteId) => {
+      const current = stateRef.current;
       const index = current.notes.findIndex((note) => note.id === noteId);
-      if (index === -1) return current;
-      setDeleted({ note: current.notes[index], index });
-
+      if (index === -1) return Promise.resolve();
+      const removed = current.notes[index];
       const remaining = current.notes.filter((note) => note.id !== noteId);
-      if (!remaining.length) {
-        const replacement = blankNote("math", "Math 1");
-        return { ...current, notes: [replacement], activeNoteId: replacement.id };
-      }
-      return {
+      const replacement = remaining.length ? null : createBlankNote("math", "Math 1");
+      const nextNotes = replacement ? [replacement] : remaining;
+      const nextState = {
         ...current,
-        notes: remaining,
-        activeNoteId:
-          current.activeNoteId === noteId ? remaining[0].id : current.activeNoteId,
+        notes: nextNotes,
+        activeNoteId: current.activeNoteId === noteId ? nextNotes[0].id : current.activeNoteId,
       };
-    });
-  }, []);
+      setDeleted({ note: removed, index });
+      commitState(nextState);
+      return enqueueWrite(async (repository) => {
+        await repository.deleteNoteTree(removed.id);
+        if (replacement) await repository.saveNoteTree(replacement);
+        await repository.saveRoot(nextState.activeNoteId);
+      });
+    },
+    [commitState, enqueueWrite]
+  );
 
   const undoDelete = useCallback(() => {
-    setState((current) => {
-      if (!deleted) return current;
-      const notes = [...current.notes];
-      notes.splice(Math.min(deleted.index, notes.length), 0, deleted.note);
-      return { ...current, notes, activeNoteId: deleted.note.id };
-    });
+    if (!deleted) return Promise.resolve();
+    const current = stateRef.current;
+    const notes = [...current.notes];
+    notes.splice(Math.min(deleted.index, notes.length), 0, deleted.note);
+    const nextState = { ...current, notes, activeNoteId: deleted.note.id };
+    commitState(nextState);
+    const restored = deleted.note;
     setDeleted(null);
-  }, [deleted]);
+    return enqueueWrite(async (repository) => {
+      await repository.saveNoteTree(restored);
+      await repository.saveRoot(restored.id);
+    });
+  }, [commitState, deleted, enqueueWrite]);
 
   const dismissDeleted = useCallback(() => setDeleted(null), []);
 
-  // Pinned notes sort to the top of their subject, which is how a student
-  // keeps the question they are working on within reach of a thumb.
-  const togglePin = useCallback(
-    (noteId) => {
-      setState((current) => ({
-        ...current,
-        notes: current.notes.map((note) =>
-          note.id === noteId ? { ...note, pinned: !note.pinned } : note
-        ),
-      }));
-    },
-    []
-  );
+  const togglePin = useCallback((noteId) => {
+    const note = stateRef.current.notes.find((entry) => entry.id === noteId);
+    return note ? updateNote(noteId, { pinned: !note.pinned }) : Promise.resolve();
+  }, [updateNote]);
 
-  // Naming a note after the question it holds. The question is already
-  // transcribed, so "Balance C3H8 + O2" costs nothing and beats "Chemistry 3".
-  // Only ever applied to a note still carrying its generated name, so a name
-  // a student chose is never overwritten.
-  const nameFromQuestion = useCallback(
-    (question) => {
-      const trimmed = (question ?? "").trim();
-      if (!trimmed) return;
-      setState((current) => {
-        const note = current.notes.find((entry) => entry.id === current.activeNoteId);
-        if (!note || !/^(Chemistry|Math) \d+$/.test(note.title)) return current;
-        return {
-          ...current,
-          notes: current.notes.map((entry) =>
-            entry.id === note.id
-              ? { ...entry, title: trimmed.slice(0, 60), updatedAt: now() }
-              : entry
-          ),
-        };
-      });
-    },
-    []
-  );
+  const nameFromQuestion = useCallback((question) => {
+    const trimmed = (question ?? "").trim();
+    if (!trimmed || !activeNote || !/^(Chemistry|Math) \d+$/.test(activeNote.title)) return Promise.resolve();
+    return updateNote(activeNote.id, { title: trimmed.slice(0, 60) });
+  }, [activeNote, updateNote]);
 
   const addPage = useCallback(() => {
-    const page = blankPage();
-    setState((current) => ({
-      ...current,
-      notes: current.notes.map((note) =>
-        note.id !== current.activeNoteId
-          ? note
-          : {
-              ...note,
-              updatedAt: now(),
-              pages: [...note.pages, page],
-              activePageId: page.id,
-            }
-      ),
-    }));
-    return page;
-  }, []);
+    const current = stateRef.current;
+    const note = current.notes.find((entry) => entry.id === current.activeNoteId);
+    if (!note) return Promise.resolve(null);
+    const page = createBlankPage(note.subject);
+    const nextNote = metadataFor({ ...note, pages: [...note.pages, page], activePageId: page.id });
+    commitState({ ...current, notes: current.notes.map((entry) => entry.id === note.id ? nextNote : entry) });
+    return enqueueWrite(async (repository) => {
+      await repository.saveNoteMetadata(nextNote);
+      await repository.saveRoot(current.activeNoteId);
+    }).then(() => page);
+  }, [commitState, enqueueWrite]);
 
   const openPage = useCallback((pageId) => {
-    setState((current) => ({
-      ...current,
-      notes: current.notes.map((note) =>
-        note.id !== current.activeNoteId ? note : { ...note, activePageId: pageId }
-      ),
-    }));
-  }, []);
+    const current = stateRef.current;
+    const note = current.notes.find((entry) => entry.id === current.activeNoteId);
+    if (!note || !note.pages.some((page) => page.id === pageId) || note.activePageId === pageId) return Promise.resolve();
+    const nextNote = metadataFor({ ...note, activePageId: pageId });
+    commitState({ ...current, notes: current.notes.map((entry) => entry.id === note.id ? nextNote : entry) });
+    return enqueueWrite((repository) => repository.saveNoteMetadata(nextNote));
+  }, [commitState, enqueueWrite]);
 
   const deletePage = useCallback((pageId) => {
     const current = stateRef.current;
     const note = current.notes.find((entry) => entry.id === current.activeNoteId);
     const index = note?.pages.findIndex((page) => page.id === pageId) ?? -1;
-    if (!note || index === -1 || note.pages.length < 2) return;
-    const deletedRecord = {
-      noteId: note.id,
-      page: note.pages[index],
-      index,
-      wasActive: note.activePageId === pageId,
-    };
+    if (!note || index === -1 || note.pages.length < 2) return Promise.resolve();
+    const removed = note.pages[index];
     const pages = note.pages.filter((page) => page.id !== pageId);
-    const nextNote = {
+    const nextNote = metadataFor({
       ...note,
-      updatedAt: now(),
       pages,
-      activePageId:
-        note.activePageId === pageId
-          ? pages[Math.max(0, index - 1)]?.id ?? pages[0].id
-          : note.activePageId,
-    };
-    const nextState = {
-      ...current,
-      notes: current.notes.map((entry) =>
-        entry.id === note.id ? nextNote : entry
-      ),
-    };
-    stateRef.current = nextState;
-    setState(nextState);
-    setDeletedPage(deletedRecord);
-    void enqueueWrite(() => repositoryRef.current?.deletePage(pageId));
-    void enqueueWrite(() => repositoryRef.current?.saveMetadata(metadataOnly(nextState)));
-  }, [enqueueWrite]);
+      activePageId: note.activePageId === pageId ? pages[Math.max(0, index - 1)]?.id ?? pages[0].id : note.activePageId,
+    });
+    const nextState = { ...current, notes: current.notes.map((entry) => entry.id === note.id ? nextNote : entry) };
+    setDeletedPage({ noteId: note.id, page: removed, index, wasActive: note.activePageId === pageId });
+    commitState(nextState);
+    return enqueueWrite((repository) => repository.deletePageAndUpdateNote({ note: nextNote, pageId }));
+  }, [commitState, enqueueWrite]);
 
   const undoDeletePage = useCallback(() => {
-    if (!deletedPage) return;
-    setState((current) => ({
+    if (!deletedPage) return Promise.resolve();
+    const current = stateRef.current;
+    const nextState = {
       ...current,
       notes: current.notes.map((note) => {
         if (note.id !== deletedPage.noteId) return note;
         const pages = [...note.pages];
         pages.splice(Math.min(deletedPage.index, pages.length), 0, deletedPage.page);
-        return {
+        return metadataFor({
           ...note,
-          updatedAt: now(),
           pages,
           activePageId: deletedPage.wasActive ? deletedPage.page.id : note.activePageId,
-        };
+        });
       }),
-    }));
-    void enqueueWrite(() => repositoryRef.current?.savePage({ noteId: deletedPage.noteId, page: deletedPage.page }));
+    };
+    const restoredNote = nextState.notes.find((note) => note.id === deletedPage.noteId);
+    commitState(nextState);
     setDeletedPage(null);
-  }, [deletedPage, enqueueWrite]);
+    return enqueueWrite((repository) => repository.restorePageAndUpdateNote({ note: restoredNote, page: deletedPage.page }));
+  }, [commitState, deletedPage, enqueueWrite]);
 
   const dismissDeletedPage = useCallback(() => setDeletedPage(null), []);
 
-  // Which lines were flagged and which hints were used, kept with the note
-  // so navigating back through past work shows what happened, not just ink.
-  const recordOutcome = useCallback(
-    (outcome) => update(activeNote.id, { lastVerdict: outcome }),
-    [activeNote.id, update]
-  );
+  const recordOutcome = useCallback((outcome) => {
+    if (!activeNote) return Promise.resolve();
+    return updateNote(activeNote.id, { lastVerdict: outcome });
+  }, [activeNote, updateNote]);
 
   const exportNotebook = useCallback(async () => {
-    if (repositoryRef.current) return repositoryRef.current.exportData();
-    return JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), state: stateRef.current }, null, 2);
-  }, []);
+    await flushWrites();
+    const repository = await repositoryReadyRef.current;
+    if (repository) return repository.exportData();
+    return JSON.stringify({ schemaVersion: 2, exportedAt: new Date().toISOString(), state: stateRef.current }, null, 2);
+  }, [flushWrites]);
 
   const importNotebook = useCallback(async (serialized) => {
-    if (!repositoryRef.current) {
-      throw new Error("Notebook storage is still starting. Try again in a moment.");
-    }
-    const imported = await repositoryRef.current.importData(serialized);
-    stateRef.current = imported;
-    setState(imported);
-    setSaveStatus("saved");
+    const imported = await enqueueWrite((repository) => repository.importData(serialized));
+    if (imported && mountedRef.current) commitState(imported);
     return imported;
-  }, []);
+  }, [commitState, enqueueWrite]);
 
   return {
     notes,
@@ -580,13 +494,15 @@ export default function useNotebook() {
     moveNoteToFolder,
     activeNote,
     activePage,
-    pageIndex: activeNote.pages.findIndex((page) => page.id === activePage.id),
-    pageCount: activeNote.pages.length,
+    pageIndex: activeNote?.pages.findIndex((page) => page.id === activePage?.id) ?? 0,
+    pageCount: activeNote?.pages.length ?? 0,
     saveStrokes,
     saveWorkflow,
     flushWrites,
+    retrySave,
     saveStatus,
     saveError,
+    hydrated,
     exportNotebook,
     importNotebook,
     createNote,

@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, checkSteps, getHint } from "./api";
+import { ApiError, ApiTimeoutError, checkSteps, getHint } from "./api";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 function response(body, options = {}) {
   return {
@@ -30,5 +33,36 @@ describe("API request wrapper", () => {
   it("turns a recoverable response error into ApiError", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response({ error: "Try again" })));
     await expect(getHint({ level: 1 })).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("keeps the timeout active while a response body stalls", async () => {
+    vi.useFakeTimers();
+    const body = new Promise(() => {});
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, text: () => body })));
+
+    const request = getHint({ level: 1 }, { timeoutMs: 25 });
+    const expectation = expect(request).rejects.toBeInstanceOf(ApiTimeoutError);
+    await vi.advanceTimersByTimeAsync(25);
+    await expectation;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("times out when fetch itself never resolves", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    const request = getHint({ level: 1 }, { timeoutMs: 25 });
+    const expectation = expect(request).rejects.toBeInstanceOf(ApiTimeoutError);
+    await vi.advanceTimersByTimeAsync(25);
+    await expectation;
+  });
+
+  it("preserves an external cancellation through body parsing", async () => {
+    const controller = new AbortController();
+    const body = new Promise(() => {});
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, text: () => body })));
+
+    const request = getHint({ level: 1 }, { signal: controller.signal, timeoutMs: 5000 });
+    controller.abort();
+    await expect(request).rejects.toMatchObject({ name: "AbortError" });
   });
 });

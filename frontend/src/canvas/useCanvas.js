@@ -16,14 +16,12 @@ import {
   getCanvasBackingSize,
   getStrokeBounds,
   resolveRowForBounds,
+  rowsNearBounds,
+  strokesNearBounds,
 } from "./inkModel";
 
 const NOTEBOOK_ROWS = 24;
 const NOTEBOOK_HEIGHT = NOTEBOOK_ROWS * LINE_HEIGHT;
-const TOOLBAR_HEIGHT = 72;
-const FEEDBACK_PANEL_WIDTH = 360;
-const PAGE_GAP = 16;
-const WIDE_BREAKPOINT = 1100;
 const NOOP = () => {};
 
 // Deep enough that a student never hits the end of undo in one problem,
@@ -53,10 +51,9 @@ export function completedRowAfterStroke(queuedRow, previousRow, committedRow) {
 }
 
 export function getCanvasDisplaySize(viewportWidth, viewportHeight) {
-  const reservedWidth = viewportWidth > WIDE_BREAKPOINT ? FEEDBACK_PANEL_WIDTH + PAGE_GAP * 3 : 0;
   return {
-    width: Math.max(1, viewportWidth - reservedWidth),
-    height: Math.max(NOTEBOOK_HEIGHT, viewportHeight - TOOLBAR_HEIGHT),
+    width: Math.max(1, Math.round(viewportWidth)),
+    height: Math.max(NOTEBOOK_HEIGHT, Math.round(viewportHeight)),
   };
 }
 
@@ -295,42 +292,48 @@ export default function useCanvas({
   // update and one redraw rather than one per sampled position.
   const eraseAlong = (centres) => {
     const radius = eraserRadiusRef.current;
+    const candidateSet = new Set();
+    for (const centre of centres) {
+      for (const stroke of strokesNearBounds(inkIndexRef.current, {
+        minX: centre.x - radius,
+        maxX: centre.x + radius,
+        minY: centre.y - radius,
+        maxY: centre.y + radius,
+      })) candidateSet.add(stroke);
+    }
     let working = strokesRef.current;
     let changed = false;
 
     for (const centre of centres) {
       // Rows the disc overlaps are the rows whose recognition is now stale.
-      for (const [row, bounds] of inkIndexRef.current.bounds) {
-        if (!bounds) continue;
-        if (
-          centre.x + radius >= bounds.minX &&
-          centre.x - radius <= bounds.maxX &&
-          centre.y + radius >= bounds.minY &&
-          centre.y - radius <= bounds.maxY
-        ) {
-          erasedRowsRef.current.add(row);
-        }
-      }
+      for (const row of rowsNearBounds(inkIndexRef.current, {
+        minX: centre.x - radius,
+        maxX: centre.x + radius,
+        minY: centre.y - radius,
+        maxY: centre.y + radius,
+      })) erasedRowsRef.current.add(row);
 
-      const next = [];
-      let touched = false;
-      for (const stroke of working) {
-        const pieces = eraseFromStroke(stroke, centre, radius);
-        // eraseFromStroke returns the original by identity when it misses.
-        if (pieces.length === 1 && pieces[0] === stroke) {
-          next.push(stroke);
-          continue;
-        }
-        touched = true;
-        next.push(...pieces);
-      }
-      if (touched) {
-        working = next;
-        changed = true;
-      }
     }
 
-    if (changed) applyStrokes(working);
+    // The spatial index narrows a drag to strokes whose bounding boxes touch
+    // the swept band. Each candidate is then clipped against every sampled
+    // centre; unrelated strokes are never rebuilt for every pointer sample.
+    const next = [];
+    for (const stroke of working) {
+      if (!candidateSet.has(stroke)) {
+        next.push(stroke);
+        continue;
+      }
+      let pieces = [stroke];
+      for (const centre of centres) {
+        pieces = pieces.flatMap((piece) => eraseFromStroke(piece, centre, radius));
+        if (!pieces.length) break;
+      }
+      if (pieces.length !== 1 || pieces[0] !== stroke) changed = true;
+      next.push(...pieces);
+    }
+
+    if (changed) applyStrokes(next);
     return changed;
   };
 
@@ -939,20 +942,6 @@ export default function useCanvas({
     observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
     return () => observer.disconnect();
   }, []);
-
-  useEffect(() => {
-    const resize = () => {
-      const { width, height } = getCanvasDisplaySize(
-        document.documentElement.clientWidth,
-        window.innerHeight
-      );
-      setViewportSize(width, height);
-    };
-
-    resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, [setViewportSize]);
 
   return {
     staticCanvasRef,

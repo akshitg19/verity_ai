@@ -111,7 +111,7 @@ export default function FeedbackPanel({
   }, [announcedKey, flaggedKey, open]);
 
   return (
-    <>
+    <div className="feedback-dock">
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {transcribing ? "Reading your latest line." : latestLine ? `Recognized: ${latestLine}` : ""}
       </div>
@@ -336,6 +336,6 @@ export default function FeedbackPanel({
           </button>
         </div>
       </aside>
-    </>
+    </div>
   );
 }

@@ -19,7 +19,8 @@ import {
   rowForChemistryLineNumber,
   upsertChemistryLine,
 } from "./lineModel";
-import { openCurrentSession, readStructureSnapshot } from "./requestModel";
+import { readStructureSnapshot } from "./requestModel";
+import useChemistrySession from "./useChemistrySession";
 import { trustedStructurePreview } from "./structurePreview";
 import { emptyValues, readStoredTopic, rememberTopic } from "./topicMemory";
 import {
@@ -59,8 +60,6 @@ export default function useChemistry({ pageId = null } = {}) {
     () => stored.values ?? emptyValues(topic.types[0])
   );
 
-  const [session, setSession] = useState(null);
-
   // Structures are one two-dimensional figure. Written chemistry uses one
   // entry per segmented row so each claim can be corrected and checked on its
   // own without pretending a page-wide transcription was one answer.
@@ -90,7 +89,6 @@ export default function useChemistry({ pageId = null } = {}) {
   const [captureCount, setCaptureCount] = useState(null);
 
   const requestId = useRef(0);
-  const sessionRequestId = useRef(0);
   const hintRequestId = useRef(0);
   const previewRequestId = useRef(0);
   const lineRequestIds = useRef(new Map());
@@ -98,7 +96,6 @@ export default function useChemistry({ pageId = null } = {}) {
   const lineAbortControllers = useRef(new Map());
   const checkAbortRef = useRef(null);
   const hintAbortRef = useRef(null);
-  const sessionAbortRef = useRef(null);
   const previewAbortRef = useRef(null);
   const pageScopeRef = useRef(pageId);
 
@@ -113,6 +110,23 @@ export default function useChemistry({ pageId = null } = {}) {
   const ready = isProblemReady(problemType, values);
   const problemText = describeProblem(topic, problemType, values);
   const reading = pageReading || readingRows.size > 0;
+  const handleSessionFailure = useCallback((error) => {
+    setStatus({
+      notice:
+        "We couldn't solve this problem ahead of time, so hints will be the " +
+        "built-in ones rather than written for your work.",
+    });
+    return error;
+  }, []);
+
+  const { session, ensureSession, cancelSession } = useChemistrySession({
+    topic,
+    problemType,
+    values,
+    problemText,
+    pageScopeRef,
+    onFailure: handleSessionFailure,
+  });
 
   useEffect(() => {
     rememberTopic(topicId, typeId, values);
@@ -181,18 +195,22 @@ export default function useChemistry({ pageId = null } = {}) {
     clearVerdict();
   }, [clearVerdict]);
 
-  const resetProblem = useCallback(() => {
-    sessionRequestId.current += 1;
-    sessionAbortRef.current?.abort();
-    sessionAbortRef.current = null;
-    setSession(null);
+  const resetProblem = useCallback(({ resetConfiguration = true } = {}) => {
+    cancelSession();
+    if (resetConfiguration) {
+      const defaultTopic = TOPICS[0];
+      const defaultType = defaultTopic.types[0];
+      setTopicId(defaultTopic.id);
+      setTypeId(defaultType.id);
+      setValues(emptyValues(defaultType));
+    }
     setStatus(null);
     setCaptureNote("");
     questionRowRef.current = null;
     setQuestionRow(null);
     setDismissedRows(new Set());
     clearAnswer();
-  }, [clearAnswer]);
+  }, [cancelSession, clearAnswer]);
 
   const chooseTopic = useCallback(
     (nextTopicId) => {
@@ -201,7 +219,7 @@ export default function useChemistry({ pageId = null } = {}) {
       setTopicId(nextTopicId);
       setTypeId(nextTopic.types[0].id);
       setValues(emptyValues(nextTopic.types[0]));
-      resetProblem();
+      resetProblem({ resetConfiguration: false });
     },
     [resetProblem, topicId]
   );
@@ -212,7 +230,7 @@ export default function useChemistry({ pageId = null } = {}) {
       if (!nextType || nextTypeId === typeId) return;
       setTypeId(nextTypeId);
       setValues(emptyValues(nextType));
-      resetProblem();
+      resetProblem({ resetConfiguration: false });
     },
     [resetProblem, topic.types, typeId]
   );
@@ -221,11 +239,10 @@ export default function useChemistry({ pageId = null } = {}) {
     (name, value) => {
       setValues((current) => ({ ...current, [name]: value }));
       // The server-side vault belongs to the exact problem that was opened.
-      sessionRequestId.current += 1;
-      setSession(null);
+      cancelSession();
       clearVerdict();
     },
-    [clearVerdict]
+    [cancelSession, clearVerdict]
   );
 
   // -- the question, written rather than typed ------------------------------
@@ -275,40 +292,6 @@ export default function useChemistry({ pageId = null } = {}) {
     setQuestionRow(null);
     if (field) setValue(field, "");
   }, [problemType, setValue, topic]);
-
-  // -- session ------------------------------------------------------------
-
-  const ensureSession = useCallback(async () => {
-    if (session) return session;
-    const payload = topic.session?.(problemType, values, problemText);
-    if (!payload) return null;
-    const id = ++sessionRequestId.current;
-    const requestPageId = pageScopeRef.current;
-    sessionAbortRef.current?.abort();
-    const abortController = new AbortController();
-    sessionAbortRef.current = abortController;
-    try {
-      const created = await openCurrentSession(
-        payload,
-        () => id === sessionRequestId.current && requestPageId === pageScopeRef.current,
-        { signal: abortController.signal }
-      );
-      if (!created) return null;
-      setSession(created);
-      return created;
-    } catch (error) {
-      if (id !== sessionRequestId.current || requestPageId !== pageScopeRef.current) return null;
-      if (error.name === "AbortError") return null;
-      setStatus({
-        notice:
-          "We couldn't solve this problem ahead of time, so hints will be the " +
-          "built-in ones rather than written for your work.",
-      });
-      return null;
-    } finally {
-      if (sessionAbortRef.current === abortController) sessionAbortRef.current = null;
-    }
-  }, [problemText, problemType, session, topic, values]);
 
   // -- reading ------------------------------------------------------------
 
@@ -737,10 +720,12 @@ export default function useChemistry({ pageId = null } = {}) {
       dismissedRows,
       hintLevel,
       hint,
+      reading,
+      checking,
       lastResult: status,
       updatedAt: Date.now(),
     });
-  }, [answer, confidence, dismissedRows, firstWrongRow, hint, hintLevel, problemText, read, status, topicId, typeId, unreadable, values, verdict, verdictsByLine]);
+  }, [answer, checking, confidence, dismissedRows, firstWrongRow, hint, hintLevel, problemText, read, reading, status, topicId, typeId, unreadable, values, verdict, verdictsByLine]);
 
   const restoreWorkflowSnapshot = useCallback((rawSnapshot) => {
     const snapshot = deserializeWorkflowSnapshot(rawSnapshot);
@@ -748,6 +733,7 @@ export default function useChemistry({ pageId = null } = {}) {
       resetProblem();
       return;
     }
+    cancelSession();
     clearAnswer();
     const nextTopicId = snapshot.chemistry?.topicId ?? TOPICS[0].id;
     const nextTopic = TOPICS.find((entry) => entry.id === nextTopicId) ?? TOPICS[0];
@@ -755,8 +741,7 @@ export default function useChemistry({ pageId = null } = {}) {
     const nextType = nextTopic.types.find((entry) => entry.id === nextTypeId) ?? nextTopic.types[0];
     setTopicId(nextTopic.id);
     setTypeId(nextType.id);
-    setValues(snapshot.chemistry?.values ?? emptyValues(nextType));
-    setSession(null);
+    setValues({ ...emptyValues(nextType), ...(snapshot.chemistry?.values ?? {}) });
     const nextLines = [...(snapshot.recognizedLines ?? [])];
     linesRef.current = nextLines;
     setLines(nextLines);
@@ -776,7 +761,7 @@ export default function useChemistry({ pageId = null } = {}) {
     setHint(snapshot.hint ?? null);
     setHintError(null);
     setStatus(snapshot.lastResult ?? null);
-  }, [clearAnswer, resetProblem]);
+  }, [cancelSession, clearAnswer, resetProblem]);
 
   useEffect(() => {
     pageScopeRef.current = pageId;
@@ -789,7 +774,6 @@ export default function useChemistry({ pageId = null } = {}) {
   useEffect(() => () => {
     checkAbortRef.current?.abort();
     hintAbortRef.current?.abort();
-    sessionAbortRef.current?.abort();
     previewAbortRef.current?.abort();
     for (const controller of lineAbortControllers.current.values()) controller.abort();
   }, []);

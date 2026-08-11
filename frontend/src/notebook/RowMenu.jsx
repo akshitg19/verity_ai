@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { COLORS, FONT, RADIUS, SHADOW } from "../theme";
 
@@ -15,36 +15,43 @@ export default function RowMenu({ items, label = "More actions" }) {
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
+  const menuId = useId();
+
+  const enabledItems = () =>
+    [...(menuRef.current?.querySelectorAll("[role='menuitem']:not(:disabled)") ?? [])];
+
+  const closeMenu = () => {
+    setOpen(false);
+    requestAnimationFrame(() => buttonRef.current?.querySelector("button")?.focus());
+  };
 
   useEffect(() => {
     if (!open) return undefined;
     const close = (event) => {
-      if (!buttonRef.current?.contains(event.target)) setOpen(false);
+      if (!buttonRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) closeMenu();
     };
-    const onKey = (event) => event.key === "Escape" && setOpen(false);
     document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", onKey);
     };
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    menuRef.current?.querySelector("[role='menuitem']")?.focus();
+    enabledItems()[0]?.focus();
   }, [open]);
 
   const onMenuKeyDown = (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
-      setOpen(false);
-      buttonRef.current?.querySelector("button")?.focus();
+      closeMenu();
       return;
     }
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
-    const last = Math.max(0, items.length - 1);
+    const controls = enabledItems();
+    if (!controls.length) return;
+    const last = controls.length - 1;
     const next = event.key === "Home"
       ? 0
       : event.key === "End"
@@ -53,7 +60,7 @@ export default function RowMenu({ items, label = "More actions" }) {
       ? Math.min(last, activeIndex + 1)
       : Math.max(0, activeIndex - 1);
     setActiveIndex(next);
-    menuRef.current?.querySelectorAll("[role='menuitem']")[next]?.focus();
+    controls[next]?.focus();
   };
 
   const toggle = (event) => {
@@ -82,6 +89,7 @@ export default function RowMenu({ items, label = "More actions" }) {
         type="button"
         aria-label={label}
         aria-expanded={open}
+        aria-controls={menuId}
         title={label}
         onClick={toggle}
         style={{
@@ -104,6 +112,7 @@ export default function RowMenu({ items, label = "More actions" }) {
       {open && (
         <div
           ref={menuRef}
+          id={menuId}
           role="menu"
           aria-label={label}
           onKeyDown={onMenuKeyDown}
@@ -131,7 +140,7 @@ export default function RowMenu({ items, label = "More actions" }) {
               disabled={item.disabled}
               onClick={(event) => {
                 event.stopPropagation();
-                setOpen(false);
+                closeMenu();
                 item.onSelect();
               }}
               style={{

@@ -10,6 +10,7 @@ import FeedbackPanel from "./components/FeedbackPanel";
 import PageActions from "./components/PageActions";
 import WorkspaceToolbar from "./components/WorkspaceToolbar";
 import NotebookSidebar from "./notebook/NotebookSidebar";
+import NotebookSaveStatus from "./notebook/NotebookSaveStatus";
 import useNotebook from "./notebook/useNotebook";
 import { deriveCompletionStatus } from "./notebook/completionStatus";
 import useMathWorkflow from "./math/useMathWorkflow";
@@ -56,12 +57,19 @@ export default function App({ theme: themeFromRoute, subject }) {
     onToggleNotebook: () => setShowNotebook((value) => !value),
   });
 
+  // A route chooses a subject once when the route changes. It must not choose
+  // a note again when the student clicks a different note within that subject.
+  // The subject list is already sorted by pin/recency, so the first note is a
+  // deterministic fallback when a subject has not been opened in this route.
+  const routedSubjectRef = useRef(null);
   useEffect(() => {
-    const subjectNote = notebook.notes.find((note) => note.subject === subject);
-    if (subjectNote && notebook.activeNote.id !== subjectNote.id) notebook.openNote(subjectNote.id);
-    // The notebook object is the intentional source of truth for the route-selected note.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notebook.activeNote.id, notebook.notes, notebook.openNote, subject]);
+    if (!notebook.hydrated) return;
+    if (routedSubjectRef.current === subject) return;
+    const subjectNote = notebook.folders[subject]?.[0];
+    if (!subjectNote) return;
+    routedSubjectRef.current = subject;
+    if (notebook.activeNote.subject !== subject) void notebook.openNote(subjectNote.id);
+  }, [notebook, notebook.activeNote.subject, notebook.folders, notebook.hydrated, notebook.openNote, subject]);
 
   const transcribing = mode === "chemistry" ? chemistry.reading : math.transcribing;
   const status = mode === "chemistry" ? chemistry.status : math.lastResult;
@@ -90,13 +98,13 @@ export default function App({ theme: themeFromRoute, subject }) {
       pendingPageLoadRef.current = null;
       return;
     }
-    notebook.saveStrokes(canvas.strokes);
+    notebook.saveStrokes(canvas.strokes, notebook.activePage.id, notebook.activeNote.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvas.strokes, notebook.activePage.id]);
 
   useEffect(() => {
     if (loadedPageRef.current !== pageId || pendingPageLoadRef.current === pageId) return;
-    notebook.saveWorkflow(activeWorkflowSnapshot, pageId);
+    notebook.saveWorkflow(activeWorkflowSnapshot, pageId, notebook.activeNote.id);
     // Persist the active page's workflow separately from its strokes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageId, workflowSignature]);
@@ -121,20 +129,6 @@ export default function App({ theme: themeFromRoute, subject }) {
     notebook.nameFromQuestion(chemistry.problemText);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chemistry.ready, chemistry.problemText, mode]);
-
-  // The route names the subject, so /chemistry opens a chemistry note even
-  // if the last one open was math. Runs once per subject change, not on
-  // every render, or it would fight the in-app subject toggle.
-  const routedSubjectRef = useRef(null);
-  useEffect(() => {
-    if (!subject || routedSubjectRef.current === subject) return;
-    routedSubjectRef.current = subject;
-    if (subject === mode) return;
-    const existing = notebook.folders[subject]?.[0];
-    if (existing) workspace.workspaceNotebook.openNote(existing.id);
-    else workspace.workspaceNotebook.createNote(subject);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, subject, workspace.workspaceNotebook]);
 
   const handleReadPage = async () => {
     if (canvas.strokes.length === 0) return;
@@ -169,6 +163,7 @@ export default function App({ theme: themeFromRoute, subject }) {
 
   return (
     <div
+      className="workspace-app"
       style={{
         position: "fixed",
         inset: 0,
@@ -220,7 +215,12 @@ export default function App({ theme: themeFromRoute, subject }) {
         theme={theme}
         onFinishLine={canvas.finishActiveRow}
         onReadPage={handleReadPage}
-        onClear={workspace.handleClear}
+        onClear={workspace.handleNewQuestion}
+      />
+      <NotebookSaveStatus
+        status={notebook.saveStatus}
+        error={notebook.saveError}
+        onRetry={notebook.retrySave}
       />
       <PageActions
         mode={mode}
@@ -229,7 +229,7 @@ export default function App({ theme: themeFromRoute, subject }) {
         activeLineNumber={canvas.activeLineNumber}
         onFinishLine={canvas.finishActiveRow}
         onReadPage={handleReadPage}
-        onClear={workspace.handleClear}
+        onNewQuestion={workspace.handleNewQuestion}
       />
       <FeedbackPanel
         mode={mode}

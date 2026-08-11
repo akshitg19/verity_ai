@@ -15,6 +15,7 @@ function PageThumb({ page, index, active, accent, onOpen, onDelete, canDelete })
       <button
         type="button"
         onClick={() => onOpen(page.id)}
+        aria-label={`Open page ${index + 1}`}
         aria-current={active ? "page" : undefined}
         title={`Page ${index + 1}`}
         style={{

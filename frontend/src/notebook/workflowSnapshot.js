@@ -30,6 +30,8 @@ export function serializeWorkflowSnapshot(snapshot = {}) {
     hintLevel: snapshot.hintLevel ?? 0,
     hint: snapshot.hint ?? snapshot.hintText ?? null,
     hintText: snapshot.hintText ?? snapshot.hint?.hint ?? null,
+    reading: Boolean(snapshot.reading),
+    checking: Boolean(snapshot.checking),
     lastResult: snapshot.lastResult ?? snapshot.status ?? null,
     updatedAt: snapshot.updatedAt ?? Date.now(),
   };

@@ -9,6 +9,7 @@ export const DEFAULT_ROW_JOIN_GAP = 10;
 // Without a ceiling every join widens the row's bounds, which makes the next
 // join likelier, and one row eventually swallows the page.
 export const MAX_ROW_HEIGHT_RATIO = 1.6;
+export const SPATIAL_CELL_SIZE = 64;
 
 export function getStrokeBounds(stroke) {
   let minX = Infinity;
@@ -160,19 +161,73 @@ export function addStrokeToInkIndex(index, stroke, options) {
   } else {
     index.rows.set(row, [stroke]);
   }
+  index.strokeRows.set(stroke, row);
 
   index.bounds.set(
     row,
     mergeBounds(index.bounds.get(row), getStrokeBounds(stroke))
   );
 
+  if (!bounds) return row;
+  index.strokeBounds.set(stroke, bounds);
+  const minCellX = Math.floor(bounds.minX / SPATIAL_CELL_SIZE);
+  const maxCellX = Math.floor(bounds.maxX / SPATIAL_CELL_SIZE);
+  const minCellY = Math.floor(bounds.minY / SPATIAL_CELL_SIZE);
+  const maxCellY = Math.floor(bounds.maxY / SPATIAL_CELL_SIZE);
+  for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+    for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) {
+      const key = `${cellX}:${cellY}`;
+      const cell = index.spatial.get(key) ?? new Set();
+      cell.add(stroke);
+      index.spatial.set(key, cell);
+    }
+  }
+
   return row;
+}
+
+export function strokesNearBounds(index, bounds) {
+  if (!bounds) return new Set();
+  const minCellX = Math.floor(bounds.minX / SPATIAL_CELL_SIZE);
+  const maxCellX = Math.floor(bounds.maxX / SPATIAL_CELL_SIZE);
+  const minCellY = Math.floor(bounds.minY / SPATIAL_CELL_SIZE);
+  const maxCellY = Math.floor(bounds.maxY / SPATIAL_CELL_SIZE);
+  const candidates = new Set();
+  for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+    for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) {
+      for (const stroke of index.spatial.get(`${cellX}:${cellY}`) ?? []) {
+        const strokeBounds = index.strokeBounds.get(stroke);
+        if (
+          strokeBounds &&
+          strokeBounds.maxX >= bounds.minX &&
+          strokeBounds.minX <= bounds.maxX &&
+          strokeBounds.maxY >= bounds.minY &&
+          strokeBounds.minY <= bounds.maxY
+        ) {
+          candidates.add(stroke);
+        }
+      }
+    }
+  }
+  return candidates;
+}
+
+export function rowsNearBounds(index, bounds) {
+  const rows = new Set();
+  for (const stroke of strokesNearBounds(index, bounds)) {
+    const row = index.strokeRows.get(stroke);
+    if (row !== undefined) rows.add(row);
+  }
+  return rows;
 }
 
 export function buildInkIndex(strokes) {
   const index = {
     rows: new Map(),
     bounds: new Map(),
+    strokeBounds: new Map(),
+    strokeRows: new Map(),
+    spatial: new Map(),
   };
 
   for (const stroke of strokes) addStrokeToInkIndex(index, stroke);
