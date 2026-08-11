@@ -68,8 +68,8 @@ function initial() {
       notes: stored.notes.map((note) => ({ folderId: null, ...note })),
     };
   }
-  const math = blankNote("math", "First problem");
-  const chemistry = blankNote("chemistry", "First structure");
+  const math = blankNote("math", "Math 1");
+  const chemistry = blankNote("chemistry", "Chemistry 1");
   return { folders: [], notes: [math, chemistry], activeNoteId: math.id };
 }
 
@@ -173,16 +173,49 @@ export default function useNotebook() {
 
   const createNote = useCallback(
     (forSubject = "math", title, folderId = null) => {
-      const note = blankNote(forSubject, title, folderId);
-      setState((current) => ({
-        ...current,
-        notes: [note, ...current.notes].slice(0, MAX_NOTES),
-        activeNoteId: note.id,
-      }));
-      return note;
+      let created;
+      setState((current) => {
+        // Numbered rather than all called the same thing. "Chemistry 3" is
+        // something a student can find again; three rows reading "Chemistry"
+        // is a list they have to open one at a time.
+        const used = current.notes.filter((note) => note.subject === forSubject);
+        const label = forSubject === "chemistry" ? "Chemistry" : "Math";
+        const fallback = `${label} ${used.length + 1}`;
+        created = blankNote(forSubject, title || fallback, folderId);
+        return {
+          ...current,
+          notes: [created, ...current.notes].slice(0, MAX_NOTES),
+          activeNoteId: created.id,
+        };
+      });
+      return created;
     },
     []
   );
+
+  // A copy of a note, ink and all, which is how a student reuses a page of
+  // working as the starting point for the next question.
+  const duplicateNote = useCallback((noteId) => {
+    setState((current) => {
+      const source = current.notes.find((note) => note.id === noteId);
+      if (!source) return current;
+      const copy = {
+        ...source,
+        id: newId(),
+        title: `${source.title} copy`.slice(0, 80),
+        createdAt: now(),
+        updatedAt: now(),
+        pages: source.pages.map((page) => ({ ...page, id: newId() })),
+        activePageId: null,
+        lastVerdict: null,
+      };
+      return {
+        ...current,
+        notes: [copy, ...current.notes].slice(0, MAX_NOTES),
+        activeNoteId: copy.id,
+      };
+    });
+  }, []);
 
   const createFolder = useCallback((subject, name) => {
     const folder = blankFolder(subject, name);
@@ -232,7 +265,7 @@ export default function useNotebook() {
     setState((current) => {
       const remaining = current.notes.filter((note) => note.id !== noteId);
       if (!remaining.length) {
-        const replacement = blankNote("math", "First problem");
+        const replacement = blankNote("math", "Math 1");
         return { ...current, notes: [replacement], activeNoteId: replacement.id };
       }
       return {
@@ -310,6 +343,7 @@ export default function useNotebook() {
     pageCount: activeNote.pages.length,
     saveStrokes,
     createNote,
+    duplicateNote,
     openNote,
     renameNote,
     deleteNote,

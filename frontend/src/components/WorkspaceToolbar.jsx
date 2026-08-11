@@ -102,6 +102,80 @@ function ToolButton({ active, children, style, ...props }) {
   );
 }
 
+function NoteTitle({ title, onRename }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+
+  const commit = () => {
+    setEditing(false);
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== title) onRename(trimmed);
+    else setDraft(title);
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        aria-label="Note name"
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+          if (event.key === "Escape") {
+            setDraft(title);
+            setEditing(false);
+          }
+        }}
+        style={{
+          width: 160,
+          padding: "5px 8px",
+          border: `1px solid ${COLORS.primary}`,
+          borderRadius: RADIUS.sm,
+          background: COLORS.surface,
+          color: COLORS.text,
+          fontFamily: "inherit",
+          fontSize: 15,
+          fontWeight: 700,
+          outline: "none",
+        }}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        // Seeded here rather than kept in step through an effect: the draft
+        // only matters while the field is open.
+        setDraft(title);
+        setEditing(true);
+      }}
+      title="Rename this note"
+      style={{
+        maxWidth: 170,
+        padding: "4px 6px",
+        background: "transparent",
+        border: "none",
+        borderRadius: RADIUS.sm,
+        color: COLORS.text,
+        fontFamily: "inherit",
+        fontWeight: 700,
+        fontSize: 16,
+        textAlign: "left",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        cursor: "text",
+      }}
+    >
+      {title}
+    </button>
+  );
+}
+
 export default function WorkspaceToolbar({
   notebook,
   showNotebook,
@@ -114,9 +188,6 @@ export default function WorkspaceToolbar({
   onProblemEditDone,
   canvas,
   theme,
-  onFinishLine,
-  onReadPage,
-  onClear,
 }) {
   const [showPenSettings, setShowPenSettings] = useState(false);
   const [showEraserSettings, setShowEraserSettings] = useState(false);
@@ -133,8 +204,6 @@ export default function WorkspaceToolbar({
     setEraserRadius,
     eraseMode,
     setEraseMode,
-    strokes,
-    activeLineNumber,
     handleUndo,
     handleRedo,
     canUndo,
@@ -246,27 +315,14 @@ export default function WorkspaceToolbar({
         >
           <Logo size={34} accent={SUBJECTS[mode].accent} />
         </button>
-        <div style={{ minWidth: 0 }}>
-          <div
-            title={notebook.activeNote.title}
-            style={{
-              color: COLORS.text,
-              fontWeight: 700,
-              fontSize: 16,
-              lineHeight: 1.15,
-              fontFamily: "inherit",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              maxWidth: 150,
-            }}
-          >
-            {notebook.activeNote.title}
-          </div>
-          <div style={{ color: COLORS.muted, fontSize: 11, marginTop: 2, fontFamily: "inherit" }}>
-            {SUBJECTS[mode].label}
-          </div>
-        </div>
+        {/* The note title, editable in place. It used to be static text with
+            the subject repeated underneath, and the subject is already the
+            toggle two controls along. Renaming where you read the name is
+            what every notes app does. */}
+        <NoteTitle
+          title={notebook.activeNote.title}
+          onRename={(name) => notebook.renameNote(notebook.activeNote.id, name)}
+        />
       </div>
 
       <PageStrip notebook={notebook} mode={mode} />
@@ -311,15 +367,19 @@ export default function WorkspaceToolbar({
           style={{ flex: 1, minWidth: 180, maxWidth: 460, padding: "10px 14px", border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: COLORS.background, color: COLORS.text, fontFamily: "inherit", fontSize: 14, outline: "none" }}
         />
       ) : (
-        <div style={{ flex: 1, minWidth: 180, maxWidth: 520, padding: "8px 14px", border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: COLORS.background, fontFamily: "inherit", overflow: "hidden" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: SUBJECTS.chemistry.accent }}>
-            {chemistry.topic.label}
-          </div>
-          <div style={{ fontSize: 13, color: chemistry.ready ? COLORS.text : COLORS.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {chemistry.ready
-              ? chemistry.problemText
-              : `${chemistry.problemType.label}. Write the question, or type it in the panel`}
-          </div>
+        // One line, not two. The topic was printed here in full and again as
+        // a heading in the panel, which read as a second tab bar for
+        // something that is not a tab.
+        <div
+          title={chemistry.ready ? chemistry.problemText : chemistry.topic.label}
+          style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 160, maxWidth: 520, padding: "8px 14px", border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: COLORS.background, fontFamily: "inherit", overflow: "hidden" }}
+        >
+          <span aria-hidden="true" style={{ color: SUBJECTS.chemistry.accent, fontSize: 14, flexShrink: 0 }}>
+            {chemistry.topic.glyph}
+          </span>
+          <span style={{ fontSize: 13, color: chemistry.ready ? COLORS.text : COLORS.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {chemistry.ready ? chemistry.problemText : "Write the question at the top of the page"}
+          </span>
         </div>
       )}
 
@@ -473,25 +533,9 @@ export default function WorkspaceToolbar({
           {themeLabel.glyph}
         </button>
 
-        {mode === "math" ? (
-          <button
-            type="button"
-            onClick={onFinishLine}
-            disabled={strokes.length === 0 || activeLineNumber === null}
-            style={{ padding: "10px 16px", whiteSpace: "nowrap", background: COLORS.primary, color: "#fff", border: "none", borderRadius: RADIUS.md, fontWeight: 600, opacity: strokes.length === 0 || activeLineNumber === null ? 0.4 : 1, cursor: strokes.length === 0 || activeLineNumber === null ? "not-allowed" : "pointer" }}
-          >
-            {activeLineNumber === null ? "Check Line" : `Check Line ${activeLineNumber}`}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onReadPage}
-            disabled={strokes.length === 0 || chemistry.reading}
-            style={{ padding: "10px 16px", whiteSpace: "nowrap", background: SUBJECTS.chemistry.accent, color: "#fff", border: "none", borderRadius: RADIUS.md, fontWeight: 600, opacity: strokes.length === 0 || chemistry.reading ? 0.4 : 1, cursor: strokes.length === 0 || chemistry.reading ? "not-allowed" : "pointer" }}
-          >
-            {chemistry.reading ? "Reading…" : chemistry.isDrawing ? "Read Page" : "Read Rows"}
-          </button>
-        )}
+        {/* Read and New question used to live here. Both moved down to the
+            page, where the hand already is: a control you reach for while
+            writing does not belong at the far top corner of a tablet. */}
 
         <ToolButton
           title="Undo"
@@ -510,12 +554,6 @@ export default function WorkspaceToolbar({
           style={{ padding: "10px 13px", opacity: canRedo ? 1 : 0.4, cursor: canRedo ? "pointer" : "not-allowed" }}
         >
           ↷
-        </ToolButton>
-        <ToolButton
-          onClick={onClear}
-          style={{ color: COLORS.danger }}
-        >
-          New Problem
         </ToolButton>
       </div>
     </div>

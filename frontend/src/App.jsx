@@ -7,13 +7,14 @@ import QuestionPrompt from "./chemistry/QuestionPrompt";
 import CanvasSurface from "./components/CanvasSurface";
 import useTheme from "./useTheme";
 import FeedbackPanel from "./components/FeedbackPanel";
+import PageActions from "./components/PageActions";
 import WorkspaceToolbar from "./components/WorkspaceToolbar";
 import NotebookSidebar from "./notebook/NotebookSidebar";
 import useNotebook from "./notebook/useNotebook";
 import useMathWorkflow from "./math/useMathWorkflow";
 import { SURFACES } from "./theme";
 
-const SIDEBAR_WIDTH = 250;
+const SIDEBAR_WIDTH = 288;
 const SWIPE_DISTANCE = 90;
 const SWIPE_SLOPE = 60;
 
@@ -172,6 +173,8 @@ export default function App({ theme: themeFromRoute, subject }) {
         open={showNotebook}
         onClose={() => setShowNotebook(false)}
         width={SIDEBAR_WIDTH}
+        subject={mode}
+        onSubjectChange={handleModeChange}
       />
       <CanvasSurface canvas={canvas}>
         {mode === "chemistry" && chemistry.questionCandidateRow !== null && (
@@ -203,6 +206,15 @@ export default function App({ theme: themeFromRoute, subject }) {
         onProblemEditDone={math.handleProblemEditDone}
         canvas={canvas}
         theme={theme}
+        onFinishLine={canvas.finishActiveRow}
+        onReadPage={handleReadPage}
+        onClear={handleClear}
+      />
+      <PageActions
+        mode={mode}
+        chemistry={chemistry}
+        strokeCount={canvas.strokes.length}
+        activeLineNumber={canvas.activeLineNumber}
         onFinishLine={canvas.finishActiveRow}
         onReadPage={handleReadPage}
         onClear={handleClear}

@@ -565,6 +565,18 @@ class WorkedExample(BaseModel):
     technique: str
     steps: Annotated[list[str], Field(min_length=1, max_length=20)]
     verified: bool = False
+    # One entry per step, aligned by index: the equation on that step as our
+    # own parser reads it, or null where the step carries no equation.
+    #
+    # Additive, and it exists to end a class of bug rather than to add a
+    # feature. Every step is a sentence and then the chemistry, so the client
+    # was parsing prose to find the equation and putting an atom tally beside
+    # it. It got that wrong often enough to be noticed. These come from
+    # `judge.chemistry_equations.parse_equation`, the same parser that judges
+    # the student, so a client can render the tally without doing any
+    # chemistry of its own, and a step we could not parse is null rather than
+    # a guess.
+    equations: list[str | None] | None = None
 
 
 class HintRequest(BaseModel):

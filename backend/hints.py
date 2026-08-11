@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 
 from model import ModelError, generate_json, is_configured
@@ -582,8 +583,101 @@ def _verify_example(topic: str, payload: dict, student_problem: str) -> WorkedEx
         return None
 
     return WorkedExample(
-        problem=problem, technique=technique, steps=steps, verified=True
+        problem=problem,
+        technique=technique,
+        steps=steps,
+        verified=True,
+        equations=[_step_equation(step) for step in steps],
     )
+
+
+# ---------------------------------------------------------------------------
+# Pulling the equation out of a step, with our own parser rather than the
+# client's.
+#
+# A step reads "Balance the oxygens last: C3H8 + 5O2 -> 3CO2 + 4H2O". The
+# client used to find the equation in that by keeping any word starting with a
+# capital, which tallied "Balance" as an element. Doing it here means the one
+# parser that already decides whether a student's line balances is also the
+# one that decides what the animation counts, and a step this cannot read
+# comes back as null instead of a wrong tally.
+# ---------------------------------------------------------------------------
+
+
+def _step_equation(step: str) -> str | None:
+    from judge.chemistry_equations import (
+        EQUATION_SEPARATORS,
+        EquationParseError,
+        parse_equation,
+    )
+
+    text = step.strip()
+    separator = next((s for s in EQUATION_SEPARATORS if s in text), None)
+    if separator is None:
+        return None
+
+    left, _, right = text.partition(separator)
+    left_terms = _formula_run(left, from_end=True)
+    right_terms = _formula_run(right, from_end=False)
+    if not left_terms or not right_terms:
+        return None
+
+    equation = f"{' + '.join(left_terms)} -> {' + '.join(right_terms)}"
+    try:
+        parse_equation(equation)
+    except EquationParseError:
+        return None
+    return equation
+
+
+def _formula_run(side: str, *, from_end: bool) -> list[str]:
+    """The run of real formula terms at one end of a side, prose trimmed off."""
+    from judge.chemistry_equations import EquationParseError, parse_formula
+
+    def readable(term: str) -> str | None:
+        # A term is either a formula already, or a sentence with the formula at
+        # the end it faces: prose runs up to the equation on the left of the
+        # arrow and away from it on the right. Anything else ends the run.
+        words = term.split()
+        salvage = (words[-1] if from_end else words[0]) if words else ""
+        for candidate in (term, salvage):
+            cleaned = candidate.strip().strip(".,;:!?")
+            if not cleaned:
+                continue
+            body = cleaned.lstrip("0123456789")
+            if not body:
+                continue
+            try:
+                parse_formula(body)
+            except EquationParseError:
+                continue
+            return cleaned
+        return None
+
+    terms = [term.strip() for term in _split_on_term_plus(side) if term.strip()]
+    ordered = list(reversed(terms)) if from_end else terms
+
+    run: list[str] = []
+    for term in ordered:
+        readable_term = readable(term)
+        if readable_term is None:
+            break
+        run.append(readable_term)
+    return list(reversed(run)) if from_end else run
+
+
+def _split_on_term_plus(side: str) -> list[str]:
+    """Split on "+", leaving a charge sign attached to its ion."""
+    terms: list[str] = []
+    current: list[str] = []
+    for character in side:
+        if character == "+" and not re.search(r"\^\d*$", "".join(current)):
+            terms.append("".join(current))
+            current = []
+            continue
+        current.append(character)
+    terms.append("".join(current))
+    return terms
 
 
 def _check_is_correct(topic: str, check: dict, steps: list[str]) -> bool:

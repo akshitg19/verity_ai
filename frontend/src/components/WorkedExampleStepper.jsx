@@ -119,9 +119,19 @@ export default function WorkedExampleStepper({ example }) {
   const [index, setIndex] = useState(0);
 
   if (!steps.length) return null;
+
+  // The server sends the equation on each step, read by the same parser that
+  // judges the student, so the tally is right rather than usually right.
+  // Falling back to reading the prose here keeps this working against an
+  // older backend, and against the static fallback hint, which has no
+  // equations attached.
+  const equationFor = (position) =>
+    example?.equations?.[position] ?? steps[position] ?? null;
+
   const current = steps[index];
-  const previous = index > 0 ? steps[index - 1] : null;
-  const hasEquation = Boolean(parseEquation(current));
+  const currentEquation = equationFor(index);
+  const previousEquation = index > 0 ? equationFor(index - 1) : null;
+  const hasEquation = Boolean(currentEquation && parseEquation(currentEquation));
 
   return (
     <div
@@ -187,8 +197,8 @@ export default function WorkedExampleStepper({ example }) {
         </div>
         {hasEquation && (
           <div style={{ marginTop: 10 }}>
-            <EquationLine text={current} previous={previous} />
-            <AtomTally text={current} previous={previous} />
+            <EquationLine text={currentEquation} previous={previousEquation} />
+            <AtomTally text={currentEquation} previous={previousEquation} />
           </div>
         )}
       </div>
