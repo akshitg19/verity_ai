@@ -1,4 +1,4 @@
-import { COLORS } from "../theme";
+import { COLORS, verdictStyle } from "../theme";
 import {
   buildMathCheckInput,
   orderedMathLines,
@@ -16,8 +16,8 @@ function lineStatus(line, isProblem, verdict, blocked) {
       detail: line.unreadable
         ? "We could not confidently read this line."
         : "Type what this line says.",
-      color: "#a96b1f",
-      background: "#fff7e8",
+      color: "var(--v-unsupported)",
+      background: "var(--v-unsupported-bg)",
       symbol: "!",
     };
   }
@@ -26,7 +26,7 @@ function lineStatus(line, isProblem, verdict, blocked) {
       label: "Waiting for earlier line",
       detail: "Waiting on the line above.",
       color: COLORS.muted,
-      background: "#f3f5f4",
+      background: "var(--v-waiting-bg)",
       symbol: "…",
     };
   }
@@ -34,8 +34,8 @@ function lineStatus(line, isProblem, verdict, blocked) {
     return {
       label: "Problem",
       detail: "This is the question being solved.",
-      color: "#486b91",
-      background: "#edf4fb",
+      color: COLORS.primary,
+      background: COLORS.primaryLight,
       symbol: "P",
     };
   }
@@ -45,7 +45,7 @@ function lineStatus(line, isProblem, verdict, blocked) {
       label: "Waiting",
       detail: "This line has not been checked yet.",
       color: COLORS.muted,
-      background: "#f3f5f4",
+      background: "var(--v-waiting-bg)",
       symbol: "…",
     };
   }
@@ -53,8 +53,8 @@ function lineStatus(line, isProblem, verdict, blocked) {
     return {
       label: "Correct step",
       detail: "This follows from the previous line.",
-      color: "#267a55",
-      background: "#edf8f2",
+      color: "var(--v-valid)",
+      background: "var(--v-valid-bg)",
       symbol: "✓",
     };
   }
@@ -65,19 +65,20 @@ function lineStatus(line, isProblem, verdict, blocked) {
         ? `Possible ${verdict.error_type.replaceAll("_", " ")}.`
         : "This does not follow from the previous line.",
       color: COLORS.danger,
-      background: "#fff0f0",
+      background: "var(--v-invalid-bg)",
       symbol: "!",
     };
   }
+  const fallbackStyle = verdictStyle(status === "parse_error" ? "parse_error" : "unsupported");
   return {
     label: status === "parse_error" ? "Could not check" : "Not supported yet",
     detail:
       status === "parse_error"
         ? "Try rewriting or editing the transcription."
         : "This type of step is outside the current scope.",
-    color: "#a96b1f",
-    background: "#fff7e8",
-    symbol: "?",
+    color: fallbackStyle.color,
+    background: fallbackStyle.background,
+    symbol: fallbackStyle.symbol,
   };
 }
 
@@ -89,6 +90,7 @@ export default function MathFeedbackPanel({ workflow }) {
     firstWrongLine,
     hintLevel,
     hintText,
+    hintError,
     hintLoading,
     handleLineEdit,
     handleLineEditDone,
@@ -180,11 +182,19 @@ export default function MathFeedbackPanel({ workflow }) {
               {hintText}
             </div>
           )}
+          {hintError && (
+            <div role="alert" style={{ marginBottom: 10, padding: 12, borderRadius: 10, background: "var(--v-parse-bg)", color: COLORS.text, fontSize: 13 }}>
+              <div>That hint did not load. Your hint level was not used.</div>
+              <button type="button" onClick={handleGetHint} disabled={hintLoading} style={{ minHeight: 44, marginTop: 8, padding: "8px 12px", border: `1px solid ${COLORS.border}`, borderRadius: 9, background: COLORS.surface, color: COLORS.primary, fontWeight: 700 }}>
+                Retry hint
+              </button>
+            </div>
+          )}
           <button
             type="button"
             onClick={handleGetHint}
             disabled={hintLoading || hintLevel >= 3}
-            style={{ width: "100%", padding: "10px 14px", background: hintLoading || hintLevel >= 3 ? "#d8ddda" : COLORS.primary, color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, cursor: hintLoading || hintLevel >= 3 ? "not-allowed" : "pointer" }}
+            style={{ width: "100%", minHeight: 44, padding: "10px 14px", background: hintLoading || hintLevel >= 3 ? "var(--v-waiting-bg)" : COLORS.primary, color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, cursor: hintLoading || hintLevel >= 3 ? "not-allowed" : "pointer" }}
           >
             {hintLoading ? "Preparing hint…" : hintLevel === 0 ? "Get a hint" : hintLevel >= 3 ? "All hints shown" : "Show another hint"}
           </button>

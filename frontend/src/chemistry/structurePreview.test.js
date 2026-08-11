@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isTrustedStructurePreview,
+  sanitizeSvg,
   trustedStructurePreview,
 } from "./structurePreview";
 
@@ -32,5 +33,19 @@ describe("structure preview trust boundary", () => {
     const preview = trustedStructurePreview({ svg: "<svg></svg>" });
 
     expect(isTrustedStructurePreview({ ...preview })).toBe(false);
+  });
+
+  it("removes scripts, event handlers, and external references before display", () => {
+    const preview = trustedStructurePreview({
+      svg: '<svg onload="alert(1)"><script>alert(1)</script><image href="https://evil.example/x" /></svg>',
+    });
+    expect(preview.svg).not.toContain("script");
+    expect(preview.svg).not.toContain("onload");
+    expect(preview.svg).not.toContain("https://evil.example");
+    expect(isTrustedStructurePreview(preview)).toBe(true);
+  });
+
+  it("rejects empty or unavailable SVG input", () => {
+    expect(sanitizeSvg("")).toBe(null);
   });
 });

@@ -141,7 +141,6 @@ export default function ChemistryPanel({
   chemistry,
   captureEnabled,
   onCapture,
-  onProblemChange,
 }) {
   const {
     topic,
@@ -171,6 +170,7 @@ export default function ChemistryPanel({
     checkAnswer,
     hintLevel,
     hint,
+    hintError,
     hintLoading,
     requestHint,
     cancelHint,
@@ -201,12 +201,10 @@ export default function ChemistryPanel({
       : firstWrongRow !== null && verdictsByLine.get(firstWrongRow)?.status === "invalid";
   const handleTopicChange = (nextTopicId) => {
     if (nextTopicId === topicId) return;
-    onProblemChange();
     chooseTopic(nextTopicId);
   };
   const handleTypeChange = (nextTypeId) => {
     if (nextTypeId === problemType.id) return;
-    onProblemChange();
     chooseType(nextTypeId);
   };
 
@@ -242,9 +240,9 @@ export default function ChemistryPanel({
             marginTop: 10,
             padding: 10,
             borderRadius: RADIUS.md,
-            background: "#fff7e8",
-            border: "1px solid #a96b1f33",
-            color: "#8a6d3b",
+            background: "var(--v-unsupported-bg)",
+            border: "1px solid var(--v-unsupported-border)",
+            color: "var(--v-unsupported)",
             fontSize: 12,
             lineHeight: 1.45,
           }}
@@ -389,7 +387,7 @@ export default function ChemistryPanel({
             style={{
               ...inputStyle,
               fontFamily: inputMode === "numeric" ? FONT.sans : FONT.mono,
-              borderColor: confidence === "low" ? "#a96b1f" : COLORS.border,
+              borderColor: confidence === "low" ? "var(--v-unsupported)" : COLORS.border,
             }}
           />
 
@@ -403,7 +401,7 @@ export default function ChemistryPanel({
               width: "100%",
               marginTop: 8,
               padding: "9px 14px",
-              background: canCheck ? accent : "#d8ddda",
+              background: canCheck ? accent : "var(--v-waiting-bg)",
               color: "#fff",
               border: "none",
               borderRadius: RADIUS.sm,
@@ -430,6 +428,7 @@ export default function ChemistryPanel({
           levelThreeRemaining={hint?.level_3_remaining}
           source={hint?.source}
           resource={hint?.resource}
+          error={hintError}
           loading={hintLoading}
           onRequest={requestHint}
           onCancel={cancelHint}

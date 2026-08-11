@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import { COLORS, RADIUS, SHADOW, SUBJECTS } from "../theme";
 
 const CARD_WIDTH = 268;
@@ -11,6 +13,20 @@ const GAP = 12;
 // them type it into a panel instead puts a seam down the middle of a
 // handwriting app.
 export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismiss }) {
+  const promptRef = useRef(null);
+  useEffect(() => {
+    if (!bounds || !text?.trim()) return undefined;
+    promptRef.current?.querySelector("button")?.focus();
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onDismiss();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [bounds, onDismiss, text]);
+
   if (!bounds || !text?.trim()) return null;
 
   // Above the ink by default so it never covers what it refers to, and below
@@ -21,6 +37,7 @@ export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismis
 
   return (
     <div
+      ref={promptRef}
       role="dialog"
       aria-label="Use this line as the question"
       style={{
@@ -28,6 +45,9 @@ export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismis
         top,
         left,
         width: CARD_WIDTH,
+        maxWidth: "calc(100vw - 16px)",
+        maxHeight: "calc(100dvh - 16px)",
+        overflowY: "auto",
         transform: above ? "translateY(-100%)" : "none",
         zIndex: 15,
         padding: 12,

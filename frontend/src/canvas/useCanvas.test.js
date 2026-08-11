@@ -14,9 +14,9 @@ describe("canvas workflow state", () => {
     expect(shouldAcknowledgeProcessedRow(7, 4, 3, 3)).toBe(false);
   });
 
-  it("fits the canvas to compact screens without changing desktop spacing", () => {
+  it("uses the full medium viewport and reserves feedback only on wide screens", () => {
     expect(getCanvasDisplaySize(390, 844).width).toBe(390);
-    expect(getCanvasDisplaySize(1024, 768).width).toBe(640);
+    expect(getCanvasDisplaySize(1024, 768).width).toBe(1024);
     expect(getCanvasDisplaySize(1440, 900).width).toBe(1032);
   });
 

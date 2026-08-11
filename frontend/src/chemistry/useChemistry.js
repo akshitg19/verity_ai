@@ -9,6 +9,7 @@ import {
 } from "../api";
 import {
   buildChemistrySteps,
+  chemistryStepLines,
   isStaleLineResponse,
   isWholePageChemistryInput,
   keepVerdictsBeforeRow,
@@ -21,6 +22,11 @@ import {
 import { openCurrentSession, readStructureSnapshot } from "./requestModel";
 import { trustedStructurePreview } from "./structurePreview";
 import { emptyValues, readStoredTopic, rememberTopic } from "./topicMemory";
+import {
+  deserializeWorkflowSnapshot,
+  serializeWorkflowSnapshot,
+  workflowProblemFingerprint,
+} from "../notebook/workflowSnapshot";
 import {
   TOPICS,
   describeProblem,
@@ -42,7 +48,7 @@ function removeReadingRow(current, row) {
   return next;
 }
 
-export default function useChemistry() {
+export default function useChemistry({ pageId = null } = {}) {
   const [stored] = useState(readStoredTopic);
   const [topicId, setTopicId] = useState(stored.topicId);
   const topic = TOPICS.find((entry) => entry.id === topicId) ?? TOPICS[0];
@@ -76,6 +82,7 @@ export default function useChemistry() {
 
   const [hintLevel, setHintLevel] = useState(0);
   const [hint, setHint] = useState(null);
+  const [hintError, setHintError] = useState(null);
   const [hintLoading, setHintLoading] = useState(false);
 
   const [status, setStatus] = useState(null); // { error } | { notice }
@@ -88,6 +95,12 @@ export default function useChemistry() {
   const previewRequestId = useRef(0);
   const lineRequestIds = useRef(new Map());
   const lineVersions = useRef(new Map());
+  const lineAbortControllers = useRef(new Map());
+  const checkAbortRef = useRef(null);
+  const hintAbortRef = useRef(null);
+  const sessionAbortRef = useRef(null);
+  const previewAbortRef = useRef(null);
+  const pageScopeRef = useRef(pageId);
 
   // The row the student marked as the question, and the rows where they said
   // "this is my working" so the offer stops coming back.
@@ -109,13 +122,18 @@ export default function useChemistry() {
 
   const clearHints = useCallback(() => {
     hintRequestId.current += 1;
+    hintAbortRef.current?.abort();
+    hintAbortRef.current = null;
     setHintLevel(0);
     setHint(null);
+    setHintError(null);
     setHintLoading(false);
   }, []);
 
   const clearVerdict = useCallback(() => {
     requestId.current += 1;
+    checkAbortRef.current?.abort();
+    checkAbortRef.current = null;
     setPageReading(false);
     setChecking(false);
     setVerdict(null);
@@ -128,6 +146,10 @@ export default function useChemistry() {
   const invalidateRequests = useCallback(() => {
     requestId.current += 1;
     previewRequestId.current += 1;
+    checkAbortRef.current?.abort();
+    checkAbortRef.current = null;
+    previewAbortRef.current?.abort();
+    previewAbortRef.current = null;
     setPageReading(false);
     setChecking(false);
     setReadingRows(new Set());
@@ -137,6 +159,12 @@ export default function useChemistry() {
   const clearAnswer = useCallback(() => {
     requestId.current += 1;
     previewRequestId.current += 1;
+    checkAbortRef.current?.abort();
+    checkAbortRef.current = null;
+    previewAbortRef.current?.abort();
+    previewAbortRef.current = null;
+    for (const controller of lineAbortControllers.current.values()) controller.abort();
+    lineAbortControllers.current.clear();
     lineRequestIds.current.clear();
     lineVersions.current.clear();
     linesRef.current = [];
@@ -155,6 +183,8 @@ export default function useChemistry() {
 
   const resetProblem = useCallback(() => {
     sessionRequestId.current += 1;
+    sessionAbortRef.current?.abort();
+    sessionAbortRef.current = null;
     setSession(null);
     setStatus(null);
     setCaptureNote("");
@@ -253,22 +283,30 @@ export default function useChemistry() {
     const payload = topic.session?.(problemType, values, problemText);
     if (!payload) return null;
     const id = ++sessionRequestId.current;
+    const requestPageId = pageScopeRef.current;
+    sessionAbortRef.current?.abort();
+    const abortController = new AbortController();
+    sessionAbortRef.current = abortController;
     try {
       const created = await openCurrentSession(
         payload,
-        () => id === sessionRequestId.current
+        () => id === sessionRequestId.current && requestPageId === pageScopeRef.current,
+        { signal: abortController.signal }
       );
       if (!created) return null;
       setSession(created);
       return created;
-    } catch {
-      if (id !== sessionRequestId.current) return null;
+    } catch (error) {
+      if (id !== sessionRequestId.current || requestPageId !== pageScopeRef.current) return null;
+      if (error.name === "AbortError") return null;
       setStatus({
         notice:
           "We couldn't solve this problem ahead of time, so hints will be the " +
           "built-in ones rather than written for your work.",
       });
       return null;
+    } finally {
+      if (sessionAbortRef.current === abortController) sessionAbortRef.current = null;
     }
   }, [problemText, problemType, session, topic, values]);
 
@@ -278,6 +316,10 @@ export default function useChemistry() {
     async (strokes) => {
       if (!isDrawing || !strokes?.length) return;
       const id = ++requestId.current;
+      const requestPageId = pageScopeRef.current;
+      checkAbortRef.current?.abort();
+      const abortController = new AbortController();
+      checkAbortRef.current = abortController;
       setPageReading(true);
       setStatus(null);
       setVerdict(null);
@@ -286,7 +328,8 @@ export default function useChemistry() {
       try {
         const data = await readStructureSnapshot(
           strokes,
-          () => id === requestId.current
+          () => id === requestId.current && requestPageId === pageScopeRef.current,
+          { signal: abortController.signal }
         );
         if (!data) return;
 
@@ -296,22 +339,28 @@ export default function useChemistry() {
         setRead(true);
         setPreview(trustedStructurePreview(data));
       } catch (error) {
-        if (id !== requestId.current) return;
+        if (id !== requestId.current || requestPageId !== pageScopeRef.current) return;
+        if (error.name === "AbortError") return;
         setStatus({ error: error.message });
       } finally {
         if (id === requestId.current) setPageReading(false);
+        if (checkAbortRef.current === abortController) checkAbortRef.current = null;
       }
     },
     [isDrawing]
   );
 
   const readLine = useCallback(
-    async ({ row, strokes }) => {
+    async ({ row, strokes, onProcessed, pageId: rowPageId }) => {
       if (isDrawing || !strokes?.length) return;
+      if (rowPageId !== undefined && rowPageId !== pageScopeRef.current) return;
 
       const version = lineVersions.current.get(row) ?? 0;
       const request = (lineRequestIds.current.get(row) ?? 0) + 1;
       lineRequestIds.current.set(row, request);
+      lineAbortControllers.current.get(row)?.abort();
+      const abortController = new AbortController();
+      lineAbortControllers.current.set(row, abortController);
       setReadingRows((current) => addReadingRow(current, row));
 
       try {
@@ -323,7 +372,7 @@ export default function useChemistry() {
             lineRequestIds.current.get(row),
             version,
             lineVersions.current.get(row) ?? 0
-          )
+          ) || (rowPageId !== undefined && rowPageId !== pageScopeRef.current)
         ) {
           return;
         }
@@ -335,19 +384,21 @@ export default function useChemistry() {
             lineRequestIds.current.get(row),
             version,
             lineVersions.current.get(row) ?? 0
-          )
+          ) || (rowPageId !== undefined && rowPageId !== pageScopeRef.current)
         ) {
           return;
         }
 
-        const data = await transcribeChemistryText(dataUrl.split(",")[1]);
+        const data = await transcribeChemistryText(dataUrl.split(",")[1], {
+          signal: abortController.signal,
+        });
         if (
           isStaleLineResponse(
             request,
             lineRequestIds.current.get(row),
             version,
             lineVersions.current.get(row) ?? 0
-          )
+          ) || (rowPageId !== undefined && rowPageId !== pageScopeRef.current)
         ) {
           return;
         }
@@ -363,6 +414,7 @@ export default function useChemistry() {
         setLines(nextLines);
         setRead(true);
         setStatus(null);
+        onProcessed?.();
       } catch (error) {
         if (
           isStaleLineResponse(
@@ -374,12 +426,15 @@ export default function useChemistry() {
         ) {
           return;
         }
-        setStatus({ error: error.message });
+        if (error.name !== "AbortError") setStatus({ error: error.message });
       } finally {
         setReadingRows((current) => {
           if (lineRequestIds.current.get(row) !== request) return current;
           return removeReadingRow(current, row);
         });
+        if (lineAbortControllers.current.get(row) === abortController) {
+          lineAbortControllers.current.delete(row);
+        }
       }
     },
     [isDrawing]
@@ -399,7 +454,10 @@ export default function useChemistry() {
     (row) => {
       lineVersions.current.set(row, (lineVersions.current.get(row) ?? 0) + 1);
       lineRequestIds.current.set(row, (lineRequestIds.current.get(row) ?? 0) + 1);
+      lineAbortControllers.current.get(row)?.abort();
+      lineAbortControllers.current.delete(row);
       requestId.current += 1;
+      checkAbortRef.current?.abort();
       setReadingRows((current) => removeReadingRow(current, row));
       setChecking(false);
       const nextLines = removeChemistryLine(linesRef.current, row);
@@ -437,17 +495,25 @@ export default function useChemistry() {
 
   const refreshPreview = useCallback(async (smiles) => {
     const id = ++previewRequestId.current;
+    const requestPageId = pageScopeRef.current;
+    previewAbortRef.current?.abort();
+    const abortController = new AbortController();
+    previewAbortRef.current = abortController;
     if (!smiles.trim()) {
       setPreview(null);
+      previewAbortRef.current = null;
       return;
     }
     try {
-      const data = await renderStructure(smiles);
-      if (id !== previewRequestId.current) return;
+      const data = await renderStructure(smiles, { signal: abortController.signal });
+      if (id !== previewRequestId.current || requestPageId !== pageScopeRef.current) return;
       setPreview(trustedStructurePreview(data));
-    } catch {
-      if (id !== previewRequestId.current) return;
+    } catch (error) {
+      if (id !== previewRequestId.current || requestPageId !== pageScopeRef.current) return;
+      if (error.name === "AbortError") return;
       setPreview(null);
+    } finally {
+      if (previewAbortRef.current === abortController) previewAbortRef.current = null;
     }
   }, []);
 
@@ -480,13 +546,19 @@ export default function useChemistry() {
     if (!ready || steps.length === 0) return;
 
     const id = ++requestId.current;
+    const requestPageId = pageScopeRef.current;
+    checkAbortRef.current?.abort();
+    const abortController = new AbortController();
+    checkAbortRef.current = abortController;
     setChecking(true);
     setStatus(null);
     clearHints();
 
     try {
-      const data = await topic.check(problemType, values, steps);
-      if (id !== requestId.current) return;
+      const data = await topic.check(problemType, values, steps, {
+        signal: abortController.signal,
+      });
+      if (id !== requestId.current || requestPageId !== pageScopeRef.current) return;
 
       if (data.problem_error) {
         setVerdict(null);
@@ -516,13 +588,15 @@ export default function useChemistry() {
       );
       if (hasInvalid) ensureSession();
     } catch (error) {
-      if (id !== requestId.current) return;
+      if (id !== requestId.current || requestPageId !== pageScopeRef.current) return;
+      if (error.name === "AbortError") return;
       setVerdict(null);
       setVerdictsByLine(new Map());
       setFirstWrongRow(null);
       setStatus({ error: `Check failed: ${error.message}` });
     } finally {
       if (id === requestId.current) setChecking(false);
+      if (checkAbortRef.current === abortController) checkAbortRef.current = null;
     }
   }, [answer, clearHints, ensureSession, isDrawing, problemType, ready, topic, values]);
 
@@ -555,8 +629,8 @@ export default function useChemistry() {
   const requestHint = useCallback(async () => {
     if (hintLevel >= 3) return;
 
-    const currentLines = orderedChemistryLines(linesRef.current);
-    const lineIndex = currentLines.findIndex((line) => line.row === firstWrongRow);
+    const stepLines = chemistryStepLines(linesRef.current, questionRowRef.current);
+    const lineIndex = stepLines.findIndex((line) => line.row === firstWrongRow);
     const activeVerdict = isDrawing
       ? verdict
       : verdictsByLine.get(firstWrongRow);
@@ -564,10 +638,15 @@ export default function useChemistry() {
 
     const nextLevel = hintLevel + 1;
     const id = ++hintRequestId.current;
+    const requestPageId = pageScopeRef.current;
+    hintAbortRef.current?.abort();
+    const abortController = new AbortController();
+    hintAbortRef.current = abortController;
     setHintLoading(true);
+    setHintError(null);
 
     const active = await ensureSession();
-    if (id !== hintRequestId.current) return;
+    if (id !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
 
     try {
       const data = await getHint({
@@ -580,26 +659,25 @@ export default function useChemistry() {
         problem: problemText,
         student_line: isDrawing
           ? answer || null
-          : currentLines[lineIndex]?.text || null,
-      });
-      if (id !== hintRequestId.current) return;
+          : stepLines[lineIndex]?.text || null,
+      }, { signal: abortController.signal });
+      if (id !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
       setHintLevel(data.level);
       setHint(data);
     } catch (error) {
-      if (id !== hintRequestId.current) return;
-      setHint({
-        level: nextLevel,
-        hint: `We couldn't fetch that hint: ${error.message}`,
-        source: "fallback",
-      });
-      setHintLevel(nextLevel);
+      if (id !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
+      if (error.name === "AbortError") return;
+      setHintError(error.message);
     } finally {
       if (id === hintRequestId.current) setHintLoading(false);
+      if (hintAbortRef.current === abortController) hintAbortRef.current = null;
     }
   }, [answer, ensureSession, firstWrongRow, hintLevel, isDrawing, problemText, topicId, verdict, verdictsByLine]);
 
   const cancelHint = useCallback(() => {
     hintRequestId.current += 1;
+    hintAbortRef.current?.abort();
+    hintAbortRef.current = null;
     setHintLoading(false);
   }, []);
 
@@ -635,6 +713,86 @@ export default function useChemistry() {
     },
     [captureNote, isDrawing, problemType.id, values]
   );
+
+  const getWorkflowSnapshot = useCallback(() => {
+    return serializeWorkflowSnapshot({
+      subject: "chemistry",
+      mode: "chemistry",
+      chemistry: { topicId, typeId, values },
+      problemText,
+      problemFingerprint: workflowProblemFingerprint({
+        subject: "chemistry",
+        problemText,
+        chemistry: { topicId, typeId, values },
+      }),
+      answer,
+      read,
+      unreadable,
+      confidence,
+      recognizedLines: linesRef.current,
+      questionRow: questionRowRef.current,
+      verdictsByLine,
+      wholePageVerdict: verdict,
+      firstWrongRow,
+      dismissedRows,
+      hintLevel,
+      hint,
+      lastResult: status,
+      updatedAt: Date.now(),
+    });
+  }, [answer, confidence, dismissedRows, firstWrongRow, hint, hintLevel, problemText, read, status, topicId, typeId, unreadable, values, verdict, verdictsByLine]);
+
+  const restoreWorkflowSnapshot = useCallback((rawSnapshot) => {
+    const snapshot = deserializeWorkflowSnapshot(rawSnapshot);
+    if (!snapshot || snapshot.subject !== "chemistry") {
+      resetProblem();
+      return;
+    }
+    clearAnswer();
+    const nextTopicId = snapshot.chemistry?.topicId ?? TOPICS[0].id;
+    const nextTopic = TOPICS.find((entry) => entry.id === nextTopicId) ?? TOPICS[0];
+    const nextTypeId = snapshot.chemistry?.typeId ?? nextTopic.types[0].id;
+    const nextType = nextTopic.types.find((entry) => entry.id === nextTypeId) ?? nextTopic.types[0];
+    setTopicId(nextTopic.id);
+    setTypeId(nextType.id);
+    setValues(snapshot.chemistry?.values ?? emptyValues(nextType));
+    setSession(null);
+    const nextLines = [...(snapshot.recognizedLines ?? [])];
+    linesRef.current = nextLines;
+    setLines(nextLines);
+    questionRowRef.current = snapshot.questionRow ?? null;
+    setQuestionRow(questionRowRef.current);
+    setDismissedRows(snapshot.dismissedRows ?? new Set());
+    setAnswer(snapshot.answer ?? "");
+    setRead(Boolean(snapshot.read || snapshot.answer));
+    setUnreadable(Boolean(snapshot.unreadable));
+    setConfidence(snapshot.confidence ?? "high");
+    setPreview(null);
+    setVerdict(snapshot.wholePageVerdict ?? null);
+    setVerdictsByLine(snapshot.verdictsByLine ?? new Map());
+    setFirstWrongRow(snapshot.firstWrongRow ?? null);
+    setProblemError(null);
+    setHintLevel(snapshot.hintLevel ?? 0);
+    setHint(snapshot.hint ?? null);
+    setHintError(null);
+    setStatus(snapshot.lastResult ?? null);
+  }, [clearAnswer, resetProblem]);
+
+  useEffect(() => {
+    pageScopeRef.current = pageId;
+    // A page identity change is an intentional state reset; App immediately
+    // restores the destination page's snapshot after this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    resetProblem();
+  }, [pageId, resetProblem]);
+
+  useEffect(() => () => {
+    checkAbortRef.current?.abort();
+    hintAbortRef.current?.abort();
+    sessionAbortRef.current?.abort();
+    previewAbortRef.current?.abort();
+    for (const controller of lineAbortControllers.current.values()) controller.abort();
+  }, []);
 
   return {
     topic,
@@ -674,6 +832,7 @@ export default function useChemistry() {
     checkAnswer,
     hintLevel,
     hint,
+    hintError,
     hintLoading,
     requestHint,
     cancelHint,
@@ -687,5 +846,7 @@ export default function useChemistry() {
     setCaptureNote,
     capture,
     captureCount,
+    getWorkflowSnapshot,
+    restoreWorkflowSnapshot,
   };
 }

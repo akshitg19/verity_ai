@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import { COLORS, RADIUS, SHADOW, SUBJECTS } from "../theme";
 import Logo, { LogoMark } from "../components/Logo";
-import { navigate } from "../router";
 import NotebookMock from "./NotebookMock";
 
 const MAX_WIDTH = 1080;
@@ -118,7 +117,7 @@ function Section({ children, style, inner }) {
   );
 }
 
-function Button({ children, onClick, tone = "solid", style }) {
+function Button({ children, onClick, href, tone = "solid", style }) {
   const tones = {
     solid: { background: COLORS.primary, color: "#fff", border: "1px solid transparent" },
     outline: {
@@ -132,24 +131,21 @@ function Button({ children, onClick, tone = "solid", style }) {
       border: `1px solid ${COLORS.border}`,
     },
   };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: "13px 24px",
-        borderRadius: RADIUS.md,
-        fontSize: 15,
-        fontWeight: 600,
-        fontFamily: "inherit",
-        cursor: "pointer",
-        ...tones[tone],
-        ...style,
-      }}
-    >
-      {children}
-    </button>
-  );
+  const props = {
+    style: {
+      padding: "13px 24px",
+      borderRadius: RADIUS.md,
+      fontSize: 15,
+      fontWeight: 600,
+      fontFamily: "inherit",
+      cursor: "pointer",
+      textDecoration: "none",
+      display: "inline-block",
+      ...tones[tone],
+      ...style,
+    },
+  };
+  return href ? <a href={href} {...props}>{children}</a> : <button type="button" onClick={onClick} {...props}>{children}</button>;
 }
 
 function SectionHeading({ children, style }) {
@@ -233,7 +229,7 @@ export default function Landing({ theme }) {
   const [openFaq, setOpenFaq] = useState(0);
 
   return (
-    <div style={{ minHeight: "100vh", background: COLORS.background, color: COLORS.text }}>
+    <div style={{ minHeight: "100vh", width: "100%", overflowX: "hidden", background: COLORS.background, color: COLORS.text }}>
       {/* ------------------------------------------------------------ header */}
       <header
         style={{
@@ -254,37 +250,35 @@ export default function Landing({ theme }) {
             gap: 24,
           }}
         >
-          <button
-            type="button"
-            onClick={() => navigate("/")}
+          <a
+            href="/"
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
             aria-label="verity.ai home"
           >
             <Logo size={34} showWordmark />
-          </button>
+          </a>
 
           <nav
             className="landing-nav"
             style={{ display: "flex", gap: 20, alignItems: "center", marginLeft: 8 }}
           >
             {SUBJECT_AREAS.map((area) => (
-              <button
+              <a
                 key={area.id}
-                type="button"
-                onClick={() => navigate(area.route)}
                 style={{
                   background: "none",
-                  border: "none",
                   padding: 0,
                   fontSize: 15,
                   fontWeight: 500,
                   color: COLORS.text,
                   cursor: "pointer",
                   fontFamily: "inherit",
+                  textDecoration: "none",
                 }}
+                href={area.route}
               >
                 {area.heading}
-              </button>
+              </a>
             ))}
             <a
               href="#faq"
@@ -321,7 +315,7 @@ export default function Landing({ theme }) {
               {theme.preference === "dark" ? "☾" : theme.preference === "light" ? "☀" : "◐"}
             </button>
             <Button
-              onClick={() => navigate("/chemistry")}
+              href="/chemistry"
               style={{ padding: "9px 18px", fontSize: 14 }}
             >
               Get started
@@ -335,7 +329,7 @@ export default function Landing({ theme }) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 310px), 1fr))",
             gap: 56,
             alignItems: "center",
           }}
@@ -369,12 +363,12 @@ export default function Landing({ theme }) {
             </p>
 
             <div style={{ marginTop: 30, display: "flex", flexWrap: "wrap", gap: 12 }}>
-              <Button onClick={() => navigate("/chemistry")} style={{ padding: "14px 26px" }}>
+              <Button href="/chemistry" style={{ padding: "14px 26px" }}>
                 Get started with chemistry
               </Button>
               <Button
                 tone="outline"
-                onClick={() => navigate("/math")}
+                href="/math"
                 style={{ padding: "14px 26px" }}
               >
                 Get started with math
@@ -420,7 +414,7 @@ export default function Landing({ theme }) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
             gap: 24,
           }}
         >
@@ -471,7 +465,7 @@ export default function Landing({ theme }) {
               </ul>
               <Button
                 tone="outline"
-                onClick={() => navigate(area.route)}
+                href={area.route}
                 style={{ marginTop: "auto", alignSelf: "flex-start" }}
               >
                 Start {area.heading.toLowerCase()}
@@ -488,7 +482,7 @@ export default function Landing({ theme }) {
           style={{
             marginTop: 34,
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
             gap: 48,
             alignItems: "center",
           }}
@@ -579,7 +573,7 @@ export default function Landing({ theme }) {
           style={{
             marginTop: 30,
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 250px), 1fr))",
             gap: 28,
           }}
         >
@@ -652,13 +646,13 @@ export default function Landing({ theme }) {
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <Button
-              onClick={() => navigate("/chemistry")}
+              href="/chemistry"
               style={{ background: "#fff", color: COLORS.primary, padding: "14px 26px" }}
             >
               Get started with chemistry
             </Button>
             <Button
-              onClick={() => navigate("/math")}
+              href="/math"
               style={{
                 background: "transparent",
                 color: "#fff",
@@ -684,7 +678,7 @@ export default function Landing({ theme }) {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
               gap: 32,
               marginBottom: 40,
             }}

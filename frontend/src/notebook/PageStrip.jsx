@@ -70,17 +70,17 @@ function PageThumb({ page, index, active, accent, onOpen, onDelete, canDelete })
           onClick={() => onDelete(page.id)}
           style={{
             position: "absolute",
-            top: -6,
-            right: -6,
-            width: 18,
-            height: 18,
+            top: -12,
+            right: -12,
+            width: 44,
+            height: 44,
             display: "grid",
             placeItems: "center",
             background: COLORS.surface,
             color: COLORS.danger,
             border: `1px solid ${COLORS.border}`,
             borderRadius: "50%",
-            fontSize: 11,
+            fontSize: 16,
             lineHeight: 1,
             cursor: "pointer",
           }}
@@ -141,6 +141,31 @@ export default function PageStrip({ notebook, mode }) {
       >
         +
       </button>
+      {notebook.deletedPage && (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            left: 16,
+            bottom: "calc(18px + env(safe-area-inset-bottom, 0px))",
+            zIndex: 30,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 12px",
+            background: COLORS.surface,
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: 10,
+            boxShadow: "var(--v-shadow-float)",
+            color: COLORS.text,
+            fontSize: 12,
+          }}
+        >
+          <span>Page deleted</span>
+          <button type="button" onClick={notebook.undoDeletePage} style={{ minWidth: 44, minHeight: 44, color: accent, background: "transparent", border: "none", fontWeight: 700 }}>Undo</button>
+          <button type="button" onClick={notebook.dismissDeletedPage} aria-label="Dismiss" style={{ minWidth: 44, minHeight: 44, color: COLORS.muted, background: "transparent", border: "none", fontSize: 18 }}>×</button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { createNotebookRepository, readLegacyNotebook } from "./notebookRepository";
+
 // The notebook model: folders by subject, notes inside them, pages inside
 // notes, persisted locally.
 //
@@ -10,7 +12,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // Local-first on purpose. Strokes are already serialisable, so persistence
 // is a JSON round-trip and needs no backend, no account, and no network.
 
-const STORAGE_KEY = "verity.notebook.v1";
 const MAX_FOLDERS = 40;
 const MAX_NOTES = 200;
 
@@ -19,7 +20,7 @@ const newId = () =>
   `${now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 function blankPage() {
-  return { id: newId(), strokes: [] };
+  return { id: newId(), strokes: [], workflowSnapshot: null };
 }
 
 function blankFolder(subject, name) {
@@ -42,21 +43,6 @@ function blankNote(subject, title, folderId = null) {
   };
 }
 
-function load() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || !Array.isArray(parsed.notes) || !parsed.notes.length) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    // A corrupt store is not worth a crash; start fresh and move on.
-    return null;
-  }
-}
-
 // The two names the app used to seed a new notebook with. They were only ever
 // generated, never typed by a student, so renaming them is safe. Without this
 // the new naming only reached people who had never opened the app: everyone
@@ -70,14 +56,31 @@ function migrateTitle(note) {
 }
 
 function initial() {
-  const stored = load();
+  const stored = (() => {
+    try {
+      return readLegacyNotebook().state;
+    } catch {
+      // IndexedDB reports the durable storage failure to the UI. This synchronous
+      // fallback keeps the workspace usable while that report is rendered.
+      return null;
+    }
+  })();
   if (stored) {
     // Migration: notes written before folders existed have no folderId, and
     // null means "loose in this subject", which is exactly where they were.
     return {
       folders: [],
       ...stored,
-      notes: stored.notes.map((note) => migrateTitle({ folderId: null, ...note })),
+      notes: stored.notes.map((note) =>
+        migrateTitle({
+          folderId: null,
+          ...note,
+          pages: (note.pages ?? []).map((page) => ({
+            workflowSnapshot: null,
+            ...page,
+          })),
+        })
+      ),
     };
   }
   const math = blankNote("math", "Math 1");
@@ -85,23 +88,89 @@ function initial() {
   return { folders: [], notes: [math, chemistry], activeNoteId: math.id };
 }
 
+function metadataOnly(state) {
+  return {
+    activeNoteId: state.activeNoteId,
+    folders: state.folders ?? [],
+    notes: (state.notes ?? []).map((note) => ({
+      ...note,
+      pages: (note.pages ?? []).map((page) => {
+        const metadata = { ...page };
+        delete metadata.strokes;
+        delete metadata.workflowSnapshot;
+        return metadata;
+      }),
+    })),
+  };
+}
+
 export default function useNotebook() {
   const [state, setState] = useState(initial);
-  const saveTimer = useRef(null);
+  const stateRef = useRef(state);
+  const repositoryRef = useRef(null);
+  const writesRef = useRef(Promise.resolve());
+  const hydratedRef = useRef(false);
+  const [saveStatus, setSaveStatus] = useState("saving");
+  const [saveError, setSaveError] = useState(null);
 
-  // Debounced so a stroke in progress does not write to disk on every point.
   useEffect(() => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      } catch {
-        // Quota exceeded, private browsing, or storage disabled. The app
-        // keeps working in memory; losing persistence must not lose the page.
-      }
-    }, 400);
-    return () => clearTimeout(saveTimer.current);
+    stateRef.current = state;
   }, [state]);
+
+  const enqueueWrite = useCallback((operation) => {
+    const repository = repositoryRef.current;
+    if (!repository) return Promise.resolve();
+    setSaveStatus("saving");
+    setSaveError(null);
+    const next = writesRef.current.then(operation, operation);
+    writesRef.current = next.catch(() => undefined);
+    next.then(
+      () => setSaveStatus("saved"),
+      (error) => {
+        setSaveStatus("error");
+        setSaveError(error instanceof Error ? error.message : "Notebook could not be saved.");
+      }
+    );
+    return next;
+  }, []);
+
+  const persistMetadata = useCallback(
+    () => enqueueWrite(() => repositoryRef.current?.saveMetadata(metadataOnly(stateRef.current))),
+    [enqueueWrite]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const repository = createNotebookRepository();
+    repository
+      .open()
+      .then(() => repository.load())
+      .then((stored) => {
+        if (cancelled) return;
+        repositoryRef.current = repository;
+        hydratedRef.current = true;
+        if (stored) {
+          stateRef.current = stored;
+          setState(stored);
+        }
+        setSaveStatus("saved");
+        return repository.saveMetadata(metadataOnly(stored ?? stateRef.current));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setSaveStatus("error");
+        setSaveError(error instanceof Error ? error.message : "Notebook storage could not be opened.");
+      });
+    return () => {
+      cancelled = true;
+      void writesRef.current;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    void persistMetadata();
+  }, [state, persistMetadata]);
 
   const notes = state.notes;
   const activeNote =
@@ -164,28 +233,69 @@ export default function useNotebook() {
 
   const saveStrokes = useCallback(
     (strokes) => {
-      setState((current) => {
-        const note = current.notes.find((entry) => entry.id === current.activeNoteId);
-        if (!note) return current;
-        const pageId = note.activePageId ?? note.pages[0].id;
-        return {
-          ...current,
-          notes: current.notes.map((entry) =>
-            entry.id !== note.id
-              ? entry
-              : {
-                  ...entry,
-                  updatedAt: now(),
-                  pages: entry.pages.map((page) =>
-                    page.id === pageId ? { ...page, strokes } : page
-                  ),
-                }
-          ),
-        };
-      });
+      const current = stateRef.current;
+      const note = current.notes.find((entry) => entry.id === current.activeNoteId);
+      if (!note) return;
+      const pageId = note.activePageId ?? note.pages[0].id;
+      const page = note.pages.find((entry) => entry.id === pageId);
+      if (!page) return;
+      const nextPage = { ...page, strokes: [...(strokes ?? [])] };
+      const nextState = {
+        ...current,
+        notes: current.notes.map((entry) =>
+          entry.id !== note.id
+            ? entry
+            : {
+                ...entry,
+                updatedAt: now(),
+                pages: entry.pages.map((entryPage) =>
+                  entryPage.id === pageId ? nextPage : entryPage
+                ),
+              }
+        ),
+      };
+      stateRef.current = nextState;
+      setState(nextState);
+      void enqueueWrite(() =>
+        repositoryRef.current?.savePage({ noteId: note.id, page: nextPage })
+      );
     },
-    []
+    [enqueueWrite]
   );
+
+  const saveWorkflow = useCallback(
+    (workflowSnapshot, pageId = null) => {
+      const current = stateRef.current;
+      const note = current.notes.find((entry) => entry.id === current.activeNoteId);
+      const targetPageId = pageId ?? note?.activePageId ?? note?.pages[0]?.id;
+      if (!note || !targetPageId) return;
+      const page = note.pages.find((entry) => entry.id === targetPageId);
+      if (!page) return;
+      const nextPage = { ...page, workflowSnapshot };
+      const nextState = {
+        ...current,
+        notes: current.notes.map((entry) =>
+          entry.id !== note.id
+            ? entry
+            : {
+                ...entry,
+                updatedAt: now(),
+                pages: entry.pages.map((entryPage) =>
+                  entryPage.id === targetPageId ? nextPage : entryPage
+                ),
+              }
+        ),
+      };
+      stateRef.current = nextState;
+      setState(nextState);
+      void enqueueWrite(() =>
+        repositoryRef.current?.savePage({ noteId: note.id, page: nextPage })
+      );
+    },
+    [enqueueWrite]
+  );
+
+  const flushWrites = useCallback(() => writesRef.current, []);
 
   const createNote = useCallback(
     (forSubject = "math", title, folderId = null) => {
@@ -281,6 +391,7 @@ export default function useNotebook() {
   // behind a single tap with no way back is the one failure mode of this
   // model that would actually matter to a student.
   const [deleted, setDeleted] = useState(null);
+  const [deletedPage, setDeletedPage] = useState(null);
 
   const deleteNote = useCallback((noteId) => {
     setState((current) => {
@@ -380,21 +491,60 @@ export default function useNotebook() {
   }, []);
 
   const deletePage = useCallback((pageId) => {
+    const current = stateRef.current;
+    const note = current.notes.find((entry) => entry.id === current.activeNoteId);
+    const index = note?.pages.findIndex((page) => page.id === pageId) ?? -1;
+    if (!note || index === -1 || note.pages.length < 2) return;
+    const deletedRecord = {
+      noteId: note.id,
+      page: note.pages[index],
+      index,
+      wasActive: note.activePageId === pageId,
+    };
+    const pages = note.pages.filter((page) => page.id !== pageId);
+    const nextNote = {
+      ...note,
+      updatedAt: now(),
+      pages,
+      activePageId:
+        note.activePageId === pageId
+          ? pages[Math.max(0, index - 1)]?.id ?? pages[0].id
+          : note.activePageId,
+    };
+    const nextState = {
+      ...current,
+      notes: current.notes.map((entry) =>
+        entry.id === note.id ? nextNote : entry
+      ),
+    };
+    stateRef.current = nextState;
+    setState(nextState);
+    setDeletedPage(deletedRecord);
+    void enqueueWrite(() => repositoryRef.current?.deletePage(pageId));
+    void enqueueWrite(() => repositoryRef.current?.saveMetadata(metadataOnly(nextState)));
+  }, [enqueueWrite]);
+
+  const undoDeletePage = useCallback(() => {
+    if (!deletedPage) return;
     setState((current) => ({
       ...current,
       notes: current.notes.map((note) => {
-        if (note.id !== current.activeNoteId) return note;
-        const pages = note.pages.filter((page) => page.id !== pageId);
-        const kept = pages.length ? pages : [blankPage()];
+        if (note.id !== deletedPage.noteId) return note;
+        const pages = [...note.pages];
+        pages.splice(Math.min(deletedPage.index, pages.length), 0, deletedPage.page);
         return {
           ...note,
           updatedAt: now(),
-          pages: kept,
-          activePageId: kept[0].id,
+          pages,
+          activePageId: deletedPage.wasActive ? deletedPage.page.id : note.activePageId,
         };
       }),
     }));
-  }, []);
+    void enqueueWrite(() => repositoryRef.current?.savePage({ noteId: deletedPage.noteId, page: deletedPage.page }));
+    setDeletedPage(null);
+  }, [deletedPage, enqueueWrite]);
+
+  const dismissDeletedPage = useCallback(() => setDeletedPage(null), []);
 
   // Which lines were flagged and which hints were used, kept with the note
   // so navigating back through past work shows what happened, not just ink.
@@ -402,6 +552,22 @@ export default function useNotebook() {
     (outcome) => update(activeNote.id, { lastVerdict: outcome }),
     [activeNote.id, update]
   );
+
+  const exportNotebook = useCallback(async () => {
+    if (repositoryRef.current) return repositoryRef.current.exportData();
+    return JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), state: stateRef.current }, null, 2);
+  }, []);
+
+  const importNotebook = useCallback(async (serialized) => {
+    if (!repositoryRef.current) {
+      throw new Error("Notebook storage is still starting. Try again in a moment.");
+    }
+    const imported = await repositoryRef.current.importData(serialized);
+    stateRef.current = imported;
+    setState(imported);
+    setSaveStatus("saved");
+    return imported;
+  }, []);
 
   return {
     notes,
@@ -417,6 +583,12 @@ export default function useNotebook() {
     pageIndex: activeNote.pages.findIndex((page) => page.id === activePage.id),
     pageCount: activeNote.pages.length,
     saveStrokes,
+    saveWorkflow,
+    flushWrites,
+    saveStatus,
+    saveError,
+    exportNotebook,
+    importNotebook,
     createNote,
     duplicateNote,
     openNote,
@@ -430,6 +602,9 @@ export default function useNotebook() {
     addPage,
     openPage,
     deletePage,
+    deletedPage,
+    undoDeletePage,
+    dismissDeletedPage,
     recordOutcome,
   };
 }

@@ -257,6 +257,7 @@ export default function WorkspaceToolbar({
 
   return (
     <div
+      className="workspace-toolbar"
       style={{
         position: "fixed",
         top: 0,
@@ -378,12 +379,16 @@ export default function WorkspaceToolbar({
             {chemistry.topic.glyph}
           </span>
           <span style={{ fontSize: 13, color: chemistry.ready ? COLORS.text : COLORS.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {chemistry.ready ? chemistry.problemText : "Write the question at the top of the page"}
+            {chemistry.ready
+              ? chemistry.problemText
+              : chemistry.inputMode === "numeric"
+              ? "Set up the problem in Feedback"
+              : "Write the question at the top of the page"}
           </span>
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+      <div className="workspace-tools" style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
         <div ref={penSettingsRef} style={{ position: "relative" }}>
           <div style={{ height: 40, display: "flex", alignItems: "stretch", border: activeTool === "pen" ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: activeTool === "pen" ? COLORS.primaryLight : COLORS.surface, overflow: "hidden", boxSizing: "border-box" }}>
             <button

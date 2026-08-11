@@ -141,6 +141,18 @@ textarea,
   outline-offset: 2px;
 }
 
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 .structure-preview svg {
   max-width: 100%;
   height: auto;
@@ -165,14 +177,34 @@ textarea,
    no way to reach it. dvh is the viewport actually being shown. The vh line
    above each dvh line is the fallback for browsers without it. */
 @media (max-width: 1100px) {
+  .workspace-toolbar {
+    height: 124px !important;
+    flex-wrap: wrap !important;
+    align-content: center;
+    gap: 8px !important;
+    overflow: visible !important;
+  }
+
+  .workspace-tools {
+    flex: 1 1 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-left: 0 !important;
+  }
+
+  .canvas-surface {
+    margin-top: 124px !important;
+  }
+
   .feedback-panel {
     top: auto !important;
     right: 12px !important;
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
-    left: auto !important;
-    width: 340px !important;
-    max-height: 60vh !important;
-    max-height: 60dvh !important;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 12px !important;
+    width: auto !important;
+    max-height: 42vh !important;
+    max-height: 42dvh !important;
+    border-radius: var(--v-radius-xl, 18px) !important;
   }
 
   /* The tab rides the panel's edge on a wide screen. Where the panel is a
@@ -192,14 +224,24 @@ textarea,
 }
 
 @media (max-width: 700px) {
+  .workspace-toolbar {
+    height: 220px !important;
+    align-content: flex-start !important;
+    padding: 8px 20px !important;
+  }
+
+  .canvas-surface {
+    margin-top: 220px !important;
+  }
+
   .feedback-panel {
     top: auto !important;
     right: 12px !important;
     bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
     left: 12px !important;
     width: auto !important;
-    max-height: 54vh !important;
-    max-height: 54dvh !important;
+    max-height: 48vh !important;
+    max-height: 48dvh !important;
   }
 
   .feedback-status {
@@ -214,5 +256,16 @@ textarea,
 @media (max-width: 760px) {
   .landing-nav {
     display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

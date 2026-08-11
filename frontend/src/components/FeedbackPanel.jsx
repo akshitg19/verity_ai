@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import ChemistryPanel from "../chemistry/ChemistryPanel";
 import { COLORS, RADIUS, SHADOW, SUBJECTS } from "../theme";
@@ -56,13 +56,18 @@ export default function FeedbackPanel({
   chemistry,
   captureEnabled,
   onCapture,
-  onChemistryProblemChange,
+  onNewQuestion,
   transcribing,
   status,
+  noteId,
+  pageId,
 }) {
   const [open, setOpen] = useState(readPanelOpen);
   const accent = SUBJECTS[mode].accent;
   const state = tabState({ mode, math, chemistry, transcribing });
+  const latestLine = mode === "chemistry"
+    ? chemistry.lines.at(-1)?.text
+    : math.lines.at(-1)?.text;
 
   const toggle = () => {
     setOpen((current) => {
@@ -79,17 +84,37 @@ export default function FeedbackPanel({
   // flagged does not have it slide straight back at them.
   const flaggedRow =
     mode === "chemistry" ? chemistry.firstWrongRow : math.firstWrongLine;
-  const [announcedRow, setAnnouncedRow] = useState(null);
-  if (flaggedRow !== null && flaggedRow !== undefined && flaggedRow !== announcedRow) {
-    setAnnouncedRow(flaggedRow);
+  const flaggedVerdict = mode === "chemistry"
+    ? chemistry.verdictsByLine.get(flaggedRow)
+    : [...math.verdictsByLine.values()].find((item) => item.line_number === flaggedRow);
+  const flaggedKey = flaggedRow === null || flaggedRow === undefined
+    ? null
+    : JSON.stringify({
+        noteId,
+        pageId,
+        mode,
+        rowId: flaggedRow,
+        version: flaggedVerdict?.version ?? flaggedVerdict?.verdict_version ?? flaggedVerdict?.updated_at ?? flaggedVerdict?.status,
+      });
+  const [announcedKey, setAnnouncedKey] = useState(null);
+
+  useEffect(() => {
+    if (!flaggedKey || flaggedKey === announcedKey) return;
+    // This is the deliberate effect that opens feedback for a newly invalid
+    // verdict; keeping it out of render prevents render-phase state updates.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAnnouncedKey(flaggedKey);
     if (!open) {
       setOpen(true);
       rememberPanelOpen(true);
     }
-  }
+  }, [announcedKey, flaggedKey, open]);
 
   return (
     <>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {transcribing ? "Reading your latest line." : latestLine ? `Recognized: ${latestLine}` : ""}
+      </div>
       {(status?.error || status?.warning || status?.notice) && (
         <div
           className="feedback-status"
@@ -166,6 +191,7 @@ export default function FeedbackPanel({
         className="feedback-panel"
         aria-label="Live feedback"
         aria-hidden={!open}
+        inert={!open}
         style={{
           position: "fixed",
           top: 88,
@@ -257,7 +283,6 @@ export default function FeedbackPanel({
               chemistry={chemistry}
               captureEnabled={captureEnabled}
               onCapture={onCapture}
-              onProblemChange={onChemistryProblemChange}
             />
           ) : (
             <MathFeedbackPanel workflow={math} />
@@ -275,8 +300,8 @@ export default function FeedbackPanel({
         >
           <button
             type="button"
-            onClick={onChemistryProblemChange}
-            title="Clear the page and start the next question"
+            onClick={onNewQuestion}
+            title="Start a new question"
             style={{
               flex: 1,
               padding: "9px 12px",
@@ -294,7 +319,7 @@ export default function FeedbackPanel({
           </button>
           <button
             type="button"
-            onClick={toggle}
+          onClick={toggle}
             style={{
               padding: "9px 14px",
               background: accent,

@@ -18,6 +18,12 @@ export function buildChemistrySteps(lines) {
   }));
 }
 
+export function chemistryStepLines(lines, questionRow = null) {
+  return readableChemistryLines(
+    orderedChemistryLines(lines).filter((line) => line.row !== questionRow)
+  );
+}
+
 export function upsertChemistryLine(lines, nextLine) {
   return orderedChemistryLines([
     ...(lines ?? []).filter((line) => line.row !== nextLine.row),

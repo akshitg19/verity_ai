@@ -25,6 +25,21 @@ function relativeTime(timestamp) {
   });
 }
 
+function downloadNotebook(serialized, title) {
+  const blob = new Blob([serialized], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const safeTitle = (title || "verity-notebook")
+    .replace(/[^a-z0-9-_]+/gi, "-")
+    .replace(/^-|-$/g, "");
+  link.href = url;
+  link.download = `${safeTitle || "verity-notebook"}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function InlineName({ value, onCommit, onCancel, size = 13 }) {
   const [draft, setDraft] = useState(value);
   const commit = () => {
@@ -95,7 +110,16 @@ function NoteRow({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-current={active ? "page" : undefined}
       onClick={() => !editing && onOpen(note.id)}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && !editing) {
+          event.preventDefault();
+          onOpen(note.id);
+        }
+      }}
       // Dragging a note onto a folder is what people try before they find the
       // menu, so the menu stays and this is the shortcut on top of it.
       draggable={!editing}
@@ -199,7 +223,16 @@ function FolderRow({ folder, children, count, onRename, onDelete, onCreateIn, on
   return (
     <div style={{ marginBottom: 2 }}>
       <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
         onClick={() => !editing && setOpen((value) => !value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            if (!editing) setOpen((value) => !value);
+          }
+        }}
         onDragOver={(event) => {
           if (!event.dataTransfer.types.includes("text/verity-note")) return;
           event.preventDefault();
@@ -323,6 +356,12 @@ export default function NotebookSidebar({
     addPage,
     openPage,
     deletePage,
+    deletedPage,
+    undoDeletePage,
+    dismissDeletedPage,
+    saveStatus,
+    saveError,
+    exportNotebook,
   } = notebook;
 
   const [query, setQuery] = useState("");
@@ -344,6 +383,10 @@ export default function NotebookSidebar({
 
   const noteCount = tree.loose.length + tree.folders.reduce((sum, f) => sum + f.notes.length, 0);
   const nothingHere = !filtered.folders.length && !filtered.loose.length;
+  const handleExportNotebook = async () => {
+    const serialized = await exportNotebook();
+    downloadNotebook(serialized, activeNote.title);
+  };
 
   return (
     <>
@@ -361,6 +404,7 @@ export default function NotebookSidebar({
 
       <aside
         aria-label="Notebook"
+        inert={!open}
         style={{
           position: "fixed",
           top: 0,
@@ -398,6 +442,8 @@ export default function NotebookSidebar({
               onClick={onClose}
               aria-label="Close notebook"
               style={{
+                minWidth: 44,
+                minHeight: 44,
                 width: 30,
                 height: 30,
                 display: "grid",
@@ -611,6 +657,25 @@ export default function NotebookSidebar({
             >
               ⤓
             </button>
+            <button
+              type="button"
+              title="Export notebook backup"
+              aria-label="Export notebook backup"
+              onClick={() => void handleExportNotebook()}
+              style={{
+                minWidth: 44,
+                minHeight: 44,
+                border: "none",
+                background: "transparent",
+                color: COLORS.muted,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              JSON
+            </button>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
             {activeNote.pages.map((page, index) => {
@@ -646,17 +711,17 @@ export default function NotebookSidebar({
                       onClick={() => deletePage(page.id)}
                       style={{
                         position: "absolute",
-                        top: -5,
-                        right: -5,
-                        width: 16,
-                        height: 16,
+                        top: -12,
+                        right: -12,
+                        width: 44,
+                        height: 44,
                         display: "grid",
                         placeItems: "center",
                         border: `1px solid ${COLORS.border}`,
                         borderRadius: "50%",
                         background: COLORS.surface,
                         color: COLORS.muted,
-                        fontSize: 10,
+                        fontSize: 16,
                         lineHeight: 1,
                         cursor: "pointer",
                       }}
@@ -796,6 +861,31 @@ export default function NotebookSidebar({
             </button>
           </div>
         )}
+
+        {deletedPage && (
+          <div
+            role="status"
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "9px 14px",
+              background: COLORS.background,
+              borderTop: `1px solid ${COLORS.border}`,
+              fontSize: 12,
+              color: COLORS.muted,
+            }}
+          >
+            <span style={{ flex: 1 }}>Page deleted</span>
+            <button type="button" onClick={undoDeletePage} style={{ minWidth: 44, minHeight: 44, border: "none", background: "transparent", color: meta.accent, fontWeight: 700 }}>Undo</button>
+            <button type="button" onClick={dismissDeletedPage} aria-label="Dismiss page recovery" style={{ minWidth: 44, minHeight: 44, border: "none", background: "transparent", color: COLORS.muted, fontSize: 18 }}>×</button>
+          </div>
+        )}
+
+        <div role="status" aria-live="polite" style={{ padding: "7px 14px", color: saveStatus === "error" ? COLORS.danger : COLORS.muted, fontSize: 11 }}>
+          {saveStatus === "saving" ? "Saving…" : saveStatus === "error" ? `Save failed: ${saveError ?? "try again"}` : "Saved"}
+        </div>
 
         {cloudNotice && (
           <div

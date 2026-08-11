@@ -23,7 +23,7 @@ const NOTEBOOK_HEIGHT = NOTEBOOK_ROWS * LINE_HEIGHT;
 const TOOLBAR_HEIGHT = 72;
 const FEEDBACK_PANEL_WIDTH = 360;
 const PAGE_GAP = 16;
-const COMPACT_BREAKPOINT = 700;
+const WIDE_BREAKPOINT = 1100;
 const NOOP = () => {};
 
 // Deep enough that a student never hits the end of undo in one problem,
@@ -53,10 +53,9 @@ export function completedRowAfterStroke(queuedRow, previousRow, committedRow) {
 }
 
 export function getCanvasDisplaySize(viewportWidth, viewportHeight) {
-  const compact = viewportWidth <= COMPACT_BREAKPOINT;
-  const reservedWidth = compact ? 0 : FEEDBACK_PANEL_WIDTH + PAGE_GAP * 3;
+  const reservedWidth = viewportWidth > WIDE_BREAKPOINT ? FEEDBACK_PANEL_WIDTH + PAGE_GAP * 3 : 0;
   return {
-    width: Math.max(compact ? 1 : 640, viewportWidth - reservedWidth),
+    width: Math.max(1, viewportWidth - reservedWidth),
     height: Math.max(NOTEBOOK_HEIGHT, viewportHeight - TOOLBAR_HEIGHT),
   };
 }
@@ -106,6 +105,7 @@ function drawStroke(context, stroke) {
 }
 
 export default function useCanvas({
+  pageId = null,
   canvasMode = "rows",
   verdictsByLine = new Map(),
   onRowReady = NOOP,
@@ -121,6 +121,7 @@ export default function useCanvas({
   const drawOverlayFrameRef = useRef(() => {});
   const overlayFrameRequestRef = useRef(null);
   const canvasSizeRef = useRef({ width: 0, height: 0, pixelRatio: 1 });
+  const pageIdRef = useRef(pageId);
 
   const [strokes, setStrokes] = useState([]);
   const strokesRef = useRef([]);
@@ -149,6 +150,10 @@ export default function useCanvas({
   const eraserCursorRef = useRef(null);
   const lastErasePointRef = useRef(null);
   const touchScrollRef = useRef(null);
+
+  useEffect(() => {
+    pageIdRef.current = pageId;
+  }, [pageId]);
 
   useEffect(() => {
     eraserRadiusRef.current = eraserRadius;
@@ -244,6 +249,7 @@ export default function useCanvas({
       row,
       strokes: [...rowStrokes],
       version,
+      pageId: pageIdRef.current,
       onProcessed: () => acknowledgeProcessedRow(row, version),
     });
   }, [acknowledgeProcessedRow]);
@@ -645,12 +651,13 @@ export default function useCanvas({
       clearTimeout(rowIdleTimerRef.current);
       rowIdleTimerRef.current = null;
     }
+    if (strokesRef.current.length) pushHistory();
     strokesRef.current = [];
     inkIndexRef.current = buildInkIndex([]);
     rowVersionsRef.current.clear();
     lastReadyVersionRef.current.clear();
-    historyRef.current = { past: [], future: [] };
-    setHistoryDepth({ past: 0, future: 0 });
+    historyRef.current.future = [];
+    syncHistoryDepth();
     erasingRef.current = false;
     erasedRowsRef.current.clear();
     eraserCursorRef.current = null;
@@ -706,6 +713,38 @@ export default function useCanvas({
     setActiveLineNumber(null);
     const { width, height } = canvasSizeRef.current;
     canvasRef.current?.getContext("2d")?.clearRect(0, 0, width, height);
+    drawStaticFrameRef.current();
+    drawOverlayFrameRef.current();
+  }, []);
+
+  const setViewportSize = useCallback((width, height) => {
+    const safeWidth = Math.max(1, Math.round(width));
+    const safeHeight = Math.max(NOTEBOOK_HEIGHT, Math.round(height));
+    const backingSize = getCanvasBackingSize(
+      safeWidth,
+      safeHeight,
+      globalThis.devicePixelRatio
+    );
+    canvasSizeRef.current = {
+      width: safeWidth,
+      height: safeHeight,
+      pixelRatio: backingSize.pixelRatio,
+    };
+    for (const canvas of [staticCanvasRef.current, overlayCanvasRef.current, canvasRef.current]) {
+      if (!canvas) continue;
+      canvas.width = backingSize.width;
+      canvas.height = backingSize.height;
+      canvas.style.width = `${safeWidth}px`;
+      canvas.style.height = `${safeHeight}px`;
+      canvas.getContext("2d")?.setTransform(
+        backingSize.pixelRatio,
+        0,
+        0,
+        backingSize.pixelRatio,
+        0,
+        0
+      );
+    }
     drawStaticFrameRef.current();
     drawOverlayFrameRef.current();
   }, []);
@@ -801,6 +840,7 @@ export default function useCanvas({
     if (!canvas) return;
     const context = canvas.getContext("2d");
     const { width, height } = canvasSizeRef.current;
+    const palette = readCanvasPalette();
     context.clearRect(0, 0, width, height);
 
     // The eraser is drawn at its true radius so it can be aimed. Drawn before
@@ -832,20 +872,22 @@ export default function useCanvas({
         ? verdict.status ?? (verdict.valid ? "valid" : "invalid")
         : null;
       const color =
-        verdictStatus === null
-          ? "rgba(70, 130, 180, 0.8)"
-          : verdictStatus === "valid"
-          ? "rgba(40, 160, 90, 0.9)"
+        verdictStatus === "valid"
+          ? palette.valid
           : verdictStatus === "invalid"
-          ? "rgba(200, 50, 50, 0.9)"
-          : "rgba(180, 120, 30, 0.9)";
+          ? palette.invalid
+          : verdictStatus === "unsupported"
+          ? palette.unsupported
+          : verdictStatus === "parse_error"
+          ? palette.parse
+          : palette.waiting;
       context.strokeStyle = color;
       context.fillStyle = color;
-      context.lineWidth = verdictStatus === "invalid" ? 2 : 1;
+      context.lineWidth = verdictStatus === "invalid" ? 2 : verdictStatus === "parse_error" ? 1.5 : 1;
       context.strokeRect(minX - 6, minY - 6, maxX - minX + 12, maxY - minY + 12);
       context.fillText(`line ${lineNumberByRow.get(row)}`, minX - 6, minY - 10);
       if (verdictStatus === "invalid") {
-        context.strokeStyle = "rgba(200, 50, 50, 0.9)";
+        context.strokeStyle = palette.invalid;
         context.lineWidth = 3;
         context.beginPath();
         context.moveTo(minX - 4, maxY + 10);
@@ -899,39 +941,18 @@ export default function useCanvas({
   }, []);
 
   useEffect(() => {
-    const staticCanvas = staticCanvasRef.current;
-    const overlayCanvas = overlayCanvasRef.current;
-    const activeCanvas = canvasRef.current;
-
     const resize = () => {
       const { width, height } = getCanvasDisplaySize(
         document.documentElement.clientWidth,
         window.innerHeight
       );
-      const backingSize = getCanvasBackingSize(
-        width,
-        height,
-        window.devicePixelRatio
-      );
-      canvasSizeRef.current = { width, height, pixelRatio: backingSize.pixelRatio };
-
-      for (const canvas of [staticCanvas, overlayCanvas, activeCanvas]) {
-        canvas.width = backingSize.width;
-        canvas.height = backingSize.height;
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
-        canvas
-          .getContext("2d")
-          .setTransform(backingSize.pixelRatio, 0, 0, backingSize.pixelRatio, 0, 0);
-      }
-      drawStaticFrameRef.current();
-      drawOverlayFrameRef.current();
+      setViewportSize(width, height);
     };
 
     resize();
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
-  }, []);
+  }, [setViewportSize]);
 
   return {
     staticCanvasRef,
@@ -969,5 +990,6 @@ export default function useCanvas({
       row === null || row === undefined
         ? null
         : inkIndexRef.current.bounds.get(row) ?? null,
+    setViewportSize,
   };
 }

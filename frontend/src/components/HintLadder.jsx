@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { COLORS, FONT, RADIUS } from "../theme";
 import WorkedExampleStepper from "./WorkedExampleStepper";
+import { safeHintResourceUrl } from "./hintResources";
 
 const HINTS_OPEN_KEY = "verity.hintsOpen";
 
@@ -62,6 +63,7 @@ export default function HintLadder({
   levelThreeRemaining,
   source,
   resource,
+  error,
   loading,
   onRequest,
   onCancel,
@@ -72,6 +74,7 @@ export default function HintLadder({
   const spendsBudget = level === 2 && !terminalStep;
   const [open, setOpen] = useState(readHintsOpen);
   const hintRef = useRef(null);
+  const safeResource = safeHintResourceUrl(resource);
 
   // A hint arrives at the bottom of a panel the student is not looking at,
   // below whatever working is already listed above it. On a tablet that is
@@ -87,7 +90,7 @@ export default function HintLadder({
     rememberHintsOpen(next);
   };
 
-  if (!open && level === 0 && !hint) {
+  if (!open) {
     return (
       <div
         style={{
@@ -113,7 +116,7 @@ export default function HintLadder({
             cursor: disabled ? "not-allowed" : "pointer",
           }}
         >
-          Stuck? Get a hint
+          {level > 0 ? "Show hints" : "Stuck? Get a hint"}
         </button>
       </div>
     );
@@ -157,7 +160,7 @@ export default function HintLadder({
             marginBottom: 10,
             padding: 12,
             borderRadius: RADIUS.md,
-            background: terminalStep ? "#fdf6e6" : COLORS.primaryLight,
+            background: terminalStep ? "var(--v-unsupported-bg)" : COLORS.primaryLight,
             color: COLORS.text,
             lineHeight: 1.5,
             fontSize: 13,
@@ -174,7 +177,7 @@ export default function HintLadder({
           >
             <div
               style={{
-                color: terminalStep ? "#8a6d3b" : COLORS.primary,
+                color: terminalStep ? "var(--v-unsupported)" : COLORS.primary,
                 fontWeight: 700,
                 fontSize: 12,
               }}
@@ -195,9 +198,9 @@ export default function HintLadder({
 
           {hint}
 
-          {resource && (
+          {safeResource && (
             <a
-              href={resource}
+              href={safeResource}
               target="_blank"
               rel="noreferrer"
               style={{
@@ -211,6 +214,41 @@ export default function HintLadder({
               Read more about this →
             </a>
           )}
+        </div>
+      )}
+
+      {error && (
+        <div
+          role="alert"
+          style={{
+            marginBottom: 10,
+            padding: 12,
+            borderRadius: RADIUS.md,
+            background: "var(--v-parse-bg)",
+            color: COLORS.text,
+            fontSize: 13,
+            lineHeight: 1.45,
+          }}
+        >
+          <div>That hint did not load. Your hint level was not used.</div>
+          <button
+            type="button"
+            onClick={onRequest}
+            disabled={loading || disabled}
+            style={{
+              marginTop: 8,
+              minHeight: 44,
+              padding: "8px 12px",
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: RADIUS.sm,
+              background: COLORS.surface,
+              color: COLORS.primary,
+              fontWeight: 700,
+              cursor: loading || disabled ? "not-allowed" : "pointer",
+            }}
+          >
+            Retry hint
+          </button>
         </div>
       )}
 
@@ -267,7 +305,7 @@ export default function HintLadder({
           style={{
             width: "100%",
             padding: "10px 14px",
-            background: disabled || atTop ? "#d8ddda" : COLORS.primary,
+            background: disabled || atTop ? "var(--v-waiting-bg)" : COLORS.primary,
             color: "#fff",
             border: "none",
             borderRadius: RADIUS.md,
