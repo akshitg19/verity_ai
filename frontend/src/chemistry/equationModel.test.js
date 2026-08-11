@@ -55,6 +55,46 @@ describe("parseEquation", () => {
     // rather than as an empty tally.
     expect(parseEquation("Count the atoms on each side.")).toBeNull();
   });
+
+  // Every generated step is a sentence and then the chemistry, so the parser
+  // meets prose on the way to the equation on almost every line.
+  it("finds the equation after a sentence on the same line", () => {
+    const equation = parseEquation(
+      "Balance the oxygens last: C3H8 + 5O2 -> 3CO2 + 4H2O"
+    );
+
+    expect(equation.left).toEqual([
+      { coefficient: 1, formula: "C3H8" },
+      { coefficient: 5, formula: "O2" },
+    ]);
+    expect(equation.right).toEqual([
+      { coefficient: 3, formula: "CO2" },
+      { coefficient: 4, formula: "H2O" },
+    ]);
+  });
+
+  it("does not read an English word as an element", () => {
+    // "Balance" parsed as Ba + ... is how a phantom row appeared in the tally
+    // beside a worked example.
+    expect(parseEquation("Balance -> the equation")).toBeNull();
+  });
+
+  it("strips a full stop after the last formula", () => {
+    const equation = parseEquation("So the answer is 2H2 + O2 -> 2H2O.");
+
+    expect(equation.right).toEqual([{ coefficient: 2, formula: "H2O" }]);
+  });
+
+  it("keeps electrons in a half-reaction", () => {
+    expect(parseEquation("MnO4^- + 8H^+ + 5e- -> Mn^2+ + 4H2O")).not.toBeNull();
+  });
+
+  it("gives up rather than tallying half an equation", () => {
+    // A term that is prose all the way through means we cannot know what the
+    // counts are, and a wrong count beside a worked example is worse than
+    // none. Prose in, prose out.
+    expect(parseEquation("Add H2 + oxygen gas together -> water")).toBeNull();
+  });
 });
 
 describe("atomTally", () => {
@@ -74,6 +114,13 @@ describe("atomTally", () => {
   it("handles a polyatomic on both sides", () => {
     const tally = atomTally("3Ca(OH)2 + 2H3PO4 -> Ca3(PO4)2 + 6H2O");
 
+    expect(tally.every((row) => row.balanced)).toBe(true);
+  });
+
+  it("tallies only real elements when the step opens with a sentence", () => {
+    const tally = atomTally("Now fix the hydrogens: N2 + 3H2 -> 2NH3");
+
+    expect(tally.map((row) => row.element)).toEqual(["N", "H"]);
     expect(tally.every((row) => row.balanced)).toBe(true);
   });
 });

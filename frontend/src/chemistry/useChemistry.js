@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { renderLineToPng } from "../canvas/render";
 import {
@@ -20,6 +20,7 @@ import {
 } from "./lineModel";
 import { openCurrentSession, readStructureSnapshot } from "./requestModel";
 import { trustedStructurePreview } from "./structurePreview";
+import { emptyValues, readStoredTopic, rememberTopic } from "./topicMemory";
 import {
   TOPICS,
   describeProblem,
@@ -28,13 +29,6 @@ import {
   questionFieldFor,
 } from "./topics";
 
-const emptyValues = (type) =>
-  Object.fromEntries(
-    type.fields.map((field) => [
-      field.name,
-      field.type === "select" ? field.options[0] : "",
-    ])
-  );
 
 function addReadingRow(current, row) {
   const next = new Set(current);
@@ -49,12 +43,15 @@ function removeReadingRow(current, row) {
 }
 
 export default function useChemistry() {
-  const [topicId, setTopicId] = useState("structure");
+  const [stored] = useState(readStoredTopic);
+  const [topicId, setTopicId] = useState(stored.topicId);
   const topic = TOPICS.find((entry) => entry.id === topicId) ?? TOPICS[0];
-  const [typeId, setTypeId] = useState(topic.types[0].id);
+  const [typeId, setTypeId] = useState(stored.typeId ?? topic.types[0].id);
   const problemType =
     topic.types.find((entry) => entry.id === typeId) ?? topic.types[0];
-  const [values, setValues] = useState(() => emptyValues(topic.types[0]));
+  const [values, setValues] = useState(
+    () => stored.values ?? emptyValues(topic.types[0])
+  );
 
   const [session, setSession] = useState(null);
 
@@ -103,6 +100,10 @@ export default function useChemistry() {
   const ready = isProblemReady(problemType, values);
   const problemText = describeProblem(topic, problemType, values);
   const reading = pageReading || readingRows.size > 0;
+
+  useEffect(() => {
+    rememberTopic(topicId, typeId, values);
+  }, [topicId, typeId, values]);
 
   // -- invalidation -------------------------------------------------------
 
@@ -524,6 +525,30 @@ export default function useChemistry() {
       if (id === requestId.current) setChecking(false);
     }
   }, [answer, clearHints, ensureSession, isDrawing, problemType, ready, topic, values]);
+
+  // Written chemistry checks itself, the way math has since the beginning.
+  //
+  // A student who has finished a line should not have to reach for a button to
+  // find out whether it holds: the line is read automatically, so it is judged
+  // automatically, and the row goes green or red on the page. `checkAnswer`
+  // through a ref so this fires on new transcription rather than every time
+  // an unrelated dependency of the callback changes.
+  //
+  // Held back while a row is still being read, so a page mid-transcription is
+  // not judged on the lines that happen to have landed first. `reading` going
+  // false is itself a trigger, so the check still runs the moment the last row
+  // is in.
+  const checkAnswerRef = useRef(checkAnswer);
+  useEffect(() => {
+    checkAnswerRef.current = checkAnswer;
+  }, [checkAnswer]);
+
+  useEffect(() => {
+    if (isDrawing || !ready || reading) return undefined;
+    if (orderedChemistryLines(lines).length === 0) return undefined;
+    const timer = setTimeout(() => checkAnswerRef.current?.(), 250);
+    return () => clearTimeout(timer);
+  }, [isDrawing, lines, ready, reading]);
 
   // -- hints --------------------------------------------------------------
 

@@ -654,6 +654,31 @@ Out of scope: Lewis dot structure recognition from a drawing, 3D geometry and
 VSEPR from drawings, and curved-arrow mechanism drawing as an input modality
 (mechanism *steps written as structures* are in scope, the arrows are not).
 
+#### Hand-testing pass: ten questions per chemistry topic
+
+Every chemistry topic gets ten questions written **by hand**, on the tablet,
+through the real UI, with what actually happened recorded in `testing/`. One
+markdown file per topic. This is the measurement the status column above does
+not make: "built, unit-tested, reachable" has never meant "seen to work on
+handwriting", and this is how that gap gets closed one topic at a time.
+
+Started with equations and balancing, on the grounds that it is the hardest.
+Five of the ten are written up in `testing/chemistry/equations-and-balancing.md`
+with the same five locked as deterministic tests in
+`backend/tests/test_balancing_walkthrough.py`.
+
+Four findings from the judge, before any handwriting was involved:
+
+| Done | Finding | Detail |
+|------|---|---|
+| [ ] | A balanced equation for a different reaction is accepted | `H2 + O2 -> H2O2` is judged valid against the problem `H2 + O2 -> H2O`. `BalanceJudge.check` parses the reference equation only to report a malformed problem and never compares the student's species against it. Balancing homework exists to break the subscript-editing habit, so this is the serious one |
+| [ ] | A fractional coefficient is a `parse_error` | `C2H6 + 3.5O2 -> 2CO2 + 3H2O` fails with `could not read '.5O2' as a formula`. Half coefficients are standard method for combustion. `_split_coefficient` takes leading digits only; accepting `3.5` and `7/2` as a `Fraction` is a small change to the same function |
+| [ ] | A balanced multiple of the answer is accepted | `4C3H8 + 20O2 -> 12CO2 + 16H2O` is valid, and `coefficient_distance` reduces before comparing so it reads as zero from the answer. Lowest whole numbers is what a teacher marks. Decide whether that is a verdict, a nudge, or nothing |
+| [ ] | Parse error text is written for a developer | All-caps `AL` out of transcription produces `unknown element 'A' in 'AL'`. Students see this string |
+
+Remaining topics, same treatment, in this order: solutions and acids and bases,
+stoichiometry, redox, structure, organic.
+
 ---
 
 ## Backend

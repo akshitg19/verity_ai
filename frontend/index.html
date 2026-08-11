@@ -23,11 +23,11 @@
       // load, which reads as a broken app on a tablet.
       (function () {
         try {
-          var stored = localStorage.getItem("verity.theme");
+          var stored = localStorage.getItem("verity.theme.v2");
           var preference =
             stored === "light" || stored === "dark" || stored === "system"
               ? stored
-              : "system";
+              : "light";
           var theme =
             preference === "system"
               ? window.matchMedia("(prefers-color-scheme: dark)").matches

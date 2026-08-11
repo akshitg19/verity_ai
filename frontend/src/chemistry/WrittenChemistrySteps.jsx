@@ -40,11 +40,7 @@ function statusForLine(line, verdict, blocked, ready) {
   const status = verdictStatus(verdict);
   if (!verdict) {
     return ready
-      ? styleFor(
-          "waiting",
-          "Ready to check",
-          "Read and understood. Press Check work below."
-        )
+      ? styleFor("waiting", "Checking", "Read and understood. Checking it now.")
       : styleFor(
           "waiting",
           "Not checked yet",
@@ -97,12 +93,18 @@ export default function WrittenChemistrySteps({
   const canCheck =
     ready && !checking && readableChemistryLines(stepLines).length > 0;
 
+  // Every finished line is checked on its own now, so this button is a way to
+  // ask again, not the way results arrive. It still earns its place: a line
+  // corrected by hand in the panel, or a question typed after the working was
+  // written, is a case where a student wants to say "now".
   const checkLabel = checking
     ? "Checking…"
     : !ready
     ? "Set the question first"
     : readableChemistryLines(stepLines).length === 0
     ? "Write your working below the question"
+    : verdictsByLine.size > 0
+    ? "Check again"
     : "Check work";
 
   return (

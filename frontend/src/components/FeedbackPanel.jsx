@@ -114,7 +114,9 @@ export default function FeedbackPanel({
             top: 88,
             right: 16,
             width: 360,
-            maxHeight: "calc(100vh - 104px)",
+            // dvh so the foot of the panel is never behind a tablet browser's
+            // toolbar. See the note on .feedback-panel in index.css.
+            maxHeight: "calc(100dvh - 104px)",
             display: "flex",
             flexDirection: "column",
             zIndex: 15,

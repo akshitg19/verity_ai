@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { COLORS, FONT, RADIUS } from "../theme";
 import WorkedExampleStepper from "./WorkedExampleStepper";
@@ -44,6 +44,16 @@ const NEXT_LABELS = {
   2: "Walk me through my step",
 };
 
+// What is being fetched, by the level being fetched. This used to be the one
+// string "Working through a fresh example", which announced level 2 while
+// level 1 was still loading and told the student the wrong thing about what
+// they had just asked for.
+const LOADING_LABELS = {
+  1: "Finding where it went wrong…",
+  2: "Working through a fresh example…",
+  3: "Working through your own step…",
+};
+
 export default function HintLadder({
   level,
   hint,
@@ -61,6 +71,16 @@ export default function HintLadder({
   const nextLabel = NEXT_LABELS[level] ?? "Show another hint";
   const spendsBudget = level === 2 && !terminalStep;
   const [open, setOpen] = useState(readHintsOpen);
+  const hintRef = useRef(null);
+
+  // A hint arrives at the bottom of a panel the student is not looking at,
+  // below whatever working is already listed above it. On a tablet that is
+  // reliably off the fold, so the help they just asked for appears somewhere
+  // they cannot see. Bring it to them instead of making them find it.
+  useEffect(() => {
+    if (!hint) return;
+    hintRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [hint, level]);
 
   const setOpenAndRemember = (next) => {
     setOpen(next);
@@ -215,7 +235,7 @@ export default function HintLadder({
               textAlign: "center",
             }}
           >
-            Working through a fresh example…
+            {LOADING_LABELS[level + 1] ?? "Working on it…"}
           </div>
           {onCancel && (
             <button
