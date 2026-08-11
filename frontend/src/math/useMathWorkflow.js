@@ -1,10 +1,15 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { checkSteps, getHint, transcribeLine } from "../api";
 import { renderLineToPng } from "../canvas/render";
 import { buildMathCheckInput } from "./lineModel";
+import {
+  deserializeWorkflowSnapshot,
+  serializeWorkflowSnapshot,
+  workflowProblemFingerprint,
+} from "../notebook/workflowSnapshot";
 
-export default function useMathWorkflow() {
+export default function useMathWorkflow({ pageId = null } = {}) {
   const [problem, setProblem] = useState("");
   const problemRef = useRef("");
   const [lines, setLines] = useState([]);
@@ -13,6 +18,7 @@ export default function useMathWorkflow() {
   const [firstWrongLine, setFirstWrongLine] = useState(null);
   const [hintLevel, setHintLevel] = useState(0);
   const [hintText, setHintText] = useState(null);
+  const [hintError, setHintError] = useState(null);
   const [hintLoading, setHintLoading] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [lastResult, setLastResult] = useState(null);
@@ -26,6 +32,9 @@ export default function useMathWorkflow() {
   const dirtyRowsRef = useRef(new Set());
   const checkRequestId = useRef(0);
   const hintRequestId = useRef(0);
+  const checkAbortRef = useRef(null);
+  const hintAbortRef = useRef(null);
+  const pageScopeRef = useRef(pageId);
 
   const bumpRowVersion = useCallback((row) => {
     const nextVersion = (rowVersionsRef.current.get(row) ?? 0) + 1;
@@ -35,8 +44,11 @@ export default function useMathWorkflow() {
 
   const clearHints = useCallback(() => {
     ++hintRequestId.current;
+    hintAbortRef.current?.abort();
+    hintAbortRef.current = null;
     setHintLevel(0);
     setHintText(null);
+    setHintError(null);
     setHintLoading(false);
   }, []);
 
@@ -51,6 +63,10 @@ export default function useMathWorkflow() {
   const recheck = useCallback(
     async (lineArr, problemText = problemRef.current, changedRow = null) => {
       const requestId = ++checkRequestId.current;
+      checkAbortRef.current?.abort();
+      const abortController = new AbortController();
+      checkAbortRef.current = abortController;
+      const requestPageId = pageScopeRef.current;
       ++hintRequestId.current;
       clearHints();
       setVerdictsByLine((current) => {
@@ -65,11 +81,16 @@ export default function useMathWorkflow() {
       const { effectiveProblem, stepList, rowByLineNumber } =
         buildMathCheckInput(lineArr, problemText);
 
-      if (!effectiveProblem || stepList.length === 0) return;
+      if (!effectiveProblem || stepList.length === 0) {
+        checkAbortRef.current = null;
+        return;
+      }
 
       try {
-        const data = await checkSteps(effectiveProblem, stepList);
-        if (requestId !== checkRequestId.current) return;
+        const data = await checkSteps(effectiveProblem, stepList, {
+          signal: abortController.signal,
+        });
+        if (requestId !== checkRequestId.current || requestPageId !== pageScopeRef.current) return;
 
         const problemVerdict = data.verdicts.find((verdict) => verdict.line_number === 0);
         const problemError = data.problem_error ?? problemVerdict?.error_type;
@@ -101,20 +122,27 @@ export default function useMathWorkflow() {
         });
         setFirstWrongLine(data.first_wrong_line > 0 ? data.first_wrong_line : null);
       } catch (error) {
-        if (requestId !== checkRequestId.current) return;
+        if (requestId !== checkRequestId.current || requestPageId !== pageScopeRef.current) return;
+        if (error.name === "AbortError") return;
         setVerdictsByLine(new Map());
         setFirstWrongLine(null);
         clearHints();
         setLastResult({ error: `Check failed: ${error.message}` });
+      } finally {
+        if (checkAbortRef.current === abortController) checkAbortRef.current = null;
       }
     },
     [clearHints]
   );
 
   const processRow = useCallback(
-    async ({ row, strokes, version, onProcessed }) => {
+    async ({ row, strokes, version, onProcessed, pageId: rowPageId }) => {
       await new Promise((resolve) => setTimeout(resolve, 0));
-      if (!strokes?.length || rowVersionsRef.current.get(row) !== version) return;
+      if (
+        !strokes?.length ||
+        rowPageId !== undefined && rowPageId !== pageScopeRef.current ||
+        rowVersionsRef.current.get(row) !== version
+      ) return;
 
       const requestId = ++transcriptionRequestId.current;
       transcriptionRowRef.current = row;
@@ -122,6 +150,7 @@ export default function useMathWorkflow() {
         const dataUrl = await renderLineToPng([...strokes]);
         if (
           requestId !== transcriptionRequestId.current ||
+          rowPageId !== undefined && rowPageId !== pageScopeRef.current ||
           rowVersionsRef.current.get(row) !== version
         ) {
           return;
@@ -135,6 +164,7 @@ export default function useMathWorkflow() {
         });
         if (
           requestId !== transcriptionRequestId.current ||
+          rowPageId !== undefined && rowPageId !== pageScopeRef.current ||
           rowVersionsRef.current.get(row) !== version
         ) {
           return;
@@ -184,6 +214,7 @@ export default function useMathWorkflow() {
   const queueRow = useCallback(
     ({ row, strokes, onProcessed }) => {
       if (row === null || row === undefined || !strokes?.length) return;
+      if (pageId !== undefined && pageId !== pageScopeRef.current) return;
       const alreadyTranscribed = linesRef.current.some((line) => line.row === row);
       if (alreadyTranscribed && !dirtyRowsRef.current.has(row)) return;
 
@@ -193,11 +224,12 @@ export default function useMathWorkflow() {
         strokes: [...strokes],
         version: rowVersionsRef.current.get(row) ?? 0,
         onProcessed,
+        pageId,
       });
       setTranscribing(true);
       void runRowQueue();
     },
-    [runRowQueue]
+    [pageId, runRowQueue]
   );
 
   const invalidateRow = useCallback(
@@ -266,22 +298,28 @@ export default function useMathWorkflow() {
 
     const nextLevel = hintLevel + 1;
     const requestId = ++hintRequestId.current;
+    hintAbortRef.current?.abort();
+    const abortController = new AbortController();
+    hintAbortRef.current = abortController;
+    const requestPageId = pageScopeRef.current;
     setHintLoading(true);
+    setHintError(null);
     try {
       const data = await getHint({
         line_number: firstWrongLine,
         error_type: activeVerdict.error_type ?? null,
         level: nextLevel,
-      });
-      if (requestId !== hintRequestId.current) return;
+      }, { signal: abortController.signal });
+      if (requestId !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
       setHintLevel(data.level);
       setHintText(data.hint);
     } catch (error) {
-      if (requestId !== hintRequestId.current) return;
-      setHintLevel(nextLevel);
-      setHintText(`Error: ${error.message}`);
+      if (requestId !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
+      if (error.name === "AbortError") return;
+      setHintError(error.message);
     } finally {
       if (requestId === hintRequestId.current) setHintLoading(false);
+      if (hintAbortRef.current === abortController) hintAbortRef.current = null;
     }
   }, [firstWrongLine, hintLevel, verdictsByLine]);
 
@@ -289,6 +327,10 @@ export default function useMathWorkflow() {
     ++transcriptionRequestId.current;
     ++checkRequestId.current;
     ++hintRequestId.current;
+    checkAbortRef.current?.abort();
+    checkAbortRef.current = null;
+    hintAbortRef.current?.abort();
+    hintAbortRef.current = null;
     transcriptionAbortRef.current?.abort();
     transcriptionAbortRef.current = null;
     rowQueueRef.current = [];
@@ -301,9 +343,65 @@ export default function useMathWorkflow() {
     setVerdictsByLine(new Map());
     setFirstWrongLine(null);
     clearHints();
+    setHintError(null);
     setLastResult(null);
     setTranscribing(false);
   }, [clearHints]);
+
+  const getWorkflowSnapshot = useCallback(() => {
+    return serializeWorkflowSnapshot({
+      subject: "math",
+      mode: "math",
+      problemText: problemRef.current,
+      problemFingerprint: workflowProblemFingerprint({
+        subject: "math",
+        problemText: problemRef.current,
+      }),
+      recognizedLines: linesRef.current,
+      verdictsByLine,
+      firstWrongLine,
+      hintLevel,
+      hintText,
+      lastResult,
+      updatedAt: Date.now(),
+    });
+  }, [firstWrongLine, hintLevel, hintText, lastResult, verdictsByLine]);
+
+  const restoreWorkflowSnapshot = useCallback((rawSnapshot) => {
+    const snapshot = deserializeWorkflowSnapshot(rawSnapshot);
+    if (!snapshot || snapshot.subject !== "math") {
+      clear();
+      return;
+    }
+    clear();
+    const nextLines = [...(snapshot.recognizedLines ?? [])];
+    problemRef.current = snapshot.problemText ?? "";
+    linesRef.current = nextLines;
+    rowVersionsRef.current.clear();
+    for (const line of nextLines) rowVersionsRef.current.set(line.row, line.version ?? 0);
+    setProblem(problemRef.current);
+    setLines(nextLines);
+    setVerdictsByLine(snapshot.verdictsByLine ?? new Map());
+    setFirstWrongLine(snapshot.firstWrongLine ?? null);
+    setHintLevel(snapshot.hintLevel ?? 0);
+    setHintText(snapshot.hintText ?? null);
+    setHintError(null);
+    setLastResult(snapshot.lastResult ?? null);
+  }, [clear]);
+
+  useEffect(() => {
+    pageScopeRef.current = pageId;
+    // A page identity change is an intentional state reset; the following
+    // render restores the destination snapshot atomically from App.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    clear();
+  }, [clear, pageId]);
+
+  useEffect(() => () => {
+    checkAbortRef.current?.abort();
+    hintAbortRef.current?.abort();
+    transcriptionAbortRef.current?.abort();
+  }, []);
 
   return {
     problem,
@@ -312,6 +410,7 @@ export default function useMathWorkflow() {
     firstWrongLine,
     hintLevel,
     hintText,
+    hintError,
     hintLoading,
     transcribing,
     lastResult,
@@ -324,5 +423,7 @@ export default function useMathWorkflow() {
     handleFinishLine: null,
     handleGetHint,
     clear,
+    getWorkflowSnapshot,
+    restoreWorkflowSnapshot,
   };
 }

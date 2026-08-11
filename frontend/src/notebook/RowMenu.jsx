@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { COLORS, FONT, RADIUS, SHADOW } from "../theme";
 
@@ -11,22 +11,57 @@ import { COLORS, FONT, RADIUS, SHADOW } from "../theme";
 
 export default function RowMenu({ items, label = "More actions" }) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef(null);
+  const menuRef = useRef(null);
+  const menuId = useId();
+
+  const enabledItems = () =>
+    [...(menuRef.current?.querySelectorAll("[role='menuitem']:not(:disabled)") ?? [])];
+
+  const closeMenu = () => {
+    setOpen(false);
+    requestAnimationFrame(() => buttonRef.current?.querySelector("button")?.focus());
+  };
 
   useEffect(() => {
     if (!open) return undefined;
     const close = (event) => {
-      if (!buttonRef.current?.contains(event.target)) setOpen(false);
+      if (!buttonRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) closeMenu();
     };
-    const onKey = (event) => event.key === "Escape" && setOpen(false);
     document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    enabledItems()[0]?.focus();
+  }, [open]);
+
+  const onMenuKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMenu();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const controls = enabledItems();
+    if (!controls.length) return;
+    const last = controls.length - 1;
+    const next = event.key === "Home"
+      ? 0
+      : event.key === "End"
+      ? last
+      : event.key === "ArrowDown"
+      ? Math.min(last, activeIndex + 1)
+      : Math.max(0, activeIndex - 1);
+    setActiveIndex(next);
+    controls[next]?.focus();
+  };
 
   const toggle = (event) => {
     event.stopPropagation();
@@ -44,6 +79,7 @@ export default function RowMenu({ items, label = "More actions" }) {
         left: Math.max(8, Math.min(rect.left - width + rect.width, window.innerWidth - width - 8)),
       });
     }
+    setActiveIndex(0);
     setOpen((value) => !value);
   };
 
@@ -53,11 +89,12 @@ export default function RowMenu({ items, label = "More actions" }) {
         type="button"
         aria-label={label}
         aria-expanded={open}
+        aria-controls={menuId}
         title={label}
         onClick={toggle}
         style={{
-          width: 26,
-          height: 26,
+          width: 44,
+          height: 44,
           display: "grid",
           placeItems: "center",
           border: "none",
@@ -74,13 +111,19 @@ export default function RowMenu({ items, label = "More actions" }) {
 
       {open && (
         <div
+          ref={menuRef}
+          id={menuId}
           role="menu"
+          aria-label={label}
+          onKeyDown={onMenuKeyDown}
           style={{
             position: "fixed",
             top: position.top,
             left: position.left,
             zIndex: 60,
             width: 176,
+            maxHeight: "min(60dvh, 320px)",
+            overflowY: "auto",
             padding: "6px 0",
             background: COLORS.surface,
             border: `1px solid ${COLORS.border}`,
@@ -97,11 +140,12 @@ export default function RowMenu({ items, label = "More actions" }) {
               disabled={item.disabled}
               onClick={(event) => {
                 event.stopPropagation();
-                setOpen(false);
+                closeMenu();
                 item.onSelect();
               }}
               style={{
                 width: "100%",
+                minHeight: 44,
                 display: "flex",
                 alignItems: "center",
                 gap: 10,

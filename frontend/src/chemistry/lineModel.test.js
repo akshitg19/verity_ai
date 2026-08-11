@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildChemistrySteps,
+  chemistryStepLines,
   isStaleLineResponse,
   isWholePageChemistryInput,
   keepVerdictsBeforeRow,
@@ -84,6 +85,19 @@ describe("written chemistry line model", () => {
         gappedLines
       ).has(7)
     ).toBe(false);
+  });
+
+  it("uses the same filtered sequence for hint line numbers when the question is handwritten", () => {
+    const withQuestion = [
+      { row: 1, text: "What is pH?", unreadable: false },
+      { row: 4, text: "pH = 2", unreadable: false },
+      { row: 7, text: "pOH = 12", unreadable: false },
+    ];
+    expect(chemistryStepLines(withQuestion, 1).map((line) => line.row)).toEqual([4, 7]);
+    expect(buildChemistrySteps(chemistryStepLines(withQuestion, 1))).toEqual([
+      { line_number: 1, smiles: "pH = 2" },
+      { line_number: 2, smiles: "pOH = 12" },
+    ]);
   });
 
   it("rejects stale responses after a row edit or a newer request", () => {

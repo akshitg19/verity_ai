@@ -1,3 +1,5 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+
 import { COLORS, RADIUS, SHADOW, SUBJECTS } from "../theme";
 
 const CARD_WIDTH = 268;
@@ -11,24 +13,62 @@ const GAP = 12;
 // them type it into a panel instead puts a seam down the middle of a
 // handwriting app.
 export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismiss }) {
-  if (!bounds || !text?.trim()) return null;
+  const promptRef = useRef(null);
+  const restoreFocusRef = useRef(null);
+  const [position, setPosition] = useState({ top: 8, left: 8 });
+  const visible = Boolean(bounds && text?.trim());
 
-  // Above the ink by default so it never covers what it refers to, and below
-  // when the line is too near the top of the page for that to fit.
-  const above = bounds.minY > 96;
-  const top = above ? bounds.minY - GAP : bounds.maxY + GAP;
-  const left = Math.max(8, bounds.minX - 6);
+  useEffect(() => {
+    if (!visible) return undefined;
+    restoreFocusRef.current = document.activeElement;
+    requestAnimationFrame(() => promptRef.current?.querySelector("button")?.focus());
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onDismiss();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      restoreFocusRef.current?.focus?.();
+    };
+  }, [visible, onDismiss]);
+
+  useLayoutEffect(() => {
+    if (!visible || !bounds || !promptRef.current) return;
+    const prompt = promptRef.current;
+    const parent = prompt.parentElement?.getBoundingClientRect();
+    if (!parent) return;
+    const card = prompt.getBoundingClientRect();
+    const gap = GAP;
+    const preferredTop = bounds.minY > card.height + 24
+      ? bounds.minY - gap - card.height
+      : bounds.maxY + gap;
+    const next = {
+      top: Math.max(8, Math.min(preferredTop, Math.max(8, parent.height - card.height - 8))),
+      left: Math.max(8, Math.min(bounds.minX - 6, Math.max(8, parent.width - card.width - 8))),
+    };
+    setPosition((current) => current.top === next.top && current.left === next.left ? current : next);
+  }, [bounds, text, visible]);
+
+  if (!visible) return null;
 
   return (
     <div
+      ref={promptRef}
       role="dialog"
+      aria-modal="false"
+      aria-describedby="question-prompt-copy"
       aria-label="Use this line as the question"
       style={{
         position: "absolute",
-        top,
-        left,
+        top: position.top,
+        left: position.left,
         width: CARD_WIDTH,
-        transform: above ? "translateY(-100%)" : "none",
+        maxWidth: "calc(100vw - 16px)",
+        maxHeight: "calc(100dvh - 16px)",
+        overflowY: "auto",
         zIndex: 15,
         padding: 12,
         boxSizing: "border-box",
@@ -39,7 +79,8 @@ export default function QuestionPrompt({ bounds, text, onUseAsQuestion, onDismis
         fontFamily: "inherit",
       }}
     >
-      <div
+        <div
+          id="question-prompt-copy"
         style={{
           fontSize: 10,
           fontWeight: 700,

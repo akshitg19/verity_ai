@@ -6,28 +6,28 @@ import useChemistry from "./chemistry/useChemistry";
 import QuestionPrompt from "./chemistry/QuestionPrompt";
 import CanvasSurface from "./components/CanvasSurface";
 import useKeyboardShortcuts from "./useKeyboardShortcuts";
-import useTheme from "./useTheme";
 import FeedbackPanel from "./components/FeedbackPanel";
 import PageActions from "./components/PageActions";
 import WorkspaceToolbar from "./components/WorkspaceToolbar";
 import NotebookSidebar from "./notebook/NotebookSidebar";
+import NotebookSaveStatus from "./notebook/NotebookSaveStatus";
 import useNotebook from "./notebook/useNotebook";
+import { deriveCompletionStatus } from "./notebook/completionStatus";
 import useMathWorkflow from "./math/useMathWorkflow";
+import WorkspaceActionDialog from "./components/WorkspaceActionDialog";
+import useWorkspaceNavigation from "./useWorkspaceNavigation";
 import { SURFACES } from "./theme";
 
 const SIDEBAR_WIDTH = 288;
-const SWIPE_DISTANCE = 90;
-const SWIPE_SLOPE = 60;
 
 export default function App({ theme: themeFromRoute, subject }) {
   const notebook = useNotebook();
-  const chemistry = useChemistry();
-  const math = useMathWorkflow();
-  const ownTheme = useTheme();
-  const theme = themeFromRoute ?? ownTheme;
+  const pageId = notebook.activePage.id;
+  const chemistry = useChemistry({ pageId });
+  const math = useMathWorkflow({ pageId });
+  const theme = themeFromRoute;
   const mode = notebook.activeNote.subject;
   const [showNotebook, setShowNotebook] = useState(false);
-  const swipeStart = useRef(null);
   const loadedPageRef = useRef(null);
   const pendingPageLoadRef = useRef(null);
   const captureEnabled = import.meta.env.VITE_CAPTURE === "1";
@@ -36,6 +36,7 @@ export default function App({ theme: themeFromRoute, subject }) {
   const activeVerdicts =
     mode === "chemistry" ? chemistry.verdictsByLine : math.verdictsByLine;
   const canvas = useCanvas({
+    pageId,
     canvasMode,
     verdictsByLine: activeVerdicts,
     onRowReady: mode === "chemistry" ? chemistry.queueRow : math.queueRow,
@@ -48,26 +49,48 @@ export default function App({ theme: themeFromRoute, subject }) {
     },
   });
 
+  const workspace = useWorkspaceNavigation({ notebook, canvas, mode, chemistry, math });
+
   useKeyboardShortcuts({
     onUndo: canvas.handleUndo,
     onRedo: canvas.handleRedo,
     onToggleNotebook: () => setShowNotebook((value) => !value),
   });
 
+  // A route chooses a subject once when the route changes. It must not choose
+  // a note again when the student clicks a different note within that subject.
+  // The subject list is already sorted by pin/recency, so the first note is a
+  // deterministic fallback when a subject has not been opened in this route.
+  const routedSubjectRef = useRef(null);
+  useEffect(() => {
+    if (!notebook.hydrated) return;
+    if (routedSubjectRef.current === subject) return;
+    const subjectNote = notebook.folders[subject]?.[0];
+    if (!subjectNote) return;
+    routedSubjectRef.current = subject;
+    if (notebook.activeNote.subject !== subject) void notebook.openNote(subjectNote.id);
+  }, [notebook, notebook.activeNote.subject, notebook.folders, notebook.hydrated, notebook.openNote, subject]);
+
   const transcribing = mode === "chemistry" ? chemistry.reading : math.transcribing;
   const status = mode === "chemistry" ? chemistry.status : math.lastResult;
+  const activeWorkflowSnapshot = mode === "chemistry"
+    ? chemistry.getWorkflowSnapshot()
+    : math.getWorkflowSnapshot();
+  const workflowSignature = JSON.stringify({ ...activeWorkflowSnapshot, updatedAt: 0 });
 
   useEffect(() => {
-    const pageId = notebook.activePage.id;
     if (loadedPageRef.current === pageId) return;
     loadedPageRef.current = pageId;
     pendingPageLoadRef.current = pageId;
     canvas.loadStrokes(notebook.activePage.strokes ?? []);
-    math.clear();
-    chemistry.clearAnswer();
+    if (mode === "chemistry") {
+      chemistry.restoreWorkflowSnapshot(notebook.activePage.workflowSnapshot);
+    } else {
+      math.restoreWorkflowSnapshot(notebook.activePage.workflowSnapshot);
+    }
     // Navigation loads a page once; ink changes are persisted by the effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notebook.activePage.id, notebook.activeNote.id]);
+  }, [notebook.activePage, notebook.activeNote.id, pageId, mode]);
 
   useEffect(() => {
     if (loadedPageRef.current !== notebook.activePage.id) return;
@@ -75,15 +98,27 @@ export default function App({ theme: themeFromRoute, subject }) {
       pendingPageLoadRef.current = null;
       return;
     }
-    notebook.saveStrokes(canvas.strokes);
+    notebook.saveStrokes(canvas.strokes, notebook.activePage.id, notebook.activeNote.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvas.strokes, notebook.activePage.id]);
 
   useEffect(() => {
-    const verdictStatus = chemistry.verdict?.status ?? (chemistry.verdict?.valid ? "valid" : null);
-    if (verdictStatus) notebook.recordOutcome(verdictStatus);
+    if (loadedPageRef.current !== pageId || pendingPageLoadRef.current === pageId) return;
+    notebook.saveWorkflow(activeWorkflowSnapshot, pageId, notebook.activeNote.id);
+    // Persist the active page's workflow separately from its strokes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chemistry.verdict]);
+  }, [pageId, workflowSignature]);
+
+  const completionStatus = deriveCompletionStatus({
+    subject: mode,
+    mathVerdicts: math.verdictsByLine,
+    chemistryVerdicts: chemistry.verdictsByLine,
+    wholePageVerdict: chemistry.verdict,
+  });
+  useEffect(() => {
+    if (completionStatus) notebook.recordOutcome(completionStatus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completionStatus]);
 
   // Once the question is known, name the note after it. The question is
   // already transcribed, so "C3H8 + O2 -> CO2 + H2O" costs nothing and beats
@@ -94,33 +129,6 @@ export default function App({ theme: themeFromRoute, subject }) {
     notebook.nameFromQuestion(chemistry.problemText);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chemistry.ready, chemistry.problemText, mode]);
-
-  // The route names the subject, so /chemistry opens a chemistry note even
-  // if the last one open was math. Runs once per subject change, not on
-  // every render, or it would fight the in-app subject toggle.
-  const routedSubjectRef = useRef(null);
-  useEffect(() => {
-    if (!subject || routedSubjectRef.current === subject) return;
-    routedSubjectRef.current = subject;
-    if (subject === mode) return;
-    const existing = notebook.folders[subject]?.[0];
-    if (existing) notebook.openNote(existing.id);
-    else notebook.createNote(subject);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subject]);
-
-  const handleClear = () => {
-    canvas.clearPage();
-  };
-
-  const handleModeChange = (nextMode) => {
-    if (nextMode === mode) return;
-    notebook.saveStrokes(canvas.getStrokesSnapshot());
-    chemistry.resetProblem();
-    const existing = notebook.folders[nextMode]?.[0];
-    if (existing) notebook.openNote(existing.id);
-    else notebook.createNote(nextMode);
-  };
 
   const handleReadPage = async () => {
     if (canvas.strokes.length === 0) return;
@@ -153,27 +161,9 @@ export default function App({ theme: themeFromRoute, subject }) {
     }
   };
 
-  const handleTouchStart = (event) => {
-    if (event.touches.length !== 1) return;
-    const touch = event.touches[0];
-    swipeStart.current = { x: touch.clientX, y: touch.clientY };
-  };
-
-  const handleTouchEnd = (event) => {
-    const start = swipeStart.current;
-    swipeStart.current = null;
-    if (!start || !event.changedTouches.length) return;
-    const touch = event.changedTouches[0];
-    const dx = touch.clientX - start.x;
-    const dy = touch.clientY - start.y;
-    if (Math.abs(dx) < SWIPE_DISTANCE || Math.abs(dy) > SWIPE_SLOPE) return;
-    handleModeChange(dx < 0 ? "chemistry" : "math");
-  };
-
   return (
     <div
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+      className="workspace-app"
       style={{
         position: "fixed",
         inset: 0,
@@ -186,12 +176,12 @@ export default function App({ theme: themeFromRoute, subject }) {
       }}
     >
       <NotebookSidebar
-        notebook={notebook}
+        notebook={workspace.workspaceNotebook}
         open={showNotebook}
         onClose={() => setShowNotebook(false)}
         width={SIDEBAR_WIDTH}
         subject={mode}
-        onSubjectChange={handleModeChange}
+        onSubjectChange={workspace.handleModeChange}
       />
       <CanvasSurface canvas={canvas} mode={mode}>
         {mode === "chemistry" && chemistry.questionCandidateRow !== null && (
@@ -212,11 +202,11 @@ export default function App({ theme: themeFromRoute, subject }) {
         )}
       </CanvasSurface>
       <WorkspaceToolbar
-        notebook={notebook}
+        notebook={workspace.workspaceNotebook}
         showNotebook={showNotebook}
         onToggleNotebook={() => setShowNotebook((value) => !value)}
         mode={mode}
-        onModeChange={handleModeChange}
+        onModeChange={workspace.handleModeChange}
         chemistry={chemistry}
         problem={math.problem}
         onProblemChange={math.handleProblemChange}
@@ -225,7 +215,12 @@ export default function App({ theme: themeFromRoute, subject }) {
         theme={theme}
         onFinishLine={canvas.finishActiveRow}
         onReadPage={handleReadPage}
-        onClear={handleClear}
+        onClear={workspace.handleNewQuestion}
+      />
+      <NotebookSaveStatus
+        status={notebook.saveStatus}
+        error={notebook.saveError}
+        onRetry={notebook.retrySave}
       />
       <PageActions
         mode={mode}
@@ -234,7 +229,7 @@ export default function App({ theme: themeFromRoute, subject }) {
         activeLineNumber={canvas.activeLineNumber}
         onFinishLine={canvas.finishActiveRow}
         onReadPage={handleReadPage}
-        onClear={handleClear}
+        onNewQuestion={workspace.handleNewQuestion}
       />
       <FeedbackPanel
         mode={mode}
@@ -242,9 +237,18 @@ export default function App({ theme: themeFromRoute, subject }) {
         chemistry={chemistry}
         captureEnabled={captureEnabled}
         onCapture={handleCaptureSample}
-        onChemistryProblemChange={handleClear}
+        onNewQuestion={workspace.handleNewQuestion}
         transcribing={transcribing}
         status={status}
+        noteId={notebook.activeNote.id}
+        pageId={notebook.activePage.id}
+      />
+      <WorkspaceActionDialog
+        actionDialog={workspace.actionDialog}
+        onClose={workspace.closeActionDialog}
+        onClear={workspace.confirmClear}
+        onCreatePage={workspace.createNewPageForQuestion}
+        onKeepInk={workspace.keepInkAndResetProblem}
       />
     </div>
   );

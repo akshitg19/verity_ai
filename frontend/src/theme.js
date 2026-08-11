@@ -157,7 +157,16 @@ export function applyTheme(preference) {
 export function readCanvasPalette() {
   const root = globalThis.document?.documentElement;
   if (!root || !globalThis.getComputedStyle) {
-    return { paper: "#faf8f2", rule: "rgba(120, 150, 190, 0.4)", ink: "#1f2926" };
+    return {
+      paper: "#faf8f2",
+      rule: "rgba(120, 150, 190, 0.4)",
+      ink: "#1f2926",
+      valid: "#267a55",
+      invalid: "#c94b4b",
+      unsupported: "#a96b1f",
+      parse: "#7a6ba9",
+      waiting: "#6f7a76",
+    };
   }
   const style = globalThis.getComputedStyle(root);
   const read = (name, fallback) =>
@@ -166,5 +175,10 @@ export function readCanvasPalette() {
     paper: read("--v-paper", "#faf8f2"),
     rule: read("--v-rule", "rgba(120, 150, 190, 0.4)"),
     ink: read("--v-ink", "#1f2926"),
+    valid: read("--v-valid", "#267a55"),
+    invalid: read("--v-invalid", "#c94b4b"),
+    unsupported: read("--v-unsupported", "#a96b1f"),
+    parse: read("--v-parse", "#7a6ba9"),
+    waiting: read("--v-waiting", "#6f7a76"),
   };
 }

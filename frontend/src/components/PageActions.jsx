@@ -14,7 +14,7 @@ export default function PageActions({
   activeLineNumber,
   onFinishLine,
   onReadPage,
-  onClear,
+  onNewQuestion,
 }) {
   const accent = SUBJECTS[mode].accent;
   const empty = strokeCount === 0;
@@ -83,7 +83,7 @@ export default function PageActions({
       </button>
       <button
         type="button"
-        onClick={onClear}
+        onClick={onNewQuestion}
         disabled={empty}
         title="Clear the page for the next question"
         style={{

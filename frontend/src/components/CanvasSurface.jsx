@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import { COLORS, FONT, SURFACES } from "../theme";
 
 // A blank page with nothing on it and nothing said is the least inviting
@@ -26,6 +28,7 @@ function EmptyPageHint({ mode }) {
 }
 
 export default function CanvasSurface({ canvas, mode, children }) {
+  const surfaceRef = useRef(null);
   const {
     staticCanvasRef,
     overlayCanvasRef,
@@ -37,10 +40,37 @@ export default function CanvasSurface({ canvas, mode, children }) {
     handlePointerCancel,
     handlePointerLeave,
     strokes,
+    setViewportSize,
   } = canvas;
 
+  useEffect(() => {
+    const surface = surfaceRef.current;
+    if (!surface) return undefined;
+    const resize = (entry) => {
+      const rect = entry?.contentRect ?? surface.getBoundingClientRect();
+      setViewportSize(rect.width, rect.height);
+    };
+    resize();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", resize);
+      return () => window.removeEventListener("resize", resize);
+    }
+    const observer = new ResizeObserver(resize);
+    observer.observe(surface);
+    return () => observer.disconnect();
+  }, [setViewportSize]);
+
   return (
-    <div style={{ position: "relative", width: "fit-content", marginTop: 72 }}>
+    <div
+      ref={surfaceRef}
+      className="canvas-surface"
+      style={{
+        position: "relative",
+        width: "100%",
+        minHeight: "calc(100dvh - 72px)",
+        marginTop: 72,
+      }}
+    >
       <canvas
         ref={staticCanvasRef}
         aria-hidden="true"

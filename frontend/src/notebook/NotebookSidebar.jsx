@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { COLORS, FONT, RADIUS, SHADOW, SUBJECTS, SURFACES } from "../theme";
 import { exportPage } from "../canvas/exportPage";
 import PageThumbnail from "./PageThumbnail";
+import { FolderRow, NoteRow } from "./NotebookRows";
 import RowMenu from "./RowMenu";
 
 // The notes shelf, built the way a notes app is built.
@@ -13,277 +14,19 @@ import RowMenu from "./RowMenu";
 // of tiny glyphs. The subject is a heading in the student's own words, not a
 // folder called "First structure".
 
-function relativeTime(timestamp) {
-  const seconds = Math.round((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
-  if (seconds < 604800) return `${Math.round(seconds / 86400)}d ago`;
-  return new Date(timestamp).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-  });
-}
-
-function InlineName({ value, onCommit, onCancel, size = 13 }) {
-  const [draft, setDraft] = useState(value);
-  const commit = () => {
-    const trimmed = draft.trim();
-    if (trimmed && trimmed !== value) onCommit(trimmed);
-    else onCancel();
-  };
-  return (
-    <input
-      autoFocus
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={commit}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") event.currentTarget.blur();
-        if (event.key === "Escape") onCancel();
-      }}
-      onClick={(event) => event.stopPropagation()}
-      style={{
-        width: "100%",
-        boxSizing: "border-box",
-        padding: "3px 6px",
-        border: `1px solid ${COLORS.primary}`,
-        borderRadius: 6,
-        background: COLORS.surface,
-        color: COLORS.text,
-        fontSize: size,
-        fontFamily: FONT.sans,
-        outline: "none",
-      }}
-    />
-  );
-}
-
-function NoteRow({
-  note,
-  active,
-  folders,
-  onOpen,
-  onRename,
-  onDelete,
-  onDuplicate,
-  onMove,
-  onTogglePin,
-}) {
-  const [editing, setEditing] = useState(false);
-  const accent = SUBJECTS[note.subject]?.accent ?? COLORS.primary;
-
-  const menu = [
-    { glyph: "✎", label: "Rename", onSelect: () => setEditing(true) },
-    {
-      glyph: note.pinned ? "☆" : "★",
-      label: note.pinned ? "Unpin" : "Pin to top",
-      onSelect: () => onTogglePin(note.id),
-    },
-    { glyph: "⧉", label: "Duplicate", onSelect: () => onDuplicate(note.id) },
-    ...folders.map((folder) => ({
-      glyph: "🗀",
-      label: `Move to ${folder.name}`,
-      disabled: note.folderId === folder.id,
-      onSelect: () => onMove(note.id, folder.id),
-    })),
-    ...(note.folderId
-      ? [{ glyph: "↥", label: "Move out of folder", onSelect: () => onMove(note.id, null) }]
-      : []),
-    { glyph: "🗑", label: "Delete", danger: true, onSelect: () => onDelete(note.id) },
-  ];
-
-  return (
-    <div
-      onClick={() => !editing && onOpen(note.id)}
-      // Dragging a note onto a folder is what people try before they find the
-      // menu, so the menu stays and this is the shortcut on top of it.
-      draggable={!editing}
-      onDragStart={(event) => {
-        event.dataTransfer.setData("text/verity-note", note.id);
-        event.dataTransfer.effectAllowed = "move";
-      }}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "9px 8px 9px 12px",
-        marginBottom: 2,
-        borderRadius: RADIUS.md,
-        background: active ? SURFACES.sidebarActive : "transparent",
-        boxShadow: active ? `inset 3px 0 0 ${accent}` : "none",
-        cursor: "pointer",
-      }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {editing ? (
-          <InlineName
-            value={note.title}
-            onCommit={(name) => {
-              onRename(note.id, name);
-              setEditing(false);
-            }}
-            onCancel={() => setEditing(false)}
-          />
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: 13.5,
-              fontWeight: active ? 700 : 500,
-              color: COLORS.text,
-              overflow: "hidden",
-            }}
-          >
-            {note.pinned && (
-              <span aria-label="Pinned" title="Pinned" style={{ fontSize: 10, color: accent }}>
-                ★
-              </span>
-            )}
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {note.title}
-            </span>
-          </div>
-        )}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            marginTop: 2,
-            fontSize: 11,
-            color: COLORS.muted,
-          }}
-        >
-          <span>{relativeTime(note.updatedAt)}</span>
-          <span aria-hidden="true">·</span>
-          <span>
-            {note.pages.length} page{note.pages.length === 1 ? "" : "s"}
-          </span>
-          {note.lastVerdict === "invalid" && (
-            <span
-              title="Something on this note was flagged"
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: "var(--v-invalid)",
-              }}
-            />
-          )}
-          {note.lastVerdict === "valid" && (
-            <span
-              title="Everything checked out"
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: "var(--v-valid)",
-              }}
-            />
-          )}
-        </div>
-      </div>
-      <RowMenu items={menu} label={`Actions for ${note.title}`} />
-    </div>
-  );
-}
-
-function FolderRow({ folder, children, count, onRename, onDelete, onCreateIn, onDropNote }) {
-  const [open, setOpen] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [over, setOver] = useState(false);
-
-  return (
-    <div style={{ marginBottom: 2 }}>
-      <div
-        onClick={() => !editing && setOpen((value) => !value)}
-        onDragOver={(event) => {
-          if (!event.dataTransfer.types.includes("text/verity-note")) return;
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
-          setOver(true);
-        }}
-        onDragLeave={() => setOver(false)}
-        onDrop={(event) => {
-          const noteId = event.dataTransfer.getData("text/verity-note");
-          setOver(false);
-          if (!noteId) return;
-          event.preventDefault();
-          onDropNote(noteId, folder.id);
-          setOpen(true);
-        }}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "8px 8px 8px 6px",
-          borderRadius: RADIUS.md,
-          background: over ? COLORS.primaryLight : "transparent",
-          outline: over ? `2px dashed ${COLORS.primary}` : "none",
-          cursor: "pointer",
-        }}
-      >
-        <span
-          aria-hidden="true"
-          style={{
-            width: 12,
-            fontSize: 9,
-            color: COLORS.muted,
-            transform: open ? "rotate(90deg)" : "none",
-            transition: "transform 160ms ease",
-          }}
-        >
-          ▶
-        </span>
-        <span aria-hidden="true" style={{ fontSize: 14 }}>
-          🗀
-        </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {editing ? (
-            <InlineName
-              value={folder.name}
-              onCommit={(name) => {
-                onRename(folder.id, name);
-                setEditing(false);
-              }}
-              onCancel={() => setEditing(false)}
-            />
-          ) : (
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: COLORS.text,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {folder.name}
-            </span>
-          )}
-        </div>
-        <span style={{ fontSize: 11, color: COLORS.muted }}>{count}</span>
-        <RowMenu
-          label={`Actions for ${folder.name}`}
-          items={[
-            { glyph: "✎", label: "Rename", onSelect: () => setEditing(true) },
-            { glyph: "+", label: "New note here", onSelect: () => onCreateIn(folder.id) },
-            {
-              glyph: "🗑",
-              label: "Delete folder",
-              danger: true,
-              onSelect: () => onDelete(folder.id),
-            },
-          ]}
-        />
-      </div>
-      {open && <div style={{ paddingLeft: 14 }}>{children}</div>}
-    </div>
-  );
+function downloadNotebook(serialized, title) {
+  const blob = new Blob([serialized], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const safeTitle = (title || "verity-notebook")
+    .replace(/[^a-z0-9-_]+/gi, "-")
+    .replace(/^-|-$/g, "");
+  link.href = url;
+  link.download = `${safeTitle || "verity-notebook"}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 // Placeholders on purpose, and labelled as such rather than pretending.
@@ -303,6 +46,13 @@ export default function NotebookSidebar({
   subject = "chemistry",
   onSubjectChange,
 }) {
+  const sidebarRef = useRef(null);
+  const headingRef = useRef(null);
+  const backdropRef = useRef(null);
+  const restoreFocusRef = useRef(null);
+  const wasOpenRef = useRef(false);
+  const backgroundStateRef = useRef([]);
+  const importInputRef = useRef(null);
   const {
     treeFor,
     createFolder,
@@ -323,10 +73,19 @@ export default function NotebookSidebar({
     addPage,
     openPage,
     deletePage,
+    deletedPage,
+    undoDeletePage,
+    dismissDeletedPage,
+    saveStatus,
+    saveError,
+    exportNotebook,
+    importNotebook,
+    retrySave,
   } = notebook;
 
   const [query, setQuery] = useState("");
   const [cloudNotice, setCloudNotice] = useState(null);
+  const [importError, setImportError] = useState(null);
   const meta = SUBJECTS[subject];
   const tree = treeFor(subject);
 
@@ -344,11 +103,78 @@ export default function NotebookSidebar({
 
   const noteCount = tree.loose.length + tree.folders.reduce((sum, f) => sum + f.notes.length, 0);
   const nothingHere = !filtered.folders.length && !filtered.loose.length;
+  const handleExportNotebook = async () => {
+    try {
+      const serialized = await exportNotebook();
+      downloadNotebook(serialized, activeNote.title);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Export failed.");
+    }
+  };
+
+  const handleImportNotebook = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImportError(null);
+    try {
+      await importNotebook(await file.text());
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "That notebook could not be imported.");
+    }
+  };
+
+  useEffect(() => {
+    if (!open || wasOpenRef.current) {
+      if (!open && wasOpenRef.current) restoreFocusRef.current?.focus?.();
+      wasOpenRef.current = open;
+      return undefined;
+    }
+    restoreFocusRef.current = document.activeElement;
+    requestAnimationFrame(() => headingRef.current?.focus());
+    const workspace = sidebarRef.current?.closest(".workspace-app");
+    backgroundStateRef.current = [...(workspace?.children ?? [])]
+      .filter((element) => element !== sidebarRef.current && element !== backdropRef.current)
+      .map((element) => {
+        const previous = Boolean(element.inert);
+        element.inert = true;
+        return { element, previous };
+      });
+    wasOpenRef.current = true;
+    return () => {
+      for (const { element, previous } of backgroundStateRef.current) element.inert = previous;
+      backgroundStateRef.current = [];
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = [...(sidebarRef.current?.querySelectorAll("button, input, [href], [tabindex]:not([tabindex='-1'])") ?? [])]
+        .filter((element) => !element.disabled && !element.closest("[inert]"));
+      if (!controls.length) return;
+      const index = controls.indexOf(document.activeElement);
+      const nextIndex = event.shiftKey
+        ? index <= 0 ? controls.length - 1 : index - 1
+        : index === controls.length - 1 ? 0 : index + 1;
+      event.preventDefault();
+      controls[nextIndex]?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose, open]);
 
   return (
     <>
       {open && (
         <div
+          ref={backdropRef}
           onClick={onClose}
           style={{
             position: "fixed",
@@ -360,7 +186,12 @@ export default function NotebookSidebar({
       )}
 
       <aside
+        ref={sidebarRef}
         aria-label="Notebook"
+        role="dialog"
+        aria-modal={open ? "true" : undefined}
+        aria-labelledby="notebook-sidebar-title"
+        inert={!open}
         style={{
           position: "fixed",
           top: 0,
@@ -382,6 +213,9 @@ export default function NotebookSidebar({
         <div style={{ padding: "18px 16px 10px", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <h2
+              ref={headingRef}
+              id="notebook-sidebar-title"
+              tabIndex={-1}
               style={{
                 margin: 0,
                 flex: 1,
@@ -398,6 +232,8 @@ export default function NotebookSidebar({
               onClick={onClose}
               aria-label="Close notebook"
               style={{
+                minWidth: 44,
+                minHeight: 44,
                 width: 30,
                 height: 30,
                 display: "grid",
@@ -611,6 +447,51 @@ export default function NotebookSidebar({
             >
               ⤓
             </button>
+            <button
+              type="button"
+              title="Export notebook backup"
+              aria-label="Export notebook backup"
+              onClick={() => void handleExportNotebook()}
+              style={{
+                minWidth: 44,
+                minHeight: 44,
+                border: "none",
+                background: "transparent",
+                color: COLORS.muted,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              JSON
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={handleImportNotebook}
+              hidden
+            />
+            <button
+              type="button"
+              title="Import notebook backup"
+              aria-label="Import notebook backup"
+              onClick={() => importInputRef.current?.click()}
+              style={{
+                minWidth: 44,
+                minHeight: 44,
+                border: "none",
+                background: "transparent",
+                color: COLORS.muted,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              Import
+            </button>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
             {activeNote.pages.map((page, index) => {
@@ -646,17 +527,17 @@ export default function NotebookSidebar({
                       onClick={() => deletePage(page.id)}
                       style={{
                         position: "absolute",
-                        top: -5,
-                        right: -5,
-                        width: 16,
-                        height: 16,
+                        top: -12,
+                        right: -12,
+                        width: 44,
+                        height: 44,
                         display: "grid",
                         placeItems: "center",
                         border: `1px solid ${COLORS.border}`,
                         borderRadius: "50%",
                         background: COLORS.surface,
                         color: COLORS.muted,
-                        fontSize: 10,
+                        fontSize: 16,
                         lineHeight: 1,
                         cursor: "pointer",
                       }}
@@ -794,6 +675,42 @@ export default function NotebookSidebar({
             >
               ×
             </button>
+          </div>
+        )}
+
+        {deletedPage && (
+          <div
+            role="status"
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "9px 14px",
+              background: COLORS.background,
+              borderTop: `1px solid ${COLORS.border}`,
+              fontSize: 12,
+              color: COLORS.muted,
+            }}
+          >
+            <span style={{ flex: 1 }}>Page deleted</span>
+            <button type="button" onClick={undoDeletePage} style={{ minWidth: 44, minHeight: 44, border: "none", background: "transparent", color: meta.accent, fontWeight: 700 }}>Undo</button>
+            <button type="button" onClick={dismissDeletedPage} aria-label="Dismiss page recovery" style={{ minWidth: 44, minHeight: 44, border: "none", background: "transparent", color: COLORS.muted, fontSize: 18 }}>×</button>
+          </div>
+        )}
+
+        <div role="status" aria-live="polite" style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", color: saveStatus === "error" ? COLORS.danger : COLORS.muted, fontSize: 11 }}>
+          <span style={{ flex: 1 }}>{saveStatus === "saving" ? "Saving…" : saveStatus === "error" ? `Save failed: ${saveError ?? "try again"}` : "Saved"}</span>
+          {saveStatus === "error" && (
+            <button type="button" onClick={() => void retrySave()} style={{ minWidth: 44, minHeight: 44, border: "none", background: "transparent", color: meta.accent, fontWeight: 700, cursor: "pointer" }}>
+              Retry
+            </button>
+          )}
+        </div>
+
+        {importError && (
+          <div role="alert" style={{ padding: "7px 14px", color: COLORS.danger, fontSize: 11 }}>
+            {importError}
           </div>
         )}
 

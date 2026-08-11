@@ -173,8 +173,8 @@ export const TOPICS = [
         steps,
       };
     },
-    check(type, values, steps) {
-      return checkStoichiometry(this.buildPayload(type, values, steps));
+    check(type, values, steps, options) {
+      return checkStoichiometry(this.buildPayload(type, values, steps), options);
     },
     session(type, values, problem) {
       return {
@@ -304,8 +304,8 @@ export const TOPICS = [
       }
       return payload;
     },
-    check(type, values, steps) {
-      return checkSolutions(this.buildPayload(type, values, steps));
+    check(type, values, steps, options) {
+      return checkSolutions(this.buildPayload(type, values, steps), options);
     },
     session(type, values, problem) {
       return {
@@ -345,15 +345,15 @@ export const TOPICS = [
         ],
       },
     ],
-    check(type, values, steps) {
+    check(type, values, steps, options) {
       const equationSteps = steps.map((step) => ({
         line_number: step.line_number,
         equation: step.smiles,
       }));
       if (type.id === "net_ionic") {
-        return checkNetIonic(values.molecular_equation, equationSteps);
+        return checkNetIonic(values.molecular_equation, equationSteps, options);
       }
-      return checkBalance(values.reference_equation, equationSteps);
+      return checkBalance(values.reference_equation, equationSteps, options);
     },
     session(type, values, problem) {
       return {
@@ -408,19 +408,20 @@ export const TOPICS = [
         ],
       },
     ],
-    check(type, values, steps) {
+    check(type, values, steps, options) {
       if (type.id === "oxidation_state") {
-        return checkOxidationState(values.formula, values.element, steps);
+        return checkOxidationState(values.formula, values.element, steps, options);
       }
       if (type.id === "cell_potential") {
-        return checkCellPotential(values.cathode, values.anode, steps);
+        return checkCellPotential(values.cathode, values.anode, steps, options);
       }
       return checkBalance(
         values.reference_equation,
         steps.map((step) => ({
           line_number: step.line_number,
           equation: step.smiles,
-        }))
+        })),
+        options
       );
     },
     session(type, values, problem) {
@@ -464,15 +465,16 @@ export const TOPICS = [
         ],
       },
     ],
-    check(type, values, steps) {
+    check(type, values, steps, options) {
       if (type.id === "isomer") {
         return checkIsomer(
           values.reference_smiles,
           values.isomer_type || "constitutional",
-          steps
+          steps,
+          options
         );
       }
-      return checkStructure(values.target_smiles, steps);
+      return checkStructure(values.target_smiles, steps, options);
     },
     session(type, values, problem) {
       if (type.id === "isomer") return null;
@@ -531,12 +533,12 @@ export const TOPICS = [
         ],
       },
     ],
-    check(type, values, steps) {
+    check(type, values, steps, options) {
       if (type.id === "functional_group") {
-        return checkFunctionalGroup(values.target_group || "ester", steps);
+        return checkFunctionalGroup(values.target_group || "ester", steps, options);
       }
       if (type.id === "naming" || type.id === "draw_from_name") {
-        return checkName(values.target_smiles, values.target_name, steps);
+        return checkName(values.target_smiles, values.target_name, steps, options);
       }
       return checkReaction({
         reactants_smiles: (values.reactants_smiles || "")
@@ -545,7 +547,7 @@ export const TOPICS = [
         reagent: values.reagent || null,
         reaction_type: values.reaction_type || null,
         steps,
-      });
+      }, options);
     },
     session(type, values, problem) {
       if (type.id === "functional_group") {

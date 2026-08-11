@@ -12,7 +12,7 @@ export default function StructurePreviewCard({ preview }) {
         marginTop: 10,
         padding: 8,
         borderRadius: RADIUS.md,
-        background: "#fff",
+        background: COLORS.surface,
         border: `1px solid ${COLORS.border}`,
       }}
     >
