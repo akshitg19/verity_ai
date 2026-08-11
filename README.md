@@ -216,6 +216,13 @@ recognition model, so the running service authenticates through its own
 service account, so there is no API key or credential file anywhere. The
 deployment plan is written up in full at the bottom of `final_tasks.md`.
 
+Every setting the service runs with lives in `cloudbuild.yaml`, and
+`deploy.ps1` submits that file rather than keeping a second copy of the
+flags, so a manual deploy and an automatic one produce the same revision.
+Once the Cloud Build trigger described in `final_tasks.md` is connected, a
+merge to `main` deploys the backend by itself, the way Vercel already does
+for the frontend.
+
 The public UI is served separately from Vercel, which builds `frontend/` and
 points it at the Cloud Run API through `VITE_API_BASE_URL`:
 

@@ -20,20 +20,12 @@ $REGION  = "us-central1"      # matches GOOGLE_CLOUD_LOCATION for Vertex AI
 $SERVICE = "verity-ai"
 $SA_NAME = "verity-ai-run"
 $SA_EMAIL = "$SA_NAME@$PROJECT.iam.gserviceaccount.com"
+$REPO    = "cloud-run-source-deploy"
 
-# The Vercel frontend calls this API cross-origin, so its origin has to be
-# allowed or every request from it fails preflight and the browser reports
-# nothing more useful than "Failed to fetch". `main.py` defaults this to
-# localhost only, which is right for development and wrong for the deployed
-# pair, and `--set-env-vars` below replaces the whole set rather than adding
-# to it, so leaving these out silently un-fixes it on the next deploy.
-$CORS_ORIGINS = "https://verity-ai-lovat.vercel.app"
-
-# Naming origins one at a time was the bug, not the fix. Vercel mints a new
-# hostname for every push and every branch, so the named alias worked and
-# every deployment opened from the Vercel dashboard did not. The regex covers
-# all of them, for good, and stays scoped to this project's own name.
-$CORS_ORIGIN_REGEX = "https://verity-ai[a-z0-9-]*\.vercel\.app"
+# What the service actually runs with -- instance counts, CPU, memory, and
+# the environment including the CORS settings -- is NOT here. It is in
+# `cloudbuild.yaml`, which this script submits, so that a push to main and a
+# person running this script deploy exactly the same thing. Change it there.
 
 # gcloud is a native executable, not a PowerShell cmdlet, so a failure sets
 # $LASTEXITCODE rather than throwing. $ErrorActionPreference does nothing for
@@ -103,39 +95,58 @@ gcloud projects add-iam-policy-binding $PROJECT `
 Assert-Ok "granting roles/aiplatform.user"
 Write-Host "Granted." -ForegroundColor Green
 
+Write-Host "`nEnsuring the image repository exists..." -ForegroundColor Yellow
+$repo = gcloud artifacts repositories list --location $REGION --filter="name~/$REPO`$" --format="value(name)"
+if (-not $repo) {
+    gcloud artifacts repositories create $REPO `
+        --repository-format docker `
+        --location $REGION `
+        --description "Images for Cloud Run deploys of verity.ai" | Out-Null
+    Assert-Ok "creating the Artifact Registry repository"
+    Write-Host "Created $REPO" -ForegroundColor Green
+} else {
+    Write-Host "$REPO already exists" -ForegroundColor Green
+}
+
+# The build runs as a service account of its own, and it needs to be allowed
+# to do the two things cloudbuild.yaml asks of it: deploy a Cloud Run
+# revision, and hand that revision the runtime identity. Without the second
+# grant the build succeeds and the deploy step fails with a permissions error
+# that reads as though the runtime account is broken, which it is not.
+Write-Host "`nGranting the build account permission to deploy..." -ForegroundColor Yellow
+$PROJECT_NUMBER = gcloud projects describe $PROJECT --format="value(projectNumber)"
+Assert-Ok "reading the project number"
+# Both are granted because which one a build runs as depends on when the
+# project was created, and granting the one that is not in use is inert.
+$BUILD_ACCOUNTS = @(
+    "$PROJECT_NUMBER@cloudbuild.gserviceaccount.com",
+    "$PROJECT_NUMBER-compute@developer.gserviceaccount.com"
+)
+foreach ($account in $BUILD_ACCOUNTS) {
+    foreach ($role in @("roles/run.admin", "roles/artifactregistry.writer", "roles/logging.logWriter")) {
+        gcloud projects add-iam-policy-binding $PROJECT `
+            --member "serviceAccount:$account" `
+            --role $role `
+            --condition=None 2>&1 | Out-Null
+    }
+    gcloud iam service-accounts add-iam-policy-binding $SA_EMAIL `
+        --member "serviceAccount:$account" `
+        --role "roles/iam.serviceAccountUser" 2>&1 | Out-Null
+}
+Write-Host "Granted." -ForegroundColor Green
+
 # --- deploy ------------------------------------------------------------------
 
 Write-Host "`nBuilding and deploying (first build takes ~5 minutes)..." -ForegroundColor Yellow
 
-# --max-instances 1 is deliberate and load-bearing, not caution:
-#   * Problem sessions -- the answer vault and the level-3 hint budget -- are
-#     held in the serving process's memory. A second instance would hold a
-#     second, separate set, and a hint request landing on the wrong one would
-#     quietly fall back to the static hint.
-#   * It is also a hard ceiling on spend. One instance cannot run up a bill.
-# --min-instances 1 keeps one box running at all times. This is the only
-# setting here that bills while nothing is happening, and it is deliberate:
-# the link is meant to be a normal website that works when anyone opens it,
-# not one that needs a warm-up lap. At --min-instances 0 the first request
-# after an idle spell waits for a container to boot and import RDKit, which
-# reads as "the site is broken" to anyone who did not build it.
-#
-# --cpu 2 because one instance serves everybody. Three people writing at once
-# means overlapping transcription, judging and hint generation in a single
-# process, and the RDKit and SymPy work is CPU-bound even though the model
-# calls are just waiting.
-gcloud run deploy $SERVICE `
-    --source . `
-    --region $REGION `
-    --allow-unauthenticated `
-    --service-account $SA_EMAIL `
-    --max-instances 1 `
-    --min-instances 1 `
-    --memory 2Gi `
-    --cpu 2 `
-    --timeout 300 `
-    --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=$REGION,GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=$CORS_ORIGINS,CORS_ORIGIN_REGEX=$CORS_ORIGIN_REGEX"
-Assert-Ok "deploying to Cloud Run"
+# Every setting that shapes the deployed service now lives in cloudbuild.yaml,
+# not here: max-instances, min-instances, cpu, memory, and the environment.
+# This script used to carry its own copy of those flags, which was fine while
+# it was the only way to deploy and became a drift hazard the moment a push
+# could deploy too. Submitting the same file means running this by hand and
+# merging a pull request produce an identical revision.
+gcloud builds submit --config cloudbuild.yaml
+Assert-Ok "building and deploying through Cloud Build"
 
 $URL = gcloud run services describe $SERVICE --region $REGION --format="value(status.url)"
 Assert-Ok "reading back the service URL"
