@@ -3,7 +3,74 @@ import {
   buildMathCheckInput,
   orderedMathLines,
 } from "../math/lineModel";
+import { MATH_TOPICS } from "../math/topics";
 import HintLadder from "./HintLadder";
+
+function MathTopicPicker({ topicId, onChoose }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: 6,
+        marginBottom: 14,
+      }}
+    >
+      {MATH_TOPICS.map((topic) => {
+        const selected = topic.id === topicId;
+        const disabled = !topic.implemented;
+
+        return (
+          <button
+            key={topic.id}
+            type="button"
+            title={topic.blurb}
+            aria-pressed={selected}
+            disabled={disabled}
+            onClick={() => onChoose(topic.id)}
+            style={{
+              padding: "9px 6px",
+              borderRadius: 10,
+              border: `1px solid ${
+                selected ? COLORS.primary : COLORS.border
+              }`,
+              background: selected ? COLORS.primaryLight : COLORS.surface,
+              color: selected
+                ? COLORS.primary
+                : disabled
+                ? COLORS.muted
+                : COLORS.text,
+              fontSize: 10.5,
+              fontWeight: selected ? 700 : 500,
+              lineHeight: 1.25,
+              cursor: disabled ? "not-allowed" : "pointer",
+              opacity: disabled ? 0.55 : 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <span style={{ fontSize: 15 }}>{topic.glyph}</span>
+
+            <span>{topic.label}</span>
+
+            {disabled && (
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 600,
+                }}
+              >
+                coming next
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function verdictStatus(verdict) {
   if (!verdict) return null;
@@ -85,6 +152,9 @@ function lineStatus(line, isProblem, verdict, blocked) {
 
 export default function MathFeedbackPanel({ workflow }) {
   const {
+    topic,
+    topicId,
+    handleTopicChange,
     problem,
     lines,
     verdictsByLine,
@@ -104,8 +174,8 @@ export default function MathFeedbackPanel({ workflow }) {
   );
   const readableRows = new Set(readableLines.map((line) => line.row));
 
-  if (lines.length === 0) {
-    return (
+  const emptyState =
+    lines.length === 0 ? (
       <div
         style={{
           minHeight: 260,
@@ -121,59 +191,92 @@ export default function MathFeedbackPanel({ workflow }) {
           border: `1px dashed ${COLORS.border}`,
         }}
       >
-        <div style={{ width: 48, height: 48, display: "grid", placeItems: "center", marginBottom: 14, borderRadius: "50%", background: COLORS.primaryLight, color: COLORS.primary, fontSize: 22, fontWeight: 700 }}>
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            display: "grid",
+            placeItems: "center",
+            marginBottom: 14,
+            borderRadius: "50%",
+            background: COLORS.primaryLight,
+            color: COLORS.primary,
+            fontSize: 22,
+            fontWeight: 700,
+          }}
+        >
           ✎
         </div>
-        <div style={{ marginBottom: 7, color: COLORS.text, fontSize: 16, fontWeight: 700 }}>
+
+        <div
+          style={{
+            marginBottom: 7,
+            color: COLORS.text,
+            fontSize: 16,
+            fontWeight: 700,
+          }}
+        >
           Start writing your problem
         </div>
-        <div style={{ maxWidth: 240, color: COLORS.muted, fontSize: 13, lineHeight: 1.5 }}>
+
+        <div
+          style={{
+            maxWidth: 240,
+            color: COLORS.muted,
+            fontSize: 13,
+            lineHeight: 1.5,
+          }}
+        >
           Write the problem on the first line, then finish the line to begin receiving live feedback.
         </div>
       </div>
-    );
-  }
+    ) : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {orderedLines.map((line, index) => {
-        const blocked =
-          Boolean(line.text.trim()) &&
-          !line.unreadable &&
-          !readableRows.has(line.row);
-        const status = lineStatus(
-          line,
-          line.row === handwrittenProblemRow,
-          verdictsByLine.get(line.row),
-          blocked
-        );
-        return (
-          <div key={line.row} style={{ padding: 12, borderRadius: 12, border: `1px solid ${status.color}33`, background: status.background }}>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-              <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", display: "grid", placeItems: "center", background: status.color, color: "#fff", fontSize: 13, fontWeight: 700 }}>
-                {status.symbol}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 3 }}>
-                  <div style={{ color: COLORS.text, fontWeight: 700, fontSize: 14 }}>Line {index + 1}</div>
-                  <div style={{ color: status.color, fontSize: 12, fontWeight: 700 }}>{status.label}</div>
+      <MathTopicPicker topicId={topicId} onChoose={handleTopicChange} />
+
+      {emptyState}
+
+      {lines.length > 0 &&
+        orderedLines.map((line, index) => {
+          const blocked =
+            Boolean(line.text.trim()) &&
+            !line.unreadable &&
+            !readableRows.has(line.row);
+          const status = lineStatus(
+            line,
+            line.row === handwrittenProblemRow,
+            verdictsByLine.get(line.row),
+            blocked
+          );
+          return (
+            <div key={line.row} style={{ padding: 12, borderRadius: 12, border: `1px solid ${status.color}33`, background: status.background }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", display: "grid", placeItems: "center", background: status.color, color: "#fff", fontSize: 13, fontWeight: 700 }}>
+                  {status.symbol}
                 </div>
-                <div style={{ color: COLORS.muted, fontSize: 12, lineHeight: 1.35, marginBottom: 8 }}>{status.detail}</div>
-                <input
-                  aria-label={`Math line ${index + 1}`}
-                  type="text"
-                  value={line.text}
-                  placeholder={line.unreadable ? "Type what you wrote" : ""}
-                  onChange={(event) => handleLineEdit(line.row, event.target.value)}
-                  onBlur={() => handleLineEditDone(line.row)}
-                  onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-                  style={{ width: "100%", boxSizing: "border-box", padding: "9px 11px", border: `1px solid ${COLORS.border}`, borderRadius: 9, background: COLORS.surface, color: COLORS.text, fontFamily: "monospace", fontSize: 14, outline: "none" }}
-                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 3 }}>
+                    <div style={{ color: COLORS.text, fontWeight: 700, fontSize: 14 }}>Line {index + 1}</div>
+                    <div style={{ color: status.color, fontSize: 12, fontWeight: 700 }}>{status.label}</div>
+                  </div>
+                  <div style={{ color: COLORS.muted, fontSize: 12, lineHeight: 1.35, marginBottom: 8 }}>{status.detail}</div>
+                  <input
+                    aria-label={`Math line ${index + 1}`}
+                    type="text"
+                    value={line.text}
+                    placeholder={line.unreadable ? "Type what you wrote" : ""}
+                    onChange={(event) => handleLineEdit(line.row, event.target.value)}
+                    onBlur={() => handleLineEditDone(line.row)}
+                    onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+                    style={{ width: "100%", boxSizing: "border-box", padding: "9px 11px", border: `1px solid ${COLORS.border}`, borderRadius: 9, background: COLORS.surface, color: COLORS.text, fontFamily: "monospace", fontSize: 14, outline: "none" }}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
 
       {firstWrongLine !== null && (
         <HintLadder
