@@ -768,6 +768,8 @@ and undocks rather than permanently owning a column.
 | [x] | Panel prose cut back | Six status strings and two paragraphs that said what the screen already showed |
 | [x] | Page thumbnails instead of numbered squares | "The one with the long division on it" is how people pick a page |
 | [x] | Drag a note onto a folder | What people try before they find the menu |
+| [x] | The worked example is its own card, not nested in the hint bubble | A stepper, an equation and a row of atom counts were squeezed into a box sized for two sentences |
+| [x] | Step progress is a bar, and each step arrives rather than swapping | The dots duplicated the counter and nothing moved between steps |
 
 ### Next, in rough order of how much they are worth
 

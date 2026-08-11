@@ -195,13 +195,6 @@ export default function HintLadder({
 
           {hint}
 
-          {workedExample && (
-            <WorkedExampleStepper
-              key={workedExample.problem}
-              example={workedExample}
-            />
-          )}
-
           {resource && (
             <a
               href={resource}
@@ -219,6 +212,17 @@ export default function HintLadder({
             </a>
           )}
         </div>
+      )}
+
+      {/* The worked example sits beside the hint rather than inside it. It was
+          nested in the tinted bubble, which squeezed a stepper, an equation
+          and a row of atom counts into a box sized for two sentences. It is
+          its own thing and now reads as its own thing. */}
+      {workedExample && (
+        <WorkedExampleStepper
+          key={workedExample.problem}
+          example={workedExample}
+        />
       )}
 
       {loading ? (
