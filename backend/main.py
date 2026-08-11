@@ -80,9 +80,27 @@ CORS_ORIGINS = os.getenv(
     "http://localhost:5173,http://127.0.0.1:5173",
 ).split(",")
 
+# Vercel gives every single deployment its own hostname: the production alias
+# verity-ai-lovat.vercel.app, a branch alias per branch, and a fresh
+# verity-ai-<hash>-<scope>.vercel.app for every push. Listing origins by name
+# therefore allows exactly one of them and blocks the rest, which is not a
+# safety property, just a hostname that has drifted: opening any deployment
+# from the Vercel dashboard failed CORS preflight and the browser reported the
+# only thing it is allowed to report, "Failed to fetch". The page loaded,
+# because that is static hosting, and every button that talked to this API
+# died.
+#
+# The regex is anchored by Starlette with fullmatch, and it is scoped to this
+# project's own name on vercel.app rather than opening the API to the web.
+CORS_ORIGIN_REGEX = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"https://verity-ai[a-z0-9-]*\.vercel\.app",
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in CORS_ORIGINS if origin.strip()],
+    allow_origin_regex=CORS_ORIGIN_REGEX or None,
     allow_methods=["*"],
     allow_headers=["*"],
 )

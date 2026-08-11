@@ -219,16 +219,31 @@ deployment plan is written up in full at the bottom of `final_tasks.md`.
 The public UI is served separately from Vercel, which builds `frontend/` and
 points it at the Cloud Run API through `VITE_API_BASE_URL`:
 
-| Piece | URL |
-|---|---|
-| Frontend (Vercel) | <https://verity-ai-lovat.vercel.app> |
-| API (Cloud Run) | <https://verity-ai-389644353290.us-central1.run.app> |
+| Piece | URL | |
+|---|---|---|
+| Frontend (Vercel) | <https://verity-ai-lovat.vercel.app> | **the link to share** |
+| API (Cloud Run) | <https://verity-ai-389644353290.us-central1.run.app> | also serves a full fallback UI |
 
-Cloud Run still serves its own copy of the frontend at the API URL, so that
-address remains a complete, self-contained fallback if Vercel is ever in the
-way. Because the two are separate origins, `CORS_ORIGINS` on the Cloud Run
-service must list every Vercel alias. A new alias that is not in that list
-fails every request from the browser.
+**Use the Vercel link.** `https://verity-ai-lovat.vercel.app` is the address
+to share, put in a deck, and open on a tablet. Cloud Run still serves its own
+copy of the frontend at the API URL, so that address remains a complete,
+self-contained fallback if Vercel is ever in the way, but it is not the link
+anyone should be given.
+
+The two are separate origins, so the browser sends a CORS preflight before
+every API call. Vercel mints a fresh hostname for every deployment and every
+branch, so `CORS_ORIGINS` listing aliases by name allowed the production one
+and blocked all the rest: opening a build from the Vercel dashboard loaded
+the page and then failed every request with "Failed to fetch". The service
+now also accepts `CORS_ORIGIN_REGEX`, defaulting to
+`https://verity-ai[a-z0-9-]*\.vercel\.app`, which covers every deployment
+this project will ever produce. `deploy.ps1` sets both, and
+`tests/test_api.py` pins the behaviour.
+
+The service runs with `--min-instances 1`, so the link is live the moment
+anyone opens it rather than booting a container first. That is the only
+setting that bills while idle; the command to turn it off is printed at the
+end of every deploy.
 
 Ship a frontend change with:
 
