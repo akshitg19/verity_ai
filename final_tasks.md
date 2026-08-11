@@ -2554,14 +2554,25 @@ structure, is a **learning tool, not a check**, and it is genuinely useful:
 so it cannot be offered on a question the student is currently answering.
 Ship it as its own "show me this molecule" action, never as a hint.
 
-**Open question, needs a decision before building 12.4.** A formula like
-`C2H6O` does not determine a structure: ethanol and dimethyl ether share it.
-So "write the formula, draw the structure" is only well posed from a *name*,
-or from a formula plus a stated constraint. Either take names through
-`judge/naming.py`, which needs the Java runtime that is deliberately absent
-from the container, or accept any structure matching the formula, which is a
-different and easier judge than the one we have. Do not build this until
-that is settled.
+**Decided Aug 11, and built.** A formula like `C2H6O` does not determine a
+structure: ethanol and dimethyl ether share it. The call is **accept any
+structure with the right formula**, because that is the question actually
+asked. A judge that knows only one isomer marks a correct drawing wrong,
+which is the top row of this file's own failure taxonomy.
+
+`FormulaStructureJudge` and `/chemistry/formula-structure` do exactly that:
+right atoms, right numbers, real molecule, and which isomer is neither asked
+nor judged. `tests/test_formula_structure_judge.py` asserts all five isomers
+of C6H14 pass, that either isomer of C2H6O passes, and that a C5H12 isomer
+does not, because being loose about which isomer must not mean being loose
+about which formula. The structure topic gained a "Draw a structure for this
+formula" type, listed first, and it is the only one there whose question a
+student can write in their own hand.
+
+Still open, and smaller: **that type opens no session**, so its hints fall
+back to the templates. The vault would have to hold "any of these", and
+`answer_vault.py` has no shape for a set of acceptable answers. A worse
+hint, never an unsafe one.
 
 ### 12.5 Organic
 
@@ -2598,3 +2609,49 @@ the student to ignore the one place we warn them.
 5. **12.5 organic**.
 6. **12.4 structure**, last, and only after the open question above is
    decided.
+
+
+## 15. Built in this pass, and what is still open
+
+Done:
+
+- **Every problem type in every topic takes its question from handwriting**,
+  except the fields listed below. A test walks all of them and fails if a new
+  type ships with a typed-only field, so this cannot quietly regress.
+- **The unit sits outside the answer box** on every numeric type that has
+  one, and is deliberately absent on pH, on a formula, and on a species.
+- **Structure from a formula**, per the decision above.
+- **The hint counter tells the truth**, per section 13.
+- **Erasing by holding the button on the stylus**, which is how people already
+  erase on these devices. `canvas/penButton.js` accepts both the eraser bit
+  and the barrel bit, because which one a device reports is genuinely
+  inconsistent and picking one would be wrong on half the hardware. The
+  selected tool never changes underneath the student, and the context menu
+  the barrel button would otherwise open is suppressed.
+
+The fields that stay typed, each for a reason:
+
+| Field | Why |
+|---|---|
+| `target_smiles`, `reference_smiles`, `reactants_smiles` | SMILES is ours, not the student's. They do not know what it is and must never be asked to write one as the question |
+| `isomer_type`, `target_group`, `reaction_type` | A fixed set of choices, offered as a dropdown. Nothing to write |
+| `reference_equation`, `molecular_equation` | Already taken from ink, through the older by-name path that predates the marker |
+
+Still open:
+
+- [ ] **Labelled write-in slots on the page.** The student asked for the panel
+      fields to appear *as boxes on the notes* rather than as a popover on an
+      arbitrary row: "put them on the notes and keep them like text boxes so I
+      can write in them with my stylus". The popover is the mechanism; anchored
+      labelled slots are the surface, and they are the better one for a
+      multi-field type like molarity where the student has to know which
+      quantity goes where.
+- [ ] **"Show working below" for numeric types.** Also asked for: rather than
+      one answer box, an area to write the steps, with hints attached per step.
+      The judge already takes a list of steps and already judges each one, so
+      this is a rendering change rather than a new capability.
+- [ ] **What structure and bonding is for, versus organic.** Both draw
+      structures, and the difference is the question, not the drawing:
+      structure asks "is this the right molecule", organic asks "does it have
+      this group" or "is this the right product". Worth saying so in the blurbs,
+      because from the outside they look like the same topic twice.

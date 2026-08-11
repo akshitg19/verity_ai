@@ -171,6 +171,12 @@ export const checkStructure = (targetSmiles, steps, options) =>
   post("/chemistry/check", { target_smiles: targetSmiles, steps }, options);
 export const checkFunctionalGroup = (targetGroup, steps, options) =>
   post("/chemistry/functional-group", { target_group: targetGroup, steps }, options);
+// "Draw a structure with this formula". Looser than checkStructure on
+// purpose: a formula does not determine a structure, so every isomer of it
+// is a correct answer to the question that was actually asked.
+export const checkFormulaStructure = (targetFormula, steps, options) =>
+  post("/chemistry/formula-structure", { target_formula: targetFormula, steps }, options);
+
 export const checkIsomer = (referenceSmiles, isomerType, steps, options) =>
   post("/chemistry/isomer", {
     reference_smiles: referenceSmiles,

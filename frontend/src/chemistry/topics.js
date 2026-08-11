@@ -10,6 +10,7 @@
 import {
   checkBalance,
   checkCellPotential,
+  checkFormulaStructure,
   checkFunctionalGroup,
   checkIsomer,
   checkName,
@@ -222,78 +223,84 @@ export const TOPICS = [
       {
         id: "molarity",
         label: "Molarity",
+        answerUnit: "M",
         fields: [
-          field("formula", "Solute formula", { placeholder: "NaCl" }),
-          field("mass_g", "Mass (g)", { placeholder: "5.85" }),
-          field("volume_l", "Volume (L)", { placeholder: "1.00" }),
+          inkField("formula", "Solute formula", "solute", { placeholder: "NaCl" }),
+          inkField("mass_g", "Mass (g)", "mass", { placeholder: "5.85" }),
+          inkField("volume_l", "Volume (L)", "volume", { placeholder: "1.00" }),
         ],
       },
       {
         id: "dilution",
         label: "Dilution (M1V1 = M2V2)",
+        // The blank one may be a concentration or a volume, so no unit is
+        // printed rather than printing a wrong one.
         fields: [
-          field("initial_concentration_m", "M1", { placeholder: "2.00" }),
-          field("initial_volume_l", "V1 (L)", { placeholder: "0.050" }),
-          field("final_concentration_m", "M2", { placeholder: "leave blank to solve" }),
-          field("final_volume_l", "V2 (L)", { placeholder: "0.500" }),
+          inkField("initial_concentration_m", "M1", "starting concentration", { placeholder: "2.00" }),
+          inkField("initial_volume_l", "V1 (L)", "starting volume", { placeholder: "0.050" }),
+          inkField("final_concentration_m", "M2", "final concentration", { placeholder: "leave blank to solve" }),
+          inkField("final_volume_l", "V2 (L)", "final volume", { placeholder: "0.500" }),
         ],
       },
       {
         id: "strong_acid_ph",
         label: "pH of a strong acid",
+        // pH is unitless. Printing a unit here would be wrong, not just noisy.
         fields: [
-          field("concentration_m", "Concentration (M)", { placeholder: "0.010" }),
-          field("protons", "Protons per formula", { placeholder: "1" }),
+          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.010" }),
+          inkField("protons", "Protons per formula", "protons per formula", { placeholder: "1" }),
         ],
       },
       {
         id: "strong_base_ph",
         label: "pH of a strong base",
         fields: [
-          field("concentration_m", "Concentration (M)", { placeholder: "0.010" }),
-          field("hydroxides", "OH per formula", { placeholder: "1" }),
+          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.010" }),
+          inkField("hydroxides", "OH per formula", "OH per formula", { placeholder: "1" }),
         ],
       },
       {
         id: "weak_acid_ph",
         label: "pH of a weak acid",
         fields: [
-          field("concentration_m", "Concentration (M)", { placeholder: "0.100" }),
-          field("ka", "Ka", { placeholder: "1.8e-5" }),
+          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.100" }),
+          inkField("ka", "Ka", "Ka", { placeholder: "1.8e-5" }),
         ],
       },
       {
         id: "weak_base_ph",
         label: "pH of a weak base",
         fields: [
-          field("concentration_m", "Concentration (M)", { placeholder: "0.100" }),
-          field("kb", "Kb", { placeholder: "1.8e-5" }),
+          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.100" }),
+          inkField("kb", "Kb", "Kb", { placeholder: "1.8e-5" }),
         ],
       },
       {
         id: "buffer_ph",
         label: "Buffer (Henderson-Hasselbalch)",
         fields: [
-          field("acid_concentration_m", "[HA]", { placeholder: "0.100" }),
-          field("base_concentration_m", "[A-]", { placeholder: "0.100" }),
-          field("pka", "pKa", { placeholder: "4.74" }),
+          inkField("acid_concentration_m", "[HA]", "acid concentration", { placeholder: "0.100" }),
+          inkField("base_concentration_m", "[A-]", "base concentration", { placeholder: "0.100" }),
+          inkField("pka", "pKa", "pKa", { placeholder: "4.74" }),
         ],
       },
       {
         id: "titration_concentration",
         label: "Titration",
+        answerUnit: "M",
         fields: [
-          field("titrant_concentration_m", "Titrant (M)", { placeholder: "0.100" }),
-          field("titrant_volume_l", "Titrant volume (L)", { placeholder: "0.0250" }),
-          field("analyte_volume_l", "Analyte volume (L)", { placeholder: "0.0200" }),
+          inkField("titrant_concentration_m", "Titrant (M)", "titrant concentration", { placeholder: "0.100" }),
+          inkField("titrant_volume_l", "Titrant volume (L)", "titrant volume", { placeholder: "0.0250" }),
+          inkField("analyte_volume_l", "Analyte volume (L)", "analyte volume", { placeholder: "0.0200" }),
         ],
       },
       {
         id: "percent_by_mass",
         label: "Percent by mass",
+        answerUnit: "%",
         fields: [
-          field("solute_mass_g", "Solute (g)", { placeholder: "5.0" }),
-          field("solution_mass_g", "Solution (g)", { placeholder: "100.0" }),
+          inkField("solute_mass_g", "Solute (g)", "solute mass", { placeholder: "5.0" }),
+          inkField("solution_mass_g", "Solution (g)", "solution mass", { placeholder: "100.0" }),
         ],
       },
     ],
@@ -414,8 +421,8 @@ export const TOPICS = [
         label: "Oxidation state",
         input: "numeric",
         fields: [
-          field("formula", "Species", { placeholder: "Cr2O7^2-" }),
-          field("element", "Element", { placeholder: "Cr" }),
+          inkField("formula", "Species", "species", { placeholder: "Cr2O7^2-" }),
+          inkField("element", "Element", "element", { placeholder: "Cr" }),
         ],
       },
       {
@@ -423,10 +430,10 @@ export const TOPICS = [
         label: "Standard cell potential",
         input: "numeric",
         fields: [
-          field("cathode", "Cathode half-reaction", {
+          inkField("cathode", "Cathode half-reaction", "cathode half-reaction", {
             placeholder: "Cu^2+ + 2e- -> Cu",
           }),
-          field("anode", "Anode half-reaction", {
+          inkField("anode", "Anode half-reaction", "anode half-reaction", {
             placeholder: "Zn^2+ + 2e- -> Zn",
           }),
         ],
@@ -464,13 +471,32 @@ export const TOPICS = [
     id: "structure",
     label: "Structure & bonding",
     glyph: "⬡",
-    blurb: "Draw a structure, or draw an isomer of one.",
+    blurb: "Write a formula and draw it, match a structure, or draw an isomer.",
     input: "drawing",
     answerPlaceholder: "SMILES read from your drawing",
     types: [
       {
+        // The one a student can start from nothing. They write `C2H6O` on the
+        // page, the popover offers to take it, and then they draw. Every
+        // isomer of that formula is accepted, because the question asked for
+        // a structure with that formula and not for one particular molecule:
+        // C2H6O is ethanol and it is also dimethyl ether, and a judge that
+        // knows only one of them marks a correct drawing wrong.
+        //
+        // Listed first because it is the only type here whose question a
+        // student can write in their own handwriting. The other two need a
+        // SMILES, which is ours, not theirs.
+        id: "formula_structure",
+        label: "Draw a structure for this formula",
+        fields: [
+          inkField("target_formula", "Formula", "formula to draw", {
+            placeholder: "C2H6O",
+          }),
+        ],
+      },
+      {
         id: "match_structure",
-        label: "Draw this structure",
+        label: "Draw this exact structure",
         fields: [
           field("target_smiles", "Target (SMILES)", { placeholder: "CC(=O)OC" }),
         ],
@@ -490,6 +516,9 @@ export const TOPICS = [
       },
     ],
     check(type, values, steps, options) {
+      if (type.id === "formula_structure") {
+        return checkFormulaStructure(values.target_formula, steps, options);
+      }
       if (type.id === "isomer") {
         return checkIsomer(
           values.reference_smiles,
@@ -501,7 +530,11 @@ export const TOPICS = [
       return checkStructure(values.target_smiles, steps, options);
     },
     session(type, values, problem) {
-      if (type.id === "isomer") return null;
+      // No session for the formula type yet: the vault would have to hold
+      // every isomer of the formula, and `answer_vault.py` has no shape for
+      // "any of these". Hints fall back to the templates, which is a worse
+      // hint and never an unsafe one. Tracked in final_tasks.md.
+      if (type.id === "isomer" || type.id === "formula_structure") return null;
       return { topic: "structure", problem, target_smiles: values.target_smiles };
     },
   },
@@ -538,7 +571,7 @@ export const TOPICS = [
       {
         id: "draw_from_name",
         label: "Draw this named compound",
-        fields: [field("target_name", "Name", { placeholder: "propan-2-ol" })],
+        fields: [inkField("target_name", "Name", "name", { placeholder: "propan-2-ol" })],
       },
       {
         id: "reaction",
@@ -547,7 +580,7 @@ export const TOPICS = [
           field("reactants_smiles", "Starting material (SMILES)", {
             placeholder: "C=C",
           }),
-          field("reagent", "Reagent / conditions", { placeholder: "H2, Pd" }),
+          inkField("reagent", "Reagent / conditions", "reagent", { placeholder: "H2, Pd" }),
           {
             name: "reaction_type",
             label: "Reaction type",

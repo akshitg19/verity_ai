@@ -254,3 +254,48 @@ describe("the unit beside the answer box", () => {
     expect(unitFor("limiting_reagent")).toBe(null);
   });
 });
+
+describe("nothing gets typed, across every topic", () => {
+  // The rule from final_tasks.md section 10. This test is the enforcement:
+  // a new problem type that ships with a typed-only field fails here rather
+  // than reaching a student who cannot write their own question.
+  const EXPECTED_TYPED_ONLY = new Set([
+    // SMILES is ours, not the student's. A student does not know what SMILES
+    // is and must never be asked to write one as the question. These stay
+    // typed on purpose and are covered by other problem types that do not.
+    "target_smiles",
+    "reference_smiles",
+    "reactants_smiles",
+    // A fixed set of choices, offered as a dropdown. Nothing to write.
+    "isomer_type",
+    "target_group",
+    "reaction_type",
+    // Balancing and net ionic already take their question from ink, by name,
+    // through the older path that predates the `ink` marker.
+    "reference_equation",
+    "molecular_equation",
+  ]);
+
+  for (const topic of TOPICS) {
+    for (const type of topic.types) {
+      it(`${topic.id}/${type.id} takes its question from handwriting`, () => {
+        const typedOnly = type.fields
+          .filter((f) => !f.ink && f.type !== "select")
+          .map((f) => f.name)
+          .filter((name) => !EXPECTED_TYPED_ONLY.has(name));
+
+        expect(typedOnly).toEqual([]);
+      });
+    }
+  }
+
+  it("gives structure and bonding a type a student can start from nothing", () => {
+    // Every other structure type needs a SMILES for its question, which a
+    // student cannot write. This one takes a formula, which they can.
+    const structure = TOPICS.find((topic) => topic.id === "structure");
+    const fromFormula = structure.types.find((t) => t.id === "formula_structure");
+
+    expect(fromFormula).toBeTruthy();
+    expect(questionFieldFor(structure, fromFormula, {})).toBe("target_formula");
+  });
+});
