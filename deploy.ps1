@@ -21,13 +21,19 @@ $SERVICE = "verity-ai"
 $SA_NAME = "verity-ai-run"
 $SA_EMAIL = "$SA_NAME@$PROJECT.iam.gserviceaccount.com"
 
-# The Vercel frontend calls this API cross-origin, so its exact origin has to
-# be allowed by name or every request from it fails preflight and the browser
-# reports nothing more useful than "Failed to fetch". `main.py` defaults this
-# to localhost only, which is right for development and wrong for the deployed
-# pair, and `--set-env-vars` below replaces the whole set rather than adding to
-# it, so leaving this out of the list silently un-fixes it on the next deploy.
+# The Vercel frontend calls this API cross-origin, so its origin has to be
+# allowed or every request from it fails preflight and the browser reports
+# nothing more useful than "Failed to fetch". `main.py` defaults this to
+# localhost only, which is right for development and wrong for the deployed
+# pair, and `--set-env-vars` below replaces the whole set rather than adding
+# to it, so leaving these out silently un-fixes it on the next deploy.
 $CORS_ORIGINS = "https://verity-ai-lovat.vercel.app"
+
+# Naming origins one at a time was the bug, not the fix. Vercel mints a new
+# hostname for every push and every branch, so the named alias worked and
+# every deployment opened from the Vercel dashboard did not. The regex covers
+# all of them, for good, and stays scoped to this project's own name.
+$CORS_ORIGIN_REGEX = "https://verity-ai[a-z0-9-]*\.vercel\.app"
 
 # gcloud is a native executable, not a PowerShell cmdlet, so a failure sets
 # $LASTEXITCODE rather than throwing. $ErrorActionPreference does nothing for
@@ -107,19 +113,28 @@ Write-Host "`nBuilding and deploying (first build takes ~5 minutes)..." -Foregro
 #     second, separate set, and a hint request landing on the wrong one would
 #     quietly fall back to the static hint.
 #   * It is also a hard ceiling on spend. One instance cannot run up a bill.
-# --min-instances 0 means the service costs nothing while nobody is using it,
-# at the price of a few seconds on the first request after it goes idle.
+# --min-instances 1 keeps one box running at all times. This is the only
+# setting here that bills while nothing is happening, and it is deliberate:
+# the link is meant to be a normal website that works when anyone opens it,
+# not one that needs a warm-up lap. At --min-instances 0 the first request
+# after an idle spell waits for a container to boot and import RDKit, which
+# reads as "the site is broken" to anyone who did not build it.
+#
+# --cpu 2 because one instance serves everybody. Three people writing at once
+# means overlapping transcription, judging and hint generation in a single
+# process, and the RDKit and SymPy work is CPU-bound even though the model
+# calls are just waiting.
 gcloud run deploy $SERVICE `
     --source . `
     --region $REGION `
     --allow-unauthenticated `
     --service-account $SA_EMAIL `
     --max-instances 1 `
-    --min-instances 0 `
-    --memory 1Gi `
-    --cpu 1 `
+    --min-instances 1 `
+    --memory 2Gi `
+    --cpu 2 `
     --timeout 300 `
-    --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=$REGION,GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=$CORS_ORIGINS"
+    --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=$REGION,GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=$CORS_ORIGINS,CORS_ORIGIN_REGEX=$CORS_ORIGIN_REGEX"
 Assert-Ok "deploying to Cloud Run"
 
 $URL = gcloud run services describe $SERVICE --region $REGION --format="value(status.url)"
@@ -134,7 +149,9 @@ Write-Host "`n=== Live ===" -ForegroundColor Green
 Write-Host "  App:    $URL"
 Write-Host "  Health: $URL/health"
 Write-Host "  Docs:   $URL/docs"
-Write-Host "`nOn demo day, keep it warm with:" -ForegroundColor Cyan
-Write-Host "  gcloud run services update $SERVICE --region $REGION --min-instances 1"
-Write-Host "and afterwards put it back to 0 so it costs nothing:"
+Write-Host "  Front:  https://verity-ai-lovat.vercel.app"
+Write-Host "`nThis deploys with one instance always running, so the link is live"
+Write-Host "with no cold start. To stop paying for idle after the demo:" -ForegroundColor Cyan
 Write-Host "  gcloud run services update $SERVICE --region $REGION --min-instances 0"
+Write-Host "and to turn it back on:"
+Write-Host "  gcloud run services update $SERVICE --region $REGION --min-instances 1"

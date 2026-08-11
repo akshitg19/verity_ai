@@ -17,6 +17,48 @@ def test_health() -> None:
     assert response.json() == {"status": "ok"}
 
 
+# --------------------------------------------------------------------------
+# CORS. Every Vercel deployment gets its own hostname, so an allow-list of
+# names lets exactly one of them through and the browser reports the failure
+# as nothing more useful than "Failed to fetch". These pin the regex.
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://verity-ai-lovat.vercel.app",  # the production alias
+        "https://verity-ai.vercel.app",  # if the short name is ever claimed
+        "https://verity-ai-git-main-akshitg19.vercel.app",  # branch alias
+        "https://verity-ai-9f3ka2xqp-akshitg19.vercel.app",  # a preview build
+    ],
+)
+def test_preflight_allows_every_vercel_deployment(origin: str) -> None:
+    response = client.options(
+        "/hint",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+
+
+def test_preflight_still_refuses_an_unrelated_origin() -> None:
+    # Widening to every deployment of *this* project must not widen to the web.
+    response = client.options(
+        "/hint",
+        headers={
+            "Origin": "https://not-verity.example.com",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert "access-control-allow-origin" not in response.headers
+
+
 def test_check_accepts_equivalent_steps() -> None:
     response = client.post(
         "/check",

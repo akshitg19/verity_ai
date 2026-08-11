@@ -1602,11 +1602,60 @@ against.
       API. This is a second origin, so `CORS_ORIGINS` on the service now
       lists every Vercel alias. Cloud Run keeps serving its own copy of the
       frontend, so the single-origin deployment above still works untouched
+- [x] **The Vercel link is the canonical one.**
+      `https://verity-ai-lovat.vercel.app` is what goes in the README, the
+      deck, and anything said out loud. The Cloud Run URL stays a working
+      fallback and is not the address to hand anyone
 - [ ] Optional: Firebase Hosting in front, for a `verity-ai.web.app` address
       rather than a Cloud Run hash. Ten minutes, free, and a much better link
       to say out loud at a demo. Do this instead of buying a domain before
       SAIL; buy one only if the product continues afterwards. **Largely
       superseded** by the Vercel address, which is already a speakable link
+
+### "Failed to fetch" on Vercel, and the fix — Aug 11
+
+Opening the app from the Vercel dashboard's Deployments tab loaded the page
+and then failed every API call with `Failed to fetch`. Diagnosed by sending
+preflights by hand against the live service:
+
+| Origin | Preflight |
+|---|---|
+| `verity-ai-lovat.vercel.app` | 200, allowed |
+| `verity-ai-git-main-akshitg19.vercel.app` | 400, blocked |
+| `verity-ai-<hash>-akshitg19.vercel.app` | 400, blocked |
+
+**Vercel gives every deployment its own hostname.** Listing origins by name
+allowed exactly one of them, which is not a safety property, just a hostname
+that drifts on every push. Nothing was wrong with the app; the browser was
+refusing to send the request, and "Failed to fetch" is the only thing it is
+permitted to tell JavaScript, which is why this looked like a mystery rather
+than a configuration line.
+
+Fixed with `CORS_ORIGIN_REGEX` in `main.py`, defaulting to
+`https://verity-ai[a-z0-9-]*\.vercel\.app`, set by `deploy.ps1` so it
+survives redeploys, and pinned by five tests in `tests/test_api.py`
+including one asserting an unrelated origin is still refused.
+
+**Requires a redeploy to take effect.** Until `.\deploy.ps1` runs, only
+`verity-ai-lovat.vercel.app` works.
+
+### Standing settings for a link that is always up — Aug 11
+
+- `--min-instances 1`. The site is live the instant anyone opens it. At 0,
+  the first request after an idle spell waits for a container to boot and
+  import RDKit, which reads as broken to anyone who did not build it. This
+  is the only setting that bills while idle
+- `--cpu 2`, `--memory 2Gi`. One instance serves everybody, so three people
+  writing at once means overlapping transcription, judging and hint
+  generation in one process
+- `--max-instances 1` **stays at 1**, and no amount of budget changes that.
+  Sessions are in-process memory, so a second instance would silently serve
+  static fallback hints to whoever landed on it. Raising it needs a shared
+  session store first
+- Nobody has ever run three sessions at once. Worth ten minutes before the
+  demo rather than finding out in the room
+- Vertex AI quota is shared across the whole `cs-sail-2b08` project, which
+  is the programme's project, not ours. Unmeasured, and outside our control
 
 ### Known deployment caveats
 

@@ -6,6 +6,7 @@
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const DEFAULT_TIMEOUT_MS = 30_000;
+const HINT_TIMEOUT_MS = 120_000;
 
 export class ApiError extends Error {
   constructor(message, status, details = null) {
@@ -183,7 +184,15 @@ export const checkCellPotential = (cathode, anode, steps, options) =>
 // Nothing it returns can carry a solved value.
 export const openSession = (payload, options) => post("/chemistry/session", payload, options);
 
-export const getHint = (payload, options) => post("/hint", payload, options);
+// Hints get their own, much longer budget. Every level is a live generation
+// call, and level 2 additionally solves the generated example with our own
+// engine and regenerates it once if verification fails. Measured against the
+// deployed service: level 1 around 9s, level 2 between 10s and 21s when it
+// succeeds and 33s on the attempt that gives up and serves the floor. The
+// 30s default was therefore aborting real hints in the browser and reporting
+// a timeout for work the server had already done.
+export const getHint = (payload, options) =>
+  post("/hint", payload, { timeoutMs: HINT_TIMEOUT_MS, ...options });
 
 // Corpus capture. 404s unless VERITY_CAPTURE_DIR is set on the backend,
 // which is how the feature stays off anywhere but a developer machine.

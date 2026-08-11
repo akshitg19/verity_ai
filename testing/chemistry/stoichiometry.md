@@ -47,6 +47,42 @@ error in the first line should not cascade into the next two.
 
 ---
 
+## The hard one, Aug 11: limiting reagent, theoretical yield, percent yield
+
+The ten above are one task each. This is the first question run through the
+live service that chains three of them, and it is the shape a real problem set
+uses. Run against the deployed API, not by hand on a tablet.
+
+> 25.0 g of aluminium is added to 90.0 g of copper(II) sulfate.
+> 2Al + 3CuSO4 -> Al2(SO4)3 + 3Cu. 30.0 g of copper is collected.
+> What is the percent yield?
+
+The trap is deliberate: there is more aluminium by mass, and CuSO4 is
+limiting. Correct answer 83.7 %, theoretical yield 35.83 g.
+
+| What was submitted | Result |
+|---|---|
+| The correct working, 7 lines | 7 of 7 `valid` |
+| The Al-is-limiting mistake, 5 lines | first two `valid`, then `n(Cu) = 1.39`, `88.3 g` and `34.0 %` all `invalid`, `wrong_value` |
+| Hint 1 | generated, and named the actual error: using the moles from aluminium rather than the limiting reactant |
+| Hint 2 | generated a Fe2O3 + 3CO analogue, 7 steps, `verified=True`, arithmetic checked by hand and correct |
+| Hint 3 | generated, worked the student's own step |
+
+**Reliability, five attempts per level: level 2 generated 4 of 5, level 3
+generated 4 of 5.** Same rate as the easy questions, so difficulty is not
+what breaks it. One press in five serves the static floor.
+
+**Latency:** level 1 8.6s, level 2 10s to 21s when it succeeds and 33s on the
+attempt that gave up, level 3 3s to 9s. The frontend's blanket 30s API
+timeout was therefore aborting real hints in the browser; `getHint` now has
+its own 120s budget.
+
+**Finding 1 is live on this question and worse than the sheet says.** Writing
+`35.8 g`, the theoretical yield, as the answer to a percent-yield question is
+marked `valid`. So is a bare `0.564` with no unit. A student who stops one
+step early is told they are right. What saved the `63.55` case was the unit
+check firing `wrong_unit`, not anything knowing which line is the answer.
+
 ## Findings
 
 1. **Any quantity from the working is accepted, including on the answer
