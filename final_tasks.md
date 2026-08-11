@@ -760,25 +760,27 @@ and undocks rather than permanently owning a column.
 | [x] | Panel heights in `dvh` plus safe-area inset | `vh` counts a tablet browser's toolbars, so the foot of the panel was behind one |
 | [x] | Light is the default theme | Dark is half a theme while the paper cannot invert |
 | [x] | Worked-example equations extracted server-side | The client was parsing prose and tallying English words as elements |
+| [x] | Pin a note to the top | Apple Notes, Keep and Samsung Notes all have it |
+| [x] | Delete a note is undoable | Deleting was silent and final, over a term of homework |
+| [x] | Notes name themselves from the question | The question is already transcribed; a name the student chose is never overwritten |
+| [x] | Empty page says what to do, and stops once you write | The first screen a student sees was a blank sheet with no invitation |
+| [x] | Keyboard shortcuts: undo, redo, toggle the shelf | Teachers will look at this on a laptop |
+| [x] | Panel prose cut back | Six status strings and two paragraphs that said what the screen already showed |
 
 ### Next, in rough order of how much they are worth
 
 | Done | Change | Detail |
 |------|---|---|
 | [ ] | Drag a note into a folder | The menu covers it; dragging is what people try first |
-| [ ] | Pin a note to the top | Apple Notes, Keep and Samsung Notes all have it. One boolean and a sort |
 | [ ] | Page thumbnails instead of numbered squares | Render the strokes small. A student picks a page by what is on it |
 | [ ] | Undo and redo as a two-finger tap and a three-finger tap | The iPad gesture. Undo already exists, only the gesture is missing |
 | [ ] | Pinch to zoom the page | The single most requested thing in every notes app review |
 | [ ] | A highlighter | Pen, highlighter, eraser is the whole toolset the research says to offer |
 | [ ] | Ruled, squared and blank paper | One CSS-variable swap plus the canvas grid draw |
-| [ ] | Auto-name a note from its question | The question is already transcribed. "Balancing propane" beats "Chemistry 3" |
 | [ ] | Swipe left on a note row to delete | Standard on both platforms |
-| [ ] | Recently deleted, with an undo | Deleting a note is currently silent and final |
 | [ ] | Export a page as PNG or PDF | The reason students screenshot their notes |
 | [ ] | The drawer resizable by dragging its edge | The stylus research calls out dockable, resizable result panels by name |
-| [ ] | Keyboard shortcuts, at least undo, new note, search | For the laptop case, which is how teachers will look at it |
-| [ ] | Empty page hint that fades on the first stroke | Right now a new page is a blank sheet with no invitation |
+| [ ] | More keyboard shortcuts: new note, search, next page | Three exist; these are the next three |
 | [ ] | Make the tab draggable, not only tappable | Half a swipe should half-open the drawer |
 
 ---

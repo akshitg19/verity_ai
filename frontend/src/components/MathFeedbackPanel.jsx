@@ -15,7 +15,7 @@ function lineStatus(line, isProblem, verdict, blocked) {
       label: "Needs review",
       detail: line.unreadable
         ? "We could not confidently read this line."
-        : "Enter the transcription for this line before checking.",
+        : "Type what this line says.",
       color: "#a96b1f",
       background: "#fff7e8",
       symbol: "!",
@@ -24,7 +24,7 @@ function lineStatus(line, isProblem, verdict, blocked) {
   if (blocked) {
     return {
       label: "Waiting for earlier line",
-      detail: "Correct the earlier unreadable line before checking this step.",
+      detail: "Waiting on the line above.",
       color: COLORS.muted,
       background: "#f3f5f4",
       symbol: "…",

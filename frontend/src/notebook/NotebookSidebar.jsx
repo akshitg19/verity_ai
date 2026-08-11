@@ -66,12 +66,18 @@ function NoteRow({
   onDelete,
   onDuplicate,
   onMove,
+  onTogglePin,
 }) {
   const [editing, setEditing] = useState(false);
   const accent = SUBJECTS[note.subject]?.accent ?? COLORS.primary;
 
   const menu = [
     { glyph: "✎", label: "Rename", onSelect: () => setEditing(true) },
+    {
+      glyph: note.pinned ? "☆" : "★",
+      label: note.pinned ? "Unpin" : "Pin to top",
+      onSelect: () => onTogglePin(note.id),
+    },
     { glyph: "⧉", label: "Duplicate", onSelect: () => onDuplicate(note.id) },
     ...folders.map((folder) => ({
       glyph: "🗀",
@@ -113,15 +119,23 @@ function NoteRow({
         ) : (
           <div
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
               fontSize: 13.5,
               fontWeight: active ? 700 : 500,
               color: COLORS.text,
               overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
             }}
           >
-            {note.title}
+            {note.pinned && (
+              <span aria-label="Pinned" title="Pinned" style={{ fontSize: 10, color: accent }}>
+                ★
+              </span>
+            )}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {note.title}
+            </span>
           </div>
         )}
         <div
@@ -275,6 +289,10 @@ export default function NotebookSidebar({
     openNote,
     renameNote,
     deleteNote,
+    togglePin,
+    deleted,
+    undoDelete,
+    dismissDeleted,
     addPage,
     openPage,
     deletePage,
@@ -457,6 +475,7 @@ export default function NotebookSidebar({
                     onDelete={deleteNote}
                     onDuplicate={duplicateNote}
                     onMove={moveNoteToFolder}
+                    onTogglePin={togglePin}
                   />
                 ))
               ) : (
@@ -478,6 +497,7 @@ export default function NotebookSidebar({
               onDelete={deleteNote}
               onDuplicate={duplicateNote}
               onMove={moveNoteToFolder}
+              onTogglePin={togglePin}
             />
           ))}
 
@@ -662,6 +682,58 @@ export default function NotebookSidebar({
             }))}
           />
         </div>
+
+        {deleted && (
+          <div
+            role="status"
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "9px 14px",
+              background: COLORS.background,
+              borderTop: `1px solid ${COLORS.border}`,
+              fontSize: 12,
+              color: COLORS.muted,
+            }}
+          >
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              Deleted “{deleted.note.title}”
+            </span>
+            <button
+              type="button"
+              onClick={undoDelete}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: meta.accent,
+                fontFamily: FONT.sans,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              onClick={dismissDeleted}
+              aria-label="Dismiss"
+              style={{
+                border: "none",
+                background: "transparent",
+                color: COLORS.muted,
+                fontSize: 14,
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {cloudNotice && (
           <div

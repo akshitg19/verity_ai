@@ -107,7 +107,11 @@ export default function useNotebook() {
       (grouped[note.subject] ?? grouped.math).push(note);
     }
     for (const key of Object.keys(grouped)) {
-      grouped[key].sort((a, b) => b.updatedAt - a.updatedAt);
+      grouped[key].sort(
+        (a, b) =>
+          Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
+          b.updatedAt - a.updatedAt
+      );
     }
     return grouped;
   }, [notes]);
@@ -261,8 +265,17 @@ export default function useNotebook() {
     [update]
   );
 
+  // Deleting is undoable for as long as the shelf is open. A term of homework
+  // behind a single tap with no way back is the one failure mode of this
+  // model that would actually matter to a student.
+  const [deleted, setDeleted] = useState(null);
+
   const deleteNote = useCallback((noteId) => {
     setState((current) => {
+      const index = current.notes.findIndex((note) => note.id === noteId);
+      if (index === -1) return current;
+      setDeleted({ note: current.notes[index], index });
+
       const remaining = current.notes.filter((note) => note.id !== noteId);
       if (!remaining.length) {
         const replacement = blankNote("math", "Math 1");
@@ -276,6 +289,56 @@ export default function useNotebook() {
       };
     });
   }, []);
+
+  const undoDelete = useCallback(() => {
+    setState((current) => {
+      if (!deleted) return current;
+      const notes = [...current.notes];
+      notes.splice(Math.min(deleted.index, notes.length), 0, deleted.note);
+      return { ...current, notes, activeNoteId: deleted.note.id };
+    });
+    setDeleted(null);
+  }, [deleted]);
+
+  const dismissDeleted = useCallback(() => setDeleted(null), []);
+
+  // Pinned notes sort to the top of their subject, which is how a student
+  // keeps the question they are working on within reach of a thumb.
+  const togglePin = useCallback(
+    (noteId) => {
+      setState((current) => ({
+        ...current,
+        notes: current.notes.map((note) =>
+          note.id === noteId ? { ...note, pinned: !note.pinned } : note
+        ),
+      }));
+    },
+    []
+  );
+
+  // Naming a note after the question it holds. The question is already
+  // transcribed, so "Balance C3H8 + O2" costs nothing and beats "Chemistry 3".
+  // Only ever applied to a note still carrying its generated name, so a name
+  // a student chose is never overwritten.
+  const nameFromQuestion = useCallback(
+    (question) => {
+      const trimmed = (question ?? "").trim();
+      if (!trimmed) return;
+      setState((current) => {
+        const note = current.notes.find((entry) => entry.id === current.activeNoteId);
+        if (!note || !/^(Chemistry|Math) \d+$/.test(note.title)) return current;
+        return {
+          ...current,
+          notes: current.notes.map((entry) =>
+            entry.id === note.id
+              ? { ...entry, title: trimmed.slice(0, 60), updatedAt: now() }
+              : entry
+          ),
+        };
+      });
+    },
+    []
+  );
 
   const addPage = useCallback(() => {
     const page = blankPage();
@@ -345,6 +408,11 @@ export default function useNotebook() {
     createNote,
     duplicateNote,
     openNote,
+    togglePin,
+    nameFromQuestion,
+    deleted,
+    undoDelete,
+    dismissDeleted,
     renameNote,
     deleteNote,
     addPage,

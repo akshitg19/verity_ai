@@ -57,3 +57,71 @@ describe("notebook tree", () => {
     expect(tree.loose.map((n) => n.title)).toContain("Orphan");
   });
 });
+
+// The sort the sidebar shows: pinned first, then most recently touched.
+// Extracted the same way as treeFor, as a pure function over the note list.
+function ordered(notes) {
+  return [...notes].sort(
+    (a, b) =>
+      Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
+      b.updatedAt - a.updatedAt
+  );
+}
+
+describe("note ordering", () => {
+  const notes = [
+    { id: "a", title: "Old", updatedAt: 1 },
+    { id: "b", title: "New", updatedAt: 3 },
+    { id: "c", title: "Middle", updatedAt: 2 },
+  ];
+
+  it("puts the most recently touched note first", () => {
+    expect(ordered(notes).map((n) => n.title)).toEqual(["New", "Middle", "Old"]);
+  });
+
+  it("lifts a pinned note above a newer unpinned one", () => {
+    const pinned = notes.map((n) => (n.id === "a" ? { ...n, pinned: true } : n));
+
+    expect(ordered(pinned).map((n) => n.title)).toEqual(["Old", "New", "Middle"]);
+  });
+
+  it("keeps pinned notes in recency order among themselves", () => {
+    const pinned = notes.map((n) =>
+      n.id === "a" || n.id === "c" ? { ...n, pinned: true } : n
+    );
+
+    expect(ordered(pinned).map((n) => n.title)).toEqual(["Middle", "Old", "New"]);
+  });
+});
+
+// Naming a note after its question, which must never overwrite a name the
+// student chose.
+function nextTitle(currentTitle, question) {
+  const trimmed = (question ?? "").trim();
+  if (!trimmed) return currentTitle;
+  if (!/^(Chemistry|Math) \d+$/.test(currentTitle)) return currentTitle;
+  return trimmed.slice(0, 60);
+}
+
+describe("naming a note from its question", () => {
+  it("replaces a generated name", () => {
+    expect(nextTitle("Chemistry 3", "C3H8 + O2 -> CO2 + H2O")).toBe(
+      "C3H8 + O2 -> CO2 + H2O"
+    );
+  });
+
+  it("leaves a name the student chose alone", () => {
+    expect(nextTitle("Friday homework", "C3H8 + O2 -> CO2 + H2O")).toBe(
+      "Friday homework"
+    );
+  });
+
+  it("does nothing when there is no question yet", () => {
+    expect(nextTitle("Chemistry 3", "   ")).toBe("Chemistry 3");
+    expect(nextTitle("Chemistry 3", undefined)).toBe("Chemistry 3");
+  });
+
+  it("caps a very long question", () => {
+    expect(nextTitle("Math 1", "x".repeat(200))).toHaveLength(60);
+  });
+});
