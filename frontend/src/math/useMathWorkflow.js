@@ -425,6 +425,7 @@ export default function useMathWorkflow({ pageId = null } = {}) {
         return;
       }
 
+      setHintError(null);
       setHintLevel(data.level);
       setHintText(data.hint);
       setHintData(data);

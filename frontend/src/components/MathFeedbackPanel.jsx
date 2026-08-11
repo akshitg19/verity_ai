@@ -166,6 +166,7 @@ export default function MathFeedbackPanel({ workflow }) {
     handleLineEdit,
     handleLineEditDone,
     handleGetHint,
+    cancelHint,
   } = workflow;
   const orderedLines = orderedMathLines(lines);
   const { handwrittenProblemRow, readableLines } = buildMathCheckInput(
