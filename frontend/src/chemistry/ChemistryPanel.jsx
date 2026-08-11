@@ -153,10 +153,11 @@ export default function ChemistryPanel({
     inputMode,
     ready,
     answer,
+    answerUnit,
     editAnswer,
     lines,
     editLine,
-    questionRow,
+    questionRows,
     releaseQuestionRow,
     read,
     unreadable,
@@ -303,7 +304,7 @@ export default function ChemistryPanel({
             inputMode={inputMode}
             ready={ready}
             checking={checking}
-            questionRow={questionRow}
+            questionRows={questionRows}
             onEdit={editLine}
             onCheck={checkAnswer}
             onReleaseQuestion={releaseQuestionRow}
@@ -371,25 +372,59 @@ export default function ChemistryPanel({
           }
           onConfirm={checkAnswer}
         >
-          <input
-            ref={answerRef}
-            aria-label="Chemistry answer transcription"
-            type="text"
-            value={answer}
-            placeholder={problemType.answerPlaceholder ?? topic.answerPlaceholder}
-            onChange={(event) => editAnswer(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.currentTarget.blur();
-                checkAnswer();
-              }
-            }}
-            style={{
-              ...inputStyle,
-              fontFamily: inputMode === "numeric" ? FONT.sans : FONT.mono,
-              borderColor: confidence === "low" ? "var(--v-unsupported)" : COLORS.border,
-            }}
-          />
+          {/* The unit sits beside the box, not inside it.
+            *
+            * A student writing a molar mass should type `98.08` and nothing
+            * else: `g/mol` is a property of the question, which we already
+            * know, not of their answer. Making them write it is asking for
+            * information we have, and it is one more thing to get wrong on a
+            * tablet keyboard.
+            *
+            * It also closes a real hole from the front. `judge/quantities.py`
+            * reads a unit off the written line, and solutions.md finding 3
+            * records that units are optional and ignored everywhere, so
+            * `0.25`, `0.250 M` and `0.250 mol/L` all pass. Supplying the unit
+            * ourselves beats tightening a parser against handwriting.
+            *
+            * Null for a formula, a species, or a pH, which have no unit and
+            * where printing one would be wrong. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              ref={answerRef}
+              aria-label="Chemistry answer transcription"
+              type="text"
+              value={answer}
+              placeholder={problemType.answerPlaceholder ?? topic.answerPlaceholder}
+              onChange={(event) => editAnswer(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.currentTarget.blur();
+                  checkAnswer();
+                }
+              }}
+              style={{
+                ...inputStyle,
+                flex: 1,
+                minWidth: 0,
+                fontFamily: inputMode === "numeric" ? FONT.sans : FONT.mono,
+                borderColor: confidence === "low" ? "var(--v-unsupported)" : COLORS.border,
+              }}
+            />
+            {answerUnit && (
+              <span
+                aria-hidden="true"
+                style={{
+                  flexShrink: 0,
+                  color: COLORS.muted,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  fontFamily: FONT.sans,
+                }}
+              >
+                {answerUnit}
+              </span>
+            )}
+          </div>
 
           <StructurePreviewCard preview={preview} />
 
@@ -425,7 +460,6 @@ export default function ChemistryPanel({
           hint={hint?.hint}
           workedExample={hint?.worked_example}
           terminalStep={hint?.terminal_step}
-          levelThreeRemaining={hint?.level_3_remaining}
           source={hint?.source}
           resource={hint?.resource}
           error={hintError}

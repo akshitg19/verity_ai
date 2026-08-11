@@ -34,6 +34,8 @@ import {
   inputModeFor,
   isProblemReady,
   questionFieldFor,
+  questionVerbFor,
+  answerUnitFor,
 } from "./topics";
 
 
@@ -59,6 +61,13 @@ export default function useChemistry({ pageId = null } = {}) {
   const [values, setValues] = useState(
     () => stored.values ?? emptyValues(topic.types[0])
   );
+  // Mirrored so useRowAsQuestion can read the current values without being
+  // rebuilt on every keystroke in the correction fields. Written in an
+  // effect rather than during render, which React forbids.
+  const valuesRef = useRef(values);
+  useEffect(() => {
+    valuesRef.current = values;
+  }, [values]);
 
   // Structures are one two-dimensional figure. Written chemistry uses one
   // entry per segmented row so each claim can be corrected and checked on its
@@ -101,8 +110,10 @@ export default function useChemistry({ pageId = null } = {}) {
 
   // The row the student marked as the question, and the rows where they said
   // "this is my working" so the offer stops coming back.
-  const [questionRow, setQuestionRow] = useState(null);
-  const questionRowRef = useRef(null);
+  // Several rows can make up one question, so this is a list. Percent yield
+  // takes four written lines; molar mass takes one.
+  const [questionRows, setQuestionRows] = useState([]);
+  const questionRowsRef = useRef([]);
   const [dismissedRows, setDismissedRows] = useState(() => new Set());
 
   const inputMode = inputModeFor(topic, problemType);
@@ -206,8 +217,8 @@ export default function useChemistry({ pageId = null } = {}) {
     }
     setStatus(null);
     setCaptureNote("");
-    questionRowRef.current = null;
-    setQuestionRow(null);
+    questionRowsRef.current = [];
+    setQuestionRows([]);
     setDismissedRows(new Set());
     clearAnswer();
   }, [cancelSession, clearAnswer]);
@@ -247,16 +258,25 @@ export default function useChemistry({ pageId = null } = {}) {
 
   // -- the question, written rather than typed ------------------------------
 
-  const questionField = questionFieldFor(topic, problemType);
+  // The field a written row would fill next, and the verb to offer for it.
+  // Values are passed in so a multi-field type offers whichever field is
+  // still empty rather than always the first: a student writes the equation
+  // on one line and the amounts on the next.
+  const questionField = questionFieldFor(topic, problemType, values);
+  const questionVerb = questionVerbFor(topic, problemType, values);
 
-  // Offer the first readable row as the question while the topic still has
-  // none. A question written on the page is the natural first thing a student
-  // does, and requiring it to be typed puts a seam down the middle of a
-  // handwriting app.
+  // Offer the first readable row that has not already been consumed or waved
+  // away, while any ink field is still empty. Writing the question on the page
+  // is the natural first thing a student does, and requiring it to be typed
+  // puts a seam down the middle of a handwriting app.
   const questionCandidateRow = (() => {
-    if (isDrawing || !questionField || ready || questionRow !== null) return null;
+    if (isDrawing || !questionField) return null;
     const candidate = orderedChemistryLines(lines).find(
-      (line) => line.text.trim() && !line.unreadable && !dismissedRows.has(line.row)
+      (line) =>
+        line.text.trim() &&
+        !line.unreadable &&
+        !dismissedRows.has(line.row) &&
+        !questionRows.includes(line.row)
     );
     return candidate?.row ?? null;
   })();
@@ -264,11 +284,14 @@ export default function useChemistry({ pageId = null } = {}) {
   const useRowAsQuestion = useCallback(
     (row) => {
       const line = linesRef.current.find((entry) => entry.row === row);
-      const field = questionFieldFor(topic, problemType);
+      const field = questionFieldFor(topic, problemType, valuesRef.current);
       const text = line?.text?.trim();
       if (!text || !field) return;
-      questionRowRef.current = row;
-      setQuestionRow(row);
+      const nextRows = questionRowsRef.current.includes(row)
+        ? questionRowsRef.current
+        : [...questionRowsRef.current, row];
+      questionRowsRef.current = nextRows;
+      setQuestionRows(nextRows);
       // setValue drops the session, so the vault is rebuilt from this
       // question rather than a stale one. That matters for more than
       // accuracy: the vault is what redaction and the terminal-step gate
@@ -288,8 +311,8 @@ export default function useChemistry({ pageId = null } = {}) {
 
   const releaseQuestionRow = useCallback(() => {
     const field = questionFieldFor(topic, problemType);
-    questionRowRef.current = null;
-    setQuestionRow(null);
+    questionRowsRef.current = [];
+    setQuestionRows([]);
     if (field) setValue(field, "");
   }, [problemType, setValue, topic]);
 
@@ -518,7 +541,7 @@ export default function useChemistry({ pageId = null } = {}) {
     // own question is checked as though it were their first line of working,
     // and is reported wrong for not being balanced.
     const currentLines = orderedChemistryLines(linesRef.current).filter(
-      (line) => line.row !== questionRowRef.current
+      (line) => !questionRowsRef.current.includes(line.row)
     );
     const steps = isDrawing
       ? written
@@ -612,7 +635,7 @@ export default function useChemistry({ pageId = null } = {}) {
   const requestHint = useCallback(async () => {
     if (hintLevel >= 3) return;
 
-    const stepLines = chemistryStepLines(linesRef.current, questionRowRef.current);
+    const stepLines = chemistryStepLines(linesRef.current, questionRowsRef.current);
     const lineIndex = stepLines.findIndex((line) => line.row === firstWrongRow);
     const activeVerdict = isDrawing
       ? verdict
@@ -713,7 +736,7 @@ export default function useChemistry({ pageId = null } = {}) {
       unreadable,
       confidence,
       recognizedLines: linesRef.current,
-      questionRow: questionRowRef.current,
+      questionRows: questionRowsRef.current,
       verdictsByLine,
       wholePageVerdict: verdict,
       firstWrongRow,
@@ -745,8 +768,12 @@ export default function useChemistry({ pageId = null } = {}) {
     const nextLines = [...(snapshot.recognizedLines ?? [])];
     linesRef.current = nextLines;
     setLines(nextLines);
-    questionRowRef.current = snapshot.questionRow ?? null;
-    setQuestionRow(questionRowRef.current);
+    // Older snapshots stored a single row; both shapes restore.
+    questionRowsRef.current = snapshot.questionRows
+      ?? (snapshot.questionRow === null || snapshot.questionRow === undefined
+        ? []
+        : [snapshot.questionRow]);
+    setQuestionRows(questionRowsRef.current);
     setDismissedRows(snapshot.dismissedRows ?? new Set());
     setAnswer(snapshot.answer ?? "");
     setRead(Boolean(snapshot.read || snapshot.answer));
@@ -795,7 +822,9 @@ export default function useChemistry({ pageId = null } = {}) {
     lines,
     editLine,
     questionField,
-    questionRow,
+    questionRows,
+    questionVerb,
+    answerUnit: answerUnitFor(problemType),
     questionCandidateRow,
     useRowAsQuestion,
     dismissQuestionCandidate,

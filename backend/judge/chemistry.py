@@ -560,3 +560,126 @@ class IsomerJudge(Judge[str, ChemistryStep, ChemistryLineVerdict]):
             )
 
         return verdicts
+
+
+def _formula_counts(formula: str) -> dict[str, int]:
+    """Element counts from a written formula, so `C2H6O` and `H6C2O` agree.
+
+    Uses the same parser that judges balancing rather than comparing the
+    Hill string, because a student writes `CH3CH2OH` as readily as `C2H6O`
+    and both are the same question.
+    """
+    from .chemistry_equations import parse_formula
+
+    atoms, _ = parse_formula(formula)
+    return dict(atoms)
+
+
+class FormulaStructureJudge(Judge[str, ChemistryStep, ChemistryLineVerdict]):
+    """Does this drawing have the formula the student was given?
+
+    Deliberately looser than `ChemistryJudge`, and the looseness is the whole
+    point. A molecular formula does not determine a structure: `C2H6O` is
+    ethanol and it is also dimethyl ether, and a student asked to "draw a
+    structure with this formula" is right either way. Demanding one specific
+    isomer would mark a correct drawing wrong, which is the failure this
+    product cannot ship with.
+
+    So the question it answers is exactly the question asked: are these the
+    right atoms, in the right numbers, in something that is a real molecule.
+    Which isomer they drew is not asked and is not judged.
+
+    Where a specific structure *is* the question, that is `ChemistryJudge`,
+    and where the relationship between two structures is the question, that
+    is `IsomerJudge`. Three different questions, three judges, and the error
+    is picking the strict one for a question that was never that strict.
+    """
+
+    def check(
+        self,
+        target_formula: str,
+        steps: list[ChemistryStep],
+    ) -> list[ChemistryLineVerdict]:
+        try:
+            wanted = _formula_counts(target_formula)
+            if not wanted:
+                raise ValueError(f"{target_formula!r} contains no atoms")
+        except Exception as exc:
+            return [
+                ChemistryLineVerdict(
+                    line_number=0,
+                    valid=False,
+                    error_type="parse_error",
+                    detail=f"Could not read the formula: {exc}",
+                    judged_by="deterministic",
+                )
+            ]
+
+        verdicts: list[ChemistryLineVerdict] = []
+        for step in steps:
+            try:
+                submitted = _parse_smiles(step.smiles)
+                reason = _support_reason(submitted)
+                if reason:
+                    raise UnsupportedChemistryError(reason)
+            except UnsupportedChemistryError as exc:
+                verdicts.append(
+                    ChemistryLineVerdict(
+                        line_number=step.line_number,
+                        valid=False,
+                        error_type="unsupported",
+                        detail=str(exc),
+                        judged_by="deterministic",
+                    )
+                )
+                continue
+            except ChemistryParseError as exc:
+                verdicts.append(
+                    ChemistryLineVerdict(
+                        line_number=step.line_number,
+                        valid=False,
+                        error_type="parse_error",
+                        detail=str(exc),
+                        judged_by="deterministic",
+                    )
+                )
+                continue
+
+            try:
+                drawn = _formula_counts(molecular_formula(step.smiles))
+            except Exception as exc:
+                verdicts.append(
+                    ChemistryLineVerdict(
+                        line_number=step.line_number,
+                        valid=False,
+                        error_type="parse_error",
+                        detail=f"Could not read that structure's formula: {exc}",
+                        judged_by="deterministic",
+                    )
+                )
+                continue
+
+            if drawn == wanted:
+                verdicts.append(
+                    ChemistryLineVerdict(
+                        line_number=step.line_number,
+                        valid=True,
+                        # Named so a student sees that a different isomer
+                        # would also have been accepted, rather than assuming
+                        # they found the one right answer.
+                        detail="This structure has the right formula",
+                        judged_by="deterministic",
+                    )
+                )
+                continue
+
+            verdicts.append(
+                ChemistryLineVerdict(
+                    line_number=step.line_number,
+                    valid=False,
+                    error_type="wrong_formula",
+                    detail="This structure does not have the formula you were given",
+                    judged_by="deterministic",
+                )
+            )
+        return verdicts

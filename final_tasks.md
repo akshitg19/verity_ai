@@ -2435,3 +2435,223 @@ Not a schedule, just the order that gets the most value per hour.
 7. **3** — palette and logo, once the surfaces have stopped moving.
 8. **4** — notes parity, largest and least urgent for a demo.
 9. **2.5** — numeric-topic question parsing, the hardest and most deferrable piece.
+
+---
+
+# Walkthrough, session 3 (Aug 11): nothing gets typed
+
+Written from a session on the tablet. **This section supersedes every "typed
+entry" row above it**, including "Per-topic input surfaces" in the frontend
+table, which says "typed equation entry for balancing, typed numeric entry
+for stoichiometry and solutions". That was the wrong call and it is now
+reversed.
+
+## 10. The rule, stated once
+
+> **A student never types chemistry. They write it, and the page offers to
+> take it.**
+
+The reason we built a handwriting product is that writing is faster and more
+natural than typing `H2SO4` on a tablet keyboard, subscripts and all. Every
+typed field in the chemistry panel is a place where the product stops being
+the thing it claims to be. In the student's words: *"there's no point of
+typing the formula, that's literally what I'm trying to avoid."*
+
+This already works for balancing and net ionic: write the equation, a popover
+asks "is this the question?", and `useRowAsQuestion` fills the field. The
+mechanism is built, tested, and used. **It is only wired to two of the eleven
+problem types**, because `questionFieldFor` returns null unless
+`inputModeFor` is `"equation"` (`topics.js` line 598).
+
+## 11. The interaction, exactly
+
+Every topic, every problem type, the same four beats:
+
+1. **Write it on the page.** A formula, an equation, a species, a name.
+2. **The page offers.** The popover already anchored to that row, with a verb
+   matching what was written: "Use as formula", "Use as equation", "Use as
+   species". Not a generic "Use as question" everywhere.
+3. **An answer box appears directly below that row**, on the page, anchored to
+   the ink. Not in the side panel. The student's eye is on the line they just
+   wrote.
+4. **The unit sits outside the box**, small, fixed, greyed. `g/mol` for molar
+   mass, `mol`, `g`, `%`. The student writes a number and nothing else, and
+   the judge is handed the number plus the unit we already know.
+
+The unit rule matters beyond convenience. `judge/quantities.py` reads a unit
+off the written line today, and `testing/chemistry/solutions.md` finding 3
+records that units are optional and ignored in every numeric topic, so
+`0.25`, `0.250 M` and `0.250 mol/L` all pass. Printing the unit beside the
+box and supplying it ourselves closes that hole from the front rather than
+by tightening a parser against handwriting.
+
+**Keep the side panel fields.** Not as the way in, as the escape hatch: a
+student whose handwriting was misread needs somewhere to correct it, and
+that field is already the correction surface. The student was explicit:
+*"you can keep the things on the right side if you want, as a stopgap, to
+change if the user really wants to change it."*
+
+## 12. What has to change, per topic
+
+Every row here is "the field is filled from ink instead of typed". No judge
+logic changes anywhere in this section.
+
+### 12.1 Moles and stoichiometry — do this one first
+
+| Type | Written on the page | Answer box unit |
+|---|---|---|
+| Molar mass | the formula | `g/mol` |
+| Percent composition | the formula, then the element | `%` |
+| Moles from mass | the formula, then the mass | `mol` |
+| Mass from moles | the formula, then the moles | `g` |
+| Empirical formula | the composition line | none, it is a formula |
+| Molecular formula | the composition, then the molar mass | none |
+| Limiting reagent | the equation, then the amounts | none, it is a species |
+| Theoretical yield | equation, amounts, product | `g` |
+| Percent yield | equation, amounts, product, actual yield | `%` |
+
+Note the multi-field types. A student writes the equation on one line and the
+amounts on the next, so the popover has to know **which field is still empty**
+and offer that one, rather than always offering the first. Fill in order,
+and once every required field is filled stop offering.
+
+### 12.2 Solutions, acids and bases
+
+Same treatment for all fourteen tasks. Units: `M` for molarity and dilution,
+`L` for volume, `%` for percent by mass, and **none for pH and pOH**, which
+are unitless and where printing a unit would be wrong.
+
+### 12.3 Redox and electrochemistry
+
+*"For oxidation state and redox, why do I need to type species and element?"*
+Both fields come from ink. Oxidation state answers carry a sign and no unit;
+cell potential is `V`.
+
+### 12.4 Structure and bonding — the SMILES problem
+
+**A student does not know what SMILES is and must never be shown it as the
+thing they are answering.** It stays as the internal representation and as
+the correction field, never as the question or the answer.
+
+The topic currently offers "Draw this structure" and "Draw an isomer", and
+neither says where the target comes from. The flow the student asked for,
+in their words: *"I write the formula. I want to draw the structure for it.
+You recognise, and then you have a lookup saying 'draw the structure', and
+when I draw the structure you check it if it's right or wrong and give me the
+hint generation as usual."*
+
+So:
+
+1. Write a **formula or a name** on the page.
+2. Popover offers **"Draw this structure"**.
+3. That becomes the target, held server-side. The student draws underneath.
+4. We read the drawing, judge it against the target, and the hint ladder runs
+   as it does everywhere else.
+
+The second direction they raised, writing a formula and being *shown* the
+structure, is a **learning tool, not a check**, and it is genuinely useful:
+`/chemistry/render` already returns RDKit SVG. But it hands over the answer,
+so it cannot be offered on a question the student is currently answering.
+Ship it as its own "show me this molecule" action, never as a hint.
+
+**Decided Aug 11, and built.** A formula like `C2H6O` does not determine a
+structure: ethanol and dimethyl ether share it. The call is **accept any
+structure with the right formula**, because that is the question actually
+asked. A judge that knows only one isomer marks a correct drawing wrong,
+which is the top row of this file's own failure taxonomy.
+
+`FormulaStructureJudge` and `/chemistry/formula-structure` do exactly that:
+right atoms, right numbers, real molecule, and which isomer is neither asked
+nor judged. `tests/test_formula_structure_judge.py` asserts all five isomers
+of C6H14 pass, that either isomer of C2H6O passes, and that a C5H12 isomer
+does not, because being loose about which isomer must not mean being loose
+about which formula. The structure topic gained a "Draw a structure for this
+formula" type, listed first, and it is the only one there whose question a
+student can write in their own hand.
+
+Still open, and smaller: **that type opens no session**, so its hints fall
+back to the templates. The vault would have to hold "any of these", and
+`answer_vault.py` has no shape for a set of acceptable answers. A worse
+hint, never an unsafe one.
+
+### 12.5 Organic
+
+Functional group and naming both come from ink. Naming is the one place a
+student writes English rather than chemistry, and the popover copy should say
+"Use as the name".
+
+## 13. Hint budget: fixed
+
+**What happened.** *"Even after I went to hint three, it still says three
+walkthroughs left for this problem."*
+
+**Why.** It was not a broken feature anyone added. `HintLadder` printed
+`level_3_remaining`, a real server-side counter, for a mechanism that is
+switched off: `hints.spend_level_3` only runs when `WITHHOLD_ANSWER` is on,
+and it has been off since the Aug 10 withholding decision. So the number was
+honestly reported and permanently 3.
+
+**Fixed.** The line now counts the ladder, which is enforced and true: "3
+hints for this line", "2 more hints", "Last hint", and after the third, "That
+was the last hint. The rest is yours." Bolder and amber on the last rung, per
+the request for more urgency. When the budget is re-armed, that is the place
+to bring the real counter back, and it will mean something then.
+
+A counter that does not count is worse than no counter, because it teaches
+the student to ignore the one place we warn them.
+
+## 14. Order
+
+1. **12.1 molar mass**, end to end, as the pattern every other type copies.
+2. The rest of 12.1.
+3. **12.2 solutions**, which is the largest and most mechanical.
+4. **12.3 redox**, two fields.
+5. **12.5 organic**.
+6. **12.4 structure**, last, and only after the open question above is
+   decided.
+
+
+## 15. Built in this pass, and what is still open
+
+Done:
+
+- **Every problem type in every topic takes its question from handwriting**,
+  except the fields listed below. A test walks all of them and fails if a new
+  type ships with a typed-only field, so this cannot quietly regress.
+- **The unit sits outside the answer box** on every numeric type that has
+  one, and is deliberately absent on pH, on a formula, and on a species.
+- **Structure from a formula**, per the decision above.
+- **The hint counter tells the truth**, per section 13.
+- **Erasing by holding the button on the stylus**, which is how people already
+  erase on these devices. `canvas/penButton.js` accepts both the eraser bit
+  and the barrel bit, because which one a device reports is genuinely
+  inconsistent and picking one would be wrong on half the hardware. The
+  selected tool never changes underneath the student, and the context menu
+  the barrel button would otherwise open is suppressed.
+
+The fields that stay typed, each for a reason:
+
+| Field | Why |
+|---|---|
+| `target_smiles`, `reference_smiles`, `reactants_smiles` | SMILES is ours, not the student's. They do not know what it is and must never be asked to write one as the question |
+| `isomer_type`, `target_group`, `reaction_type` | A fixed set of choices, offered as a dropdown. Nothing to write |
+| `reference_equation`, `molecular_equation` | Already taken from ink, through the older by-name path that predates the marker |
+
+Still open:
+
+- [ ] **Labelled write-in slots on the page.** The student asked for the panel
+      fields to appear *as boxes on the notes* rather than as a popover on an
+      arbitrary row: "put them on the notes and keep them like text boxes so I
+      can write in them with my stylus". The popover is the mechanism; anchored
+      labelled slots are the surface, and they are the better one for a
+      multi-field type like molarity where the student has to know which
+      quantity goes where.
+- [ ] **"Show working below" for numeric types.** Also asked for: rather than
+      one answer box, an area to write the steps, with hints attached per step.
+      The judge already takes a list of steps and already judges each one, so
+      this is a rendering change rather than a new capability.
+- [ ] **What structure and bonding is for, versus organic.** Both draw
+      structures, and the difference is the question, not the drawing:
+      structure asks "is this the right molecule", organic asks "does it have
+      this group" or "is this the right product". Worth saying so in the blurbs,
+      because from the outside they look like the same topic twice.

@@ -99,6 +99,10 @@ export default function CanvasSurface({ canvas, mode, children }) {
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onPointerLeave={handlePointerLeave}
+        // The stylus barrel button is the same signal a right click uses, so
+        // holding it to erase would otherwise open a context menu on top of
+        // the page mid-stroke.
+        onContextMenu={(event) => event.preventDefault()}
         style={{
           position: "absolute",
           inset: 0,

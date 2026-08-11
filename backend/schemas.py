@@ -444,6 +444,27 @@ class NamingRequest(BaseModel):
         return self
 
 
+class FormulaStructureRequest(BaseModel):
+    """"Draw a structure with this formula."
+
+    Additive, and looser than IsomerRequest on purpose. A molecular formula
+    does not determine a structure: C2H6O is ethanol and it is also dimethyl
+    ether, and a student told to draw a structure with that formula is right
+    either way. The target is the formula the student wrote, not a SMILES,
+    because a student writes `C2H6O` and does not know what SMILES is.
+    """
+
+    target_formula: FormulaText
+    steps: Annotated[list[ChemistryStep], Field(min_length=1, max_length=50)]
+
+    @model_validator(mode="after")
+    def steps_are_unique_and_ordered(self):
+        numbers = [step.line_number for step in self.steps]
+        if numbers != sorted(set(numbers)):
+            raise ValueError("step line numbers must be unique and increasing")
+        return self
+
+
 class IsomerRequest(BaseModel):
     """"Draw an isomer of this" -- same formula, different connectivity."""
 

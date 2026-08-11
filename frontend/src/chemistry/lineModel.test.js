@@ -112,3 +112,33 @@ describe("written chemistry line model", () => {
     expect(isWholePageChemistryInput("numeric")).toBe(false);
   });
 });
+
+describe("chemistryStepLines with several question rows", () => {
+  const lines = [
+    { row: 0, text: "N2 + 3H2 -> 2NH3", unreadable: false },
+    { row: 1, text: "N2: 28.0, H2: 6.0", unreadable: false },
+    { row: 2, text: "n = 2.00 mol", unreadable: false },
+    { row: 3, text: "m = 34.06 g", unreadable: false },
+  ];
+
+  it("excludes every row that was used to build the question", () => {
+    // Percent yield takes four written lines. All of them are the question
+    // and none of them are working, so none may be judged as a step.
+    const steps = chemistryStepLines(lines, [0, 1]);
+
+    expect(steps.map((line) => line.row)).toEqual([2, 3]);
+  });
+
+  it("still accepts a single row, which is what one-field types pass", () => {
+    expect(chemistryStepLines(lines, 0).map((line) => line.row)).toEqual([1, 2, 3]);
+  });
+
+  it("treats null and an empty list as nothing excluded", () => {
+    expect(chemistryStepLines(lines, null)).toHaveLength(4);
+    expect(chemistryStepLines(lines, [])).toHaveLength(4);
+  });
+
+  it("accepts a Set, since the hook holds one internally", () => {
+    expect(chemistryStepLines(lines, new Set([0, 1, 2])).map((l) => l.row)).toEqual([3]);
+  });
+});

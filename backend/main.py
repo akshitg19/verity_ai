@@ -18,6 +18,7 @@ from hints import generate_hint
 from judge import AlgebraJudge, BalanceJudge, ChemistryJudge, FunctionalGroupJudge
 from judge.chemistry import (
     ChemistryParseError,
+    FormulaStructureJudge,
     IsomerJudge,
     UnsupportedChemistryError,
     is_generic,
@@ -47,6 +48,7 @@ from schemas import (
     ChemistryCheckResponse,
     ChemistrySessionRequest,
     ChemistrySessionResponse,
+    FormulaStructureRequest,
     FunctionalGroupCheckRequest,
     HintRequest,
     HintResponse,
@@ -115,6 +117,7 @@ solutions_judge = SolutionsJudge()
 oxidation_state_judge = OxidationStateJudge()
 cell_potential_judge = CellPotentialJudge()
 reaction_judge = ReactionJudge()
+formula_structure_judge = FormulaStructureJudge()
 
 # The routing table from final_tasks.md, served rather than duplicated in
 # the frontend. Each topic names the engine that decides correctness and the
@@ -159,7 +162,11 @@ CHEMISTRY_TOPICS = [
         "label": "Molecular structure & bonding",
         "engine": "deterministic",
         "input": "drawing",
-        "endpoints": ["/chemistry/check", "/chemistry/isomer"],
+        "endpoints": [
+            "/chemistry/check",
+            "/chemistry/isomer",
+            "/chemistry/formula-structure",
+        ],
     },
     {
         "topic": "organic",
@@ -345,6 +352,19 @@ def check_oxidation_state_steps(req: OxidationStateRequest):
 def check_cell_potential_steps(req: CellPotentialRequest):
     problem = CellPotentialProblem(cathode=req.cathode, anode=req.anode)
     return _chemistry_response(cell_potential_judge.check(problem, req.steps))
+
+
+@app.post("/chemistry/formula-structure", response_model=ChemistryCheckResponse)
+def check_formula_structure_steps(req: FormulaStructureRequest):
+    """Draw any structure with this formula.
+
+    Looser than /chemistry/check on purpose: a molecular formula does not
+    determine a structure, so every isomer of it is a correct answer to the
+    question that was actually asked.
+    """
+    return _chemistry_response(
+        formula_structure_judge.check(req.target_formula, req.steps)
+    )
 
 
 @app.post("/chemistry/isomer", response_model=ChemistryCheckResponse)

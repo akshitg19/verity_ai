@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   TOPICS,
   TOPIC_BY_ID,
+  answerUnitFor,
   describeProblem,
   inputModeFor,
   isProblemReady,
   parsePairs,
+  questionFieldFor,
+  questionVerbFor,
 } from "./topics";
 import { categoryLabel } from "../components/verdictLabels";
 
@@ -179,5 +182,120 @@ describe("categoryLabel", () => {
   it("returns null when there is no category at all", () => {
     expect(categoryLabel(null)).toBeNull();
     expect(categoryLabel(undefined)).toBeNull();
+  });
+});
+
+// --------------------------------------------------------------------------
+// Nothing gets typed: which field a written row fills, and what unit sits
+// beside the answer box rather than inside it.
+// --------------------------------------------------------------------------
+describe("filling the question from ink", () => {
+  const stoichiometry = TOPICS.find((topic) => topic.id === "stoichiometry");
+  const molarMass = stoichiometry.types.find((type) => type.id === "molar_mass");
+  const percentYield = stoichiometry.types.find((type) => type.id === "percent_yield");
+
+  it("offers the formula on a one-field type", () => {
+    expect(questionFieldFor(stoichiometry, molarMass, {})).toBe("formula");
+    expect(questionVerbFor(stoichiometry, molarMass, {})).toBe("formula");
+  });
+
+  it("stops offering once the only field is filled", () => {
+    expect(questionFieldFor(stoichiometry, molarMass, { formula: "H2SO4" })).toBe(null);
+  });
+
+  it("walks a multi-field type in order rather than always offering the first", () => {
+    // A student writes the equation on one line and the amounts on the next.
+    // Offering "equation" again for the second line would overwrite the first.
+    let values = {};
+    expect(questionFieldFor(stoichiometry, percentYield, values)).toBe("equation");
+
+    values = { ...values, equation: "N2 + 3H2 -> 2NH3" };
+    expect(questionFieldFor(stoichiometry, percentYield, values)).toBe("amounts");
+
+    values = { ...values, amounts: "N2: 28.0, H2: 6.0" };
+    expect(questionFieldFor(stoichiometry, percentYield, values)).toBe("product");
+
+    values = { ...values, product: "NH3" };
+    expect(questionFieldFor(stoichiometry, percentYield, values)).toBe("actual_yield_g");
+
+    values = { ...values, actual_yield_g: "30.0" };
+    expect(questionFieldFor(stoichiometry, percentYield, values)).toBe(null);
+  });
+
+  it("treats whitespace as unfilled", () => {
+    expect(questionFieldFor(stoichiometry, molarMass, { formula: "   " })).toBe("formula");
+  });
+
+  it("keeps equation topics working exactly as they did", () => {
+    const balancing = TOPICS.find((topic) => topic.id === "balancing");
+    const type = balancing.types[0];
+    expect(questionFieldFor(balancing, type, {})).toBe("reference_equation");
+  });
+});
+
+describe("the unit beside the answer box", () => {
+  const stoichiometry = TOPICS.find((topic) => topic.id === "stoichiometry");
+  const unitFor = (id) =>
+    answerUnitFor(stoichiometry.types.find((type) => type.id === id));
+
+  it("names the unit the student should not have to write", () => {
+    expect(unitFor("molar_mass")).toBe("g/mol");
+    expect(unitFor("moles_from_mass")).toBe("mol");
+    expect(unitFor("mass_from_moles")).toBe("g");
+    expect(unitFor("percent_composition")).toBe("%");
+    expect(unitFor("percent_yield")).toBe("%");
+  });
+
+  it("has no unit where the answer is not a quantity", () => {
+    // A formula and a species are not measured in anything, and printing a
+    // unit beside them would be wrong rather than merely unhelpful.
+    expect(unitFor("empirical_formula")).toBe(null);
+    expect(unitFor("molecular_formula")).toBe(null);
+    expect(unitFor("limiting_reagent")).toBe(null);
+  });
+});
+
+describe("nothing gets typed, across every topic", () => {
+  // The rule from final_tasks.md section 10. This test is the enforcement:
+  // a new problem type that ships with a typed-only field fails here rather
+  // than reaching a student who cannot write their own question.
+  const EXPECTED_TYPED_ONLY = new Set([
+    // SMILES is ours, not the student's. A student does not know what SMILES
+    // is and must never be asked to write one as the question. These stay
+    // typed on purpose and are covered by other problem types that do not.
+    "target_smiles",
+    "reference_smiles",
+    "reactants_smiles",
+    // A fixed set of choices, offered as a dropdown. Nothing to write.
+    "isomer_type",
+    "target_group",
+    "reaction_type",
+    // Balancing and net ionic already take their question from ink, by name,
+    // through the older path that predates the `ink` marker.
+    "reference_equation",
+    "molecular_equation",
+  ]);
+
+  for (const topic of TOPICS) {
+    for (const type of topic.types) {
+      it(`${topic.id}/${type.id} takes its question from handwriting`, () => {
+        const typedOnly = type.fields
+          .filter((f) => !f.ink && f.type !== "select")
+          .map((f) => f.name)
+          .filter((name) => !EXPECTED_TYPED_ONLY.has(name));
+
+        expect(typedOnly).toEqual([]);
+      });
+    }
+  }
+
+  it("gives structure and bonding a type a student can start from nothing", () => {
+    // Every other structure type needs a SMILES for its question, which a
+    // student cannot write. This one takes a formula, which they can.
+    const structure = TOPICS.find((topic) => topic.id === "structure");
+    const fromFormula = structure.types.find((t) => t.id === "formula_structure");
+
+    expect(fromFormula).toBeTruthy();
+    expect(questionFieldFor(structure, fromFormula, {})).toBe("target_formula");
   });
 });

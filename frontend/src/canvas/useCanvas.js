@@ -7,6 +7,7 @@ import {
   samplePath,
   strokeTouchesPoint,
 } from "./geometry";
+import { isPenEraserGesture } from "./penButton";
 import { readCanvasPalette } from "../theme";
 import {
   addStrokeToInkIndex,
@@ -386,7 +387,11 @@ export default function useCanvas({
     activeCanvasRectRef.current = canvasRect;
     const firstPoint = getPoint(event, canvasRect);
 
-    if (activeTool === "eraser") {
+    // Holding the button on the stylus erases, the way Samsung Notes does,
+    // without changing the selected tool. A student who has used the tablet's
+    // own notes app tries this before they look for a toolbar, and the tool
+    // must be exactly where they left it when they let go.
+    if (activeTool === "eraser" || isPenEraserGesture(event)) {
       activePointerId.current = event.pointerId;
       canvasRef.current.setPointerCapture(event.pointerId);
       erasingRef.current = true;

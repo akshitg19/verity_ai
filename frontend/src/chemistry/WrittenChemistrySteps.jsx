@@ -82,14 +82,17 @@ export default function WrittenChemistrySteps({
   inputMode,
   ready,
   checking,
-  questionRow = null,
+  questionRows = [],
   onEdit,
   onCheck,
   onReleaseQuestion,
 }) {
   // The question is not a step, so it is neither numbered nor checked.
-  const stepLines = lines.filter((line) => line.row !== questionRow);
-  const questionLine = lines.find((line) => line.row === questionRow) ?? null;
+  // Several written rows can make up one question, so all of them are
+  // excluded from the working and the first is shown as the question.
+  const asked = new Set(questionRows ?? []);
+  const stepLines = lines.filter((line) => !asked.has(line.row));
+  const questionLine = lines.find((line) => asked.has(line.row)) ?? null;
   const canCheck =
     ready && !checking && readableChemistryLines(stepLines).length > 0;
 
