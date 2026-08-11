@@ -120,17 +120,33 @@ async function request(path, options = {}) {
   }
 }
 
+// The optional shared-secret header. Absent unless VITE_API_SECRET is set at
+// build time, which matches the backend defaulting the check off, so nothing
+// changes until both sides are turned on together.
+//
+// Worth being clear about what it is: this value ships inside the JavaScript
+// bundle, so anyone who opens developer tools can read it. It keeps a crawler
+// or a casually forwarded link from spending our Vertex AI quota. It is not
+// authentication and must never be described as any.
+const API_SECRET = import.meta.env.VITE_API_SECRET ?? "";
+
+function withSecret(headers = {}) {
+  return API_SECRET ? { ...headers, "X-Verity-Key": API_SECRET } : headers;
+}
+
 async function post(path, body, options = {}) {
+  const { headers, ...rest } = options;
   return request(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    ...options,
+    ...rest,
+    headers: withSecret({ "Content-Type": "application/json", ...headers }),
   });
 }
 
 async function get(path, options = {}) {
-  return request(path, options);
+  const { headers, ...rest } = options;
+  return request(path, { ...rest, headers: withSecret(headers) });
 }
 
 // -- math, unchanged ---------------------------------------------------------

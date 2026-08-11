@@ -1,5 +1,6 @@
 import base64
 import binascii
+import hmac
 import json
 import logging
 import os
@@ -602,6 +603,67 @@ async def strip_api_prefix(request, call_next):
     path = request.scope.get("path", "")
     if path.startswith(API_PREFIX + "/"):
         request.scope["path"] = path[len(API_PREFIX):]
+    return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# Optional shared-secret header.
+#
+# The deployed URL is public and unauthenticated, which is fine while it is an
+# unguessable address only three people know, and stops being fine the moment
+# it is posted anywhere: every request spends Vertex AI quota on a project we
+# share with the whole programme.
+#
+# Off unless VERITY_API_SECRET is set, so development, CI, and the current
+# deployment are unchanged. Setting it requires every API call to carry the
+# same value in X-Verity-Key.
+#
+# What this is worth, stated honestly: the frontend has to know the secret to
+# send it, and the frontend is JavaScript delivered to a browser, so anyone
+# who opens developer tools can read it. This raises the bar from "anyone who
+# finds the URL" to "anyone who looks", which is a speed bump against crawlers
+# and casual sharing, not authentication. Real authentication means accounts,
+# and that is a different piece of work.
+# ---------------------------------------------------------------------------
+API_SECRET = os.getenv("VERITY_API_SECRET", "").strip()
+API_SECRET_HEADER = "x-verity-key"
+
+# Built from the app's own routes so a new endpoint is covered the day it is
+# added rather than the day someone remembers to add it to a list. Computed
+# before the static mount below, so it holds API paths only and the frontend
+# itself is never behind the header. /health is out because Cloud Run probes
+# it and a probe carries no headers of ours.
+_PROTECTED_PATHS = {
+    route.path
+    for route in app.routes
+    if getattr(route, "methods", None) and route.path != "/health"
+}
+
+
+@app.middleware("http")
+async def require_shared_secret(request, call_next):
+    if not API_SECRET:
+        return await call_next(request)
+
+    # This middleware is registered after strip_api_prefix, which makes it the
+    # outer one, so it still sees /api/... here and has to normalise the same
+    # way. Two lines of duplication, rather than an ordering dependency that
+    # would silently unprotect everything if the pair were ever reordered.
+    path = request.scope.get("path", "")
+    if path.startswith(API_PREFIX + "/"):
+        path = path[len(API_PREFIX):]
+
+    if path not in _PROTECTED_PATHS:
+        return await call_next(request)
+
+    # A preflight carries no custom headers by definition, so rejecting it
+    # would make the browser report a CORS failure and hide the real reason.
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    supplied = request.headers.get(API_SECRET_HEADER, "")
+    if not hmac.compare_digest(supplied, API_SECRET):
+        return JSONResponse({"detail": "Not authorised"}, status_code=401)
     return await call_next(request)
 
 
