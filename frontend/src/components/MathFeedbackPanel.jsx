@@ -3,6 +3,7 @@ import {
   buildMathCheckInput,
   orderedMathLines,
 } from "../math/lineModel";
+import HintLadder from "./HintLadder";
 
 function verdictStatus(verdict) {
   if (!verdict) return null;
@@ -89,7 +90,7 @@ export default function MathFeedbackPanel({ workflow }) {
     verdictsByLine,
     firstWrongLine,
     hintLevel,
-    hintText,
+    hintData,
     hintError,
     hintLoading,
     handleLineEdit,
@@ -175,30 +176,20 @@ export default function MathFeedbackPanel({ workflow }) {
       })}
 
       {firstWrongLine !== null && (
-        <div style={{ marginTop: 4, paddingTop: 14, borderTop: `1px solid ${COLORS.border}` }}>
-          {hintText && (
-            <div style={{ marginBottom: 10, padding: 12, borderRadius: 10, background: COLORS.primaryLight, color: COLORS.text, lineHeight: 1.45, fontSize: 13 }}>
-              <div style={{ color: COLORS.primary, fontWeight: 700, marginBottom: 4 }}>Hint {hintLevel} of 3</div>
-              {hintText}
-            </div>
-          )}
-          {hintError && (
-            <div role="alert" style={{ marginBottom: 10, padding: 12, borderRadius: 10, background: "var(--v-parse-bg)", color: COLORS.text, fontSize: 13 }}>
-              <div>That hint did not load. Your hint level was not used.</div>
-              <button type="button" onClick={handleGetHint} disabled={hintLoading} style={{ minHeight: 44, marginTop: 8, padding: "8px 12px", border: `1px solid ${COLORS.border}`, borderRadius: 9, background: COLORS.surface, color: COLORS.primary, fontWeight: 700 }}>
-                Retry hint
-              </button>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={handleGetHint}
-            disabled={hintLoading || hintLevel >= 3}
-            style={{ width: "100%", minHeight: 44, padding: "10px 14px", background: hintLoading || hintLevel >= 3 ? "var(--v-waiting-bg)" : COLORS.primary, color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, cursor: hintLoading || hintLevel >= 3 ? "not-allowed" : "pointer" }}
-          >
-            {hintLoading ? "Preparing hint…" : hintLevel === 0 ? "Get a hint" : hintLevel >= 3 ? "All hints shown" : "Show another hint"}
-          </button>
-        </div>
+        <HintLadder
+          level={hintLevel}
+          hint={hintData?.hint ?? null}
+          workedExample={hintData?.worked_example ?? null}
+          terminalStep={Boolean(hintData?.terminal_step)}
+          levelThreeRemaining={hintData?.level_3_remaining ?? null}
+          source={hintData?.source ?? null}
+          resource={hintData?.resource ?? null}
+          error={hintError}
+          loading={hintLoading}
+          onRequest={handleGetHint}
+          onCancel={cancelHint}
+          disabled={false}
+        />
       )}
     </div>
   );

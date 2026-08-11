@@ -204,7 +204,11 @@ export const checkCellPotential = (cathode, anode, steps, options) =>
 
 // The session holds the answer vault and the level-3 budget server-side.
 // Nothing it returns can carry a solved value.
-export const openSession = (payload, options) => post("/chemistry/session", payload, options);
+export const openSession = (payload, options) => 
+  post("/chemistry/session", payload, options);
+
+export const openMathSession = (payload, options) =>
+  post("/math/session", payload, options);
 
 // Hints get their own, much longer budget. Every level is a live generation
 // call, and level 2 additionally solves the generated example with our own

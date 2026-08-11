@@ -3,11 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { checkSteps, getHint, transcribeLine } from "../api";
 import { renderLineToPng } from "../canvas/render";
 import { buildMathCheckInput } from "./lineModel";
+import useMathSession from "./useMathSession";
 import {
   deserializeWorkflowSnapshot,
   serializeWorkflowSnapshot,
   workflowProblemFingerprint,
 } from "../notebook/workflowSnapshot";
+
+const MATH_TOPIC = "algebra";
 
 export default function useMathWorkflow({ pageId = null } = {}) {
   const [problem, setProblem] = useState("");
@@ -18,6 +21,7 @@ export default function useMathWorkflow({ pageId = null } = {}) {
   const [firstWrongLine, setFirstWrongLine] = useState(null);
   const [hintLevel, setHintLevel] = useState(0);
   const [hintText, setHintText] = useState(null);
+  const [hintData, setHintData] = useState(null);
   const [hintError, setHintError] = useState(null);
   const [hintLoading, setHintLoading] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -36,6 +40,21 @@ export default function useMathWorkflow({ pageId = null } = {}) {
   const hintAbortRef = useRef(null);
   const pageScopeRef = useRef(pageId);
 
+  const handleSessionFailure = useCallback((error) => {
+    setHintError(error.message);
+  }, []);
+
+  const {
+    session,
+    ensureSession,
+    cancelSession,
+  } = useMathSession({
+    topic: MATH_TOPIC,
+    problemText: problem,
+    pageScopeRef,
+    onFailure: handleSessionFailure,
+  });
+
   const bumpRowVersion = useCallback((row) => {
     const nextVersion = (rowVersionsRef.current.get(row) ?? 0) + 1;
     rowVersionsRef.current.set(row, nextVersion);
@@ -48,7 +67,15 @@ export default function useMathWorkflow({ pageId = null } = {}) {
     hintAbortRef.current = null;
     setHintLevel(0);
     setHintText(null);
+    setHintData(null);
     setHintError(null);
+    setHintLoading(false);
+  }, []);
+
+  const cancelHint = useCallback(() => {
+    ++hintRequestId.current;
+    hintAbortRef.current?.abort();
+    hintAbortRef.current = null;
     setHintLoading(false);
   }, []);
 
@@ -274,13 +301,16 @@ export default function useMathWorkflow({ pageId = null } = {}) {
     const nextProblem = event.target.value;
     problemRef.current = nextProblem;
     setProblem(nextProblem);
+
+    cancelSession();
+
     ++checkRequestId.current;
     ++hintRequestId.current;
     setVerdictsByLine(new Map());
     setFirstWrongLine(null);
     clearHints();
     setLastResult(null);
-  }, [clearHints]);
+  }, [cancelSession, clearHints]);
 
   const handleProblemEditDone = useCallback(
     () => recheck(linesRef.current, problemRef.current),
@@ -289,41 +319,122 @@ export default function useMathWorkflow({ pageId = null } = {}) {
 
   const handleGetHint = useCallback(async () => {
     if (firstWrongLine === null || hintLevel >= 3) return;
-    const activeVerdict = [...verdictsByLine.values()].find(
-      (item) => item.line_number === firstWrongLine
-    );
-    if (!activeVerdict || (activeVerdict.status ?? (activeVerdict.valid ? "valid" : "invalid")) !== "invalid") {
+
+    const {
+      effectiveProblem,
+      stepList,
+      rowByLineNumber,
+    } = buildMathCheckInput(linesRef.current, problemRef.current);
+
+    if (!effectiveProblem || stepList.length === 0) {
       return;
     }
 
+    const wrongRow = rowByLineNumber.get(firstWrongLine);
+    if (wrongRow === undefined) {
+      return;
+    }
+
+    const activeVerdict = verdictsByLine.get(wrongRow);
+
+    if (
+      !activeVerdict ||
+      (activeVerdict.status ??
+        (activeVerdict.valid ? "valid" : "invalid")) !== "invalid"
+    ) {
+      return;
+    }
+
+    const activeLine = linesRef.current.find(
+      (line) => line.row === wrongRow
+    );
+
+    const previousRow = rowByLineNumber.get(firstWrongLine - 1);
+    const previousLine =
+      previousRow === undefined
+        ? null
+        : linesRef.current.find((line) => line.row === previousRow);
+
     const nextLevel = hintLevel + 1;
     const requestId = ++hintRequestId.current;
+
     hintAbortRef.current?.abort();
+
     const abortController = new AbortController();
     hintAbortRef.current = abortController;
+
     const requestPageId = pageScopeRef.current;
+
     setHintLoading(true);
     setHintError(null);
+
     try {
-      const data = await getHint({
-        line_number: firstWrongLine,
-        error_type: activeVerdict.error_type ?? null,
-        level: nextLevel,
-      }, { signal: abortController.signal });
-      if (requestId !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
+      const activeSession = await ensureSession(effectiveProblem);
+
+      if (
+        requestId !== hintRequestId.current ||
+        requestPageId !== pageScopeRef.current
+      ) {
+        return;
+      }
+
+      const data = await getHint(
+        {
+          line_number: firstWrongLine,
+          error_type: activeVerdict.error_type ?? null,
+          level: nextLevel,
+          subject: "math",
+          topic: MATH_TOPIC,
+          session_id: activeSession?.session_id ?? null,
+          problem: effectiveProblem,
+          student_line: activeLine?.text ?? null,
+          previous_line: previousLine?.text ?? null,
+        },
+        {
+          signal: abortController.signal,
+        }
+      );
+
+      if (
+        requestId !== hintRequestId.current ||
+        requestPageId !== pageScopeRef.current
+      ) {
+        return;
+      }
+
       setHintLevel(data.level);
       setHintText(data.hint);
+      setHintData(data);
     } catch (error) {
-      if (requestId !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
+      if (
+        requestId !== hintRequestId.current ||
+        requestPageId !== pageScopeRef.current
+      ) {
+        return;
+      }
+
       if (error.name === "AbortError") return;
+
       setHintError(error.message);
     } finally {
-      if (requestId === hintRequestId.current) setHintLoading(false);
-      if (hintAbortRef.current === abortController) hintAbortRef.current = null;
+      if (requestId === hintRequestId.current) {
+        setHintLoading(false);
+      }
+
+      if (hintAbortRef.current === abortController) {
+        hintAbortRef.current = null;
+      }
     }
-  }, [firstWrongLine, hintLevel, verdictsByLine]);
+  }, [
+    ensureSession,
+    firstWrongLine,
+    hintLevel,
+    verdictsByLine,
+  ]);
 
   const clear = useCallback(() => {
+    cancelSession();
+
     ++transcriptionRequestId.current;
     ++checkRequestId.current;
     ++hintRequestId.current;
@@ -346,7 +457,7 @@ export default function useMathWorkflow({ pageId = null } = {}) {
     setHintError(null);
     setLastResult(null);
     setTranscribing(false);
-  }, [clearHints]);
+  }, [cancelSession, clearHints]);
 
   const getWorkflowSnapshot = useCallback(() => {
     return serializeWorkflowSnapshot({
@@ -385,6 +496,15 @@ export default function useMathWorkflow({ pageId = null } = {}) {
     setFirstWrongLine(snapshot.firstWrongLine ?? null);
     setHintLevel(snapshot.hintLevel ?? 0);
     setHintText(snapshot.hintText ?? null);
+    setHintData(
+      snapshot.hintText
+        ? {
+            level: snapshot.hintLevel ?? 0,
+            hint: snapshot.hintText,
+            source: "fallback",
+          }
+        : null
+    );
     setHintError(null);
     setLastResult(snapshot.lastResult ?? null);
   }, [clear]);
@@ -410,10 +530,12 @@ export default function useMathWorkflow({ pageId = null } = {}) {
     firstWrongLine,
     hintLevel,
     hintText,
+    hintData,
     hintError,
     hintLoading,
     transcribing,
     lastResult,
+    session,
     queueRow,
     invalidateRow,
     handleLineEdit,
@@ -422,6 +544,7 @@ export default function useMathWorkflow({ pageId = null } = {}) {
     handleProblemEditDone,
     handleFinishLine: null,
     handleGetHint,
+    cancelHint,
     clear,
     getWorkflowSnapshot,
     restoreWorkflowSnapshot,
