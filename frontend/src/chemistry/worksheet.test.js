@@ -47,15 +47,19 @@ describe("three shapes of page, one per shape of question", () => {
     expect(isDrawingRow(sheet, sheet.workingStart)).toBe(true);
   });
 
-  it("never asks a student to write a SMILES", () => {
-    // A SMILES is ours, not theirs. It has no `ink`, so it must never
-    // become a box on the page, on any type in any topic.
+  it("never asks a student to write a SMILES, and never prints one", () => {
+    // A SMILES is ours, not theirs. It may occupy a row, because the page
+    // has to say what the question is about, but it is always shown as a
+    // drawn molecule and never as a box to write in or a string to read.
     for (const topic of TOPICS) {
       for (const type of topic.types) {
         const sheet = buildWorksheet(topic, type);
-        const keys = sheet.prompts.map((prompt) => prompt.key);
-        for (const key of keys) {
-          expect(key).not.toMatch(/smiles/i);
+        for (const prompt of sheet.prompts) {
+          if (!/smiles/i.test(prompt.key)) continue;
+          expect(prompt.source).toBe("panel");
+          expect(prompt.secret).toBe(true);
+          expect(promptAtRow(sheet, prompt.row)).toBeNull();
+          expect(isReadableRow(sheet, prompt.row)).toBe(false);
         }
       }
     }

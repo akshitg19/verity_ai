@@ -82,6 +82,14 @@ function isWritable(field) {
   return Boolean(field.ink) && field.type !== "select";
 }
 
+// A SMILES is the one thing a student must not be shown as the question.
+// Everything else that lives in the panel is still printed on the page, so
+// the page states the whole question rather than half of it.
+const SECRET_FIELDS = /smiles/i;
+
+// How many rows a rendered molecule gets. One row is a postage stamp.
+const PICTURE_ROWS = 3;
+
 // Things a student writes out as a whole line rather than as one value.
 const WIDE_FIELDS =
   /equation|half-reaction|reaction|composition|amounts|name|reagent|cathode|anode/i;
@@ -99,6 +107,10 @@ function promptFor(field, row) {
     // product. The fallback is only for fields where the label is the whole
     // answer, like a formula.
     prompt: field.prompt ?? `write the ${label.toLowerCase()} here`,
+    // What to say above a molecule we draw for them, which is an
+    // instruction rather than a field name: "write the IUPAC name of this
+    // molecule" beats "Structure to name".
+    pictureLabel: field.pictureLabel ?? null,
     // A box for a whole written line runs the width of the page; a box for
     // one value does not need to. Judged by what goes in it rather than by
     // how long the caption is, so the box does not change size when the
@@ -131,11 +143,29 @@ export function buildWorksheet(
   const mode = inputMode ?? problemType.input ?? topic.input ?? "drawing";
   const kind = worksheetKindFor(mode);
 
-  const prompts = (problemType.fields ?? [])
-    .filter(isWritable)
-    .map((field, index) => promptFor(field, index));
+  // Every field appears on the page. The ones a student writes are boxes;
+  // the ones set in the panel are printed as a line saying what they are and
+  // where to change them, so the page states the whole question rather than
+  // half of it and the student is never left wondering what they are drawing.
+  let row = 0;
+  const prompts = (problemType.fields ?? []).map((field) => {
+    const secret = SECRET_FIELDS.test(field.name);
+    const prompt = {
+      ...promptFor(field, row),
+      source: isWritable(field) ? "ink" : "panel",
+      // A SMILES is never shown. The molecule it names is drawn instead, as
+      // a picture, which is the only honest way to ask "name this structure"
+      // or "draw an isomer of this" of somebody who has never heard of
+      // SMILES. It needs real height to be readable.
+      secret,
+      rows: secret ? PICTURE_ROWS : 1,
+      options: field.options ?? null,
+    };
+    row += prompt.rows;
+    return prompt;
+  });
 
-  const workingStart = prompts.length;
+  const workingStart = row;
   const rows = Math.min(
     Math.max(Math.round(workingRows) || MIN_WORKING_ROWS, MIN_WORKING_ROWS),
     MAX_WORKING_ROWS
@@ -175,10 +205,15 @@ export function zoneAtRow(worksheet, row) {
   return null;
 }
 
-/** The question field a row fills in, or null if the row is not a prompt. */
+/** The question box a row fills in, or null if the row is not a written box. */
 export function promptAtRow(worksheet, row) {
-  if (zoneAtRow(worksheet, row) !== ZONES.PROMPT) return null;
-  return worksheet.prompts.find((prompt) => prompt.row === row) ?? null;
+  if (!worksheet || row === null || row === undefined) return null;
+  if (row < 0 || row >= worksheet.workingStart) return null;
+  const prompt =
+    worksheet.prompts.find(
+      (entry) => row >= entry.row && row < entry.row + entry.rows
+    ) ?? null;
+  return prompt?.source === "ink" ? prompt : null;
 }
 
 /**
@@ -191,7 +226,10 @@ export function promptAtRow(worksheet, row) {
  */
 export function isReadableRow(worksheet, row) {
   const zone = zoneAtRow(worksheet, row);
-  if (zone === ZONES.PROMPT || zone === ZONES.ANSWER) return true;
+  // A panel row is printed information, not a box. Nothing written on it is
+  // sent anywhere, so reading it would be a call with nowhere to put it.
+  if (zone === ZONES.PROMPT) return Boolean(promptAtRow(worksheet, row));
+  if (zone === ZONES.ANSWER) return true;
   // On a STEPS page every working row IS a step and must be read, which is
   // the behaviour balancing and net ionic already have and that this change
   // must not disturb. On a DRAW page the middle is one figure, read whole
@@ -240,6 +278,6 @@ export function rowBand(row, span = 1, lineHeight = DEFAULT_LINE_HEIGHT) {
 export function promptsComplete(worksheet, values = {}) {
   if (!worksheet) return false;
   return worksheet.prompts
-    .filter((prompt) => !prompt.optional)
+    .filter((prompt) => prompt.source === "ink" && !prompt.optional)
     .every((prompt) => Boolean(String(values[prompt.key] ?? "").trim()));
 }

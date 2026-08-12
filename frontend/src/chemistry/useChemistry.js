@@ -159,6 +159,37 @@ export default function useChemistry({ pageId = null } = {}) {
     worksheetRef.current = worksheet;
   });
 
+  // The molecule the question is about, drawn as a picture.
+  //
+  // "Name this structure" and "draw an isomer of this" both hand the student
+  // a molecule, and the only field holding it is a SMILES, which a student
+  // has never heard of and must never be shown as the question. RDKit
+  // already draws it, so the page shows the drawing and the SMILES stays in
+  // the panel as the teacher's field.
+  const targetPrompt =
+    worksheet?.prompts.find((prompt) => prompt.secret) ?? null;
+  const targetSmiles = targetPrompt ? values[targetPrompt.key] ?? "" : "";
+  const [targetPicture, setTargetPicture] = useState(null);
+  const targetRequestId = useRef(0);
+  useEffect(() => {
+    const smiles = targetSmiles.trim();
+    const id = ++targetRequestId.current;
+    const controller = new AbortController();
+    // Resolved rather than returned early, so the clear and the render take
+    // the same path out of the effect and neither sets state synchronously.
+    Promise.resolve(
+      smiles ? renderStructure(smiles, { signal: controller.signal }) : null
+    )
+      .then((data) => {
+        if (id !== targetRequestId.current) return;
+        setTargetPicture(data ? trustedStructurePreview(data) : null);
+      })
+      .catch(() => {
+        if (id === targetRequestId.current) setTargetPicture(null);
+      });
+    return () => controller.abort();
+  }, [targetSmiles]);
+
   const answerLine = worksheet
     ? lines.find((line) => line.row === worksheet.answerRow) ?? null
     : null;
@@ -947,6 +978,7 @@ export default function useChemistry({ pageId = null } = {}) {
     questionRows,
     questionVerb,
     worksheet,
+    targetPicture,
     answerText,
     answerVerdict:
       worksheet?.answerRow !== null && worksheet

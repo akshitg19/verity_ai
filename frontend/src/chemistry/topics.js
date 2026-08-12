@@ -508,11 +508,11 @@ export const TOPICS = [
         fields: [
           inkField("cathode", "Cathode half-reaction", "cathode half-reaction", {
             placeholder: "Cu^2+ + 2e- -> Cu",
-            prompt: "the half-reaction being reduced, like Cu^2+ + 2e- -> Cu",
+            prompt: "cathode: the half-reaction being reduced, like Cu^2+ + 2e- -> Cu",
           }),
           inkField("anode", "Anode half-reaction", "anode half-reaction", {
             placeholder: "Zn^2+ + 2e- -> Zn",
-            prompt: "the half-reaction being oxidised, like Zn^2+ + 2e- -> Zn",
+            prompt: "anode: the half-reaction being oxidised, like Zn^2+ + 2e- -> Zn",
           }),
         ],
       },
@@ -574,25 +574,25 @@ export const TOPICS = [
         ],
       },
       {
-        // The target is a SMILES, which is ours and not the student's. It
-        // has no `ink`, so it never appears as a box on the page: a student
-        // does not know what a SMILES is and must never be asked to write
-        // one. The teacher sets it in the panel, and the page just says
-        // "draw it below".
-        id: "match_structure",
-        label: "Draw this exact structure",
-        fields: [
-          field("target_smiles", "Target (SMILES)", { placeholder: "CC(=O)OC" }),
-        ],
-      },
-      {
+        // "Draw this exact structure" used to sit here as a third type. It
+        // was removed: from a student's side it was indistinguishable from
+        // the formula type above, because the only thing separating them was
+        // a SMILES they were never shown. `checkStructure` and
+        // `/chemistry/structure` are untouched and still serve it.
+        //
+        // The reference is a SMILES, so it is never printed. The molecule it
+        // names is drawn on the page instead, which is the only honest way
+        // to ask this of somebody who has never heard of SMILES.
         id: "isomer",
-        label: "Draw an isomer",
+        label: "Draw an isomer of this",
         fields: [
-          field("reference_smiles", "Reference (SMILES)", { placeholder: "CCO" }),
+          field("reference_smiles", "Molecule to find an isomer of", {
+            placeholder: "CCO",
+            pictureLabel: "draw a different molecule with the same formula",
+          }),
           {
             name: "isomer_type",
-            label: "Kind",
+            label: "Kind of isomer",
             type: "select",
             options: ["constitutional", "stereo", "any"],
           },
@@ -602,6 +602,11 @@ export const TOPICS = [
     check(type, values, steps, options) {
       if (type.id === "formula_structure") {
         return checkFormulaStructure(values.target_formula, steps, options);
+      }
+      // `match_structure` is no longer offered in the UI; the call is kept
+      // so the endpoint stays reachable if the type comes back.
+      if (type.id === "match_structure") {
+        return checkStructure(values.target_smiles, steps, options);
       }
       if (type.id === "isomer") {
         return checkIsomer(
@@ -633,11 +638,15 @@ export const TOPICS = [
     types: [
       {
         id: "functional_group",
-        label: "Draw a molecule with this group",
+        label: "Draw any molecule containing this group",
         fields: [
           {
             name: "target_group",
-            label: "Group",
+            // Printed on the page as "Functional group: ester", so the
+            // student can read the whole question without looking away.
+            // It stays a dropdown, because it is a fixed set of eight and
+            // there is nothing to write.
+            label: "Functional group",
             type: "select",
             options: FUNCTIONAL_GROUPS,
           },
@@ -648,8 +657,12 @@ export const TOPICS = [
         label: "Name this structure",
         input: "text",
         answerPlaceholder: "e.g. methyl ethanoate",
+        // No unit: a name is not a quantity.
         fields: [
-          field("target_smiles", "Structure (SMILES)", { placeholder: "CC(=O)OC" }),
+          field("target_smiles", "Structure to name", {
+            placeholder: "CC(=O)OC",
+            pictureLabel: "write the IUPAC name of this molecule",
+          }),
         ],
       },
       {
@@ -666,8 +679,9 @@ export const TOPICS = [
         id: "reaction",
         label: "Predict the product",
         fields: [
-          field("reactants_smiles", "Starting material (SMILES)", {
+          field("reactants_smiles", "Starting material", {
             placeholder: "C=C",
+            pictureLabel: "the molecule you are reacting",
           }),
           inkField("reagent", "Reagent / conditions", "reagent", {
             placeholder: "H2, Pd",

@@ -16,6 +16,7 @@ export default function ChemistryPageOverlays({ chemistry, canvas }) {
         <WorksheetOverlay
           worksheet={chemistry.worksheet}
           values={chemistry.values}
+          targetPicture={chemistry.targetPicture}
           answerText={chemistry.answerText}
           answerVerdict={chemistry.answerVerdict}
           width={canvas.canvasWidth}

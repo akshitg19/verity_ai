@@ -26,6 +26,7 @@ export const PAPER = {
   muted: "var(--v-paper-muted)",
   line: "var(--v-paper-line)",
   fill: "var(--v-paper-fill)",
+  card: "var(--v-paper-card)",
 };
 
 export const SURFACES = {
