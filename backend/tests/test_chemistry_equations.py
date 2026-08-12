@@ -373,3 +373,58 @@ def test_a_dot_with_nothing_after_it_is_still_an_error():
     dot in it."""
     with pytest.raises(EquationParseError):
         parse_formula("CuSO4.5")
+
+
+# ---------------------------------------------------------------------------
+# A charge sign is not a plus sign
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "equation,left,right",
+    [
+        # How a student writes it, and how the model writes it.
+        ("Ag+ + Cl- -> AgCl", [(1, "Ag+"), (1, "Cl-")], [(1, "AgCl")]),
+        (
+            "NH4+ + OH- -> NH3 + H2O",
+            [(1, "NH4+"), (1, "OH-")],
+            [(1, "NH3"), (1, "H2O")],
+        ),
+        (
+            "MnO4- + 8H+ + 5e- -> Mn2+ + 4H2O",
+            [(1, "MnO4-"), (8, "H+"), (5, "e-")],
+            [(1, "Mn2+"), (4, "H2O")],
+        ),
+        # With state symbols hanging off the charge.
+        (
+            "3Ag+(aq) + PO4^3-(aq) -> Ag3PO4(s)",
+            [(3, "Ag+"), (1, "PO4^3-")],
+            [(1, "Ag3PO4")],
+        ),
+        (
+            "Pb2+(aq) + 2I-(aq) -> PbI2(s)",
+            [(1, "Pb2+"), (2, "I-")],
+            [(1, "PbI2")],
+        ),
+    ],
+)
+def test_a_charge_written_without_a_caret_stays_with_its_ion(equation, left, right):
+    """"Ag+ + Cl- -> AgCl" split into "Ag" and "(aq)" and came back as "has
+    an empty term", because a "+" only counted as a charge after a caret.
+    Nobody writes the caret on paper. Live, it threw away four correct net
+    ionic worked examples, and it would have done the same to a student."""
+    assert parse_equation(equation) == (left, right)
+
+
+@pytest.mark.parametrize(
+    "equation",
+    [
+        "2H2+O2->2H2O",       # no spaces anywhere, still two reactants
+        "2H2 + O2 -> 2H2O",
+        "Fe^3+ + e- -> Fe^2+",  # the caret form, untouched
+    ],
+)
+def test_a_separator_is_still_a_separator(equation):
+    left, _ = parse_equation(equation)
+
+    assert len(left) == 2, "the plus between two formulas still splits them"

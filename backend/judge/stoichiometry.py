@@ -52,6 +52,23 @@ TASKS = (
 _PERIODIC_TABLE = Chem.GetPeriodicTable()
 
 
+# What each task needs to be solvable. Same reasoning as the solutions
+# table: a flat list of every field is not a description of any one task.
+TASK_INPUTS: dict[str, tuple[str, ...]] = {
+    "molar_mass": ("formula",),
+    "percent_composition": ("formula", "element"),
+    "moles_from_mass": ("formula", "mass_g"),
+    "mass_from_moles": ("formula", "moles"),
+    "particles_from_moles": ("moles",),
+    "moles_from_particles": ("particles",),
+    "empirical_formula": ("composition",),
+    "molecular_formula": ("composition", "target_molar_mass"),
+    "limiting_reagent": ("equation", "amounts"),
+    "theoretical_yield": ("equation", "amounts", "product"),
+    "percent_yield": ("equation", "amounts", "product", "actual_yield_g"),
+}
+
+
 class StoichiometryError(ValueError):
     """The problem as stated cannot be solved as written."""
 

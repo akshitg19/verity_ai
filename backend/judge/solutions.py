@@ -43,6 +43,38 @@ TASKS = (
 )
 
 
+# What each task needs to be solvable, so a caller can be told before it
+# guesses. The level 2 prompt is built from this: the flat list of every
+# field a solutions problem has invited the model to reach for
+# `initial_concentration_m` on a weak acid question, and "this task needs an
+# initial concentration" came back from the solver as a rejected worked
+# example. `test_solutions.py` proves each entry actually solves.
+TASK_INPUTS: dict[str, tuple[str, ...]] = {
+    "molarity": ("formula", "mass_g", "volume_l"),
+    "moles_from_molarity": ("concentration_m", "volume_l"),
+    "volume_from_molarity": ("concentration_m", "moles"),
+    "dilution": (
+        "initial_concentration_m",
+        "initial_volume_l",
+        "final_volume_l or final_concentration_m",
+    ),
+    "ph_from_concentration": ("hydrogen_concentration_m",),
+    "poh_from_concentration": ("hydroxide_concentration_m",),
+    "ph_from_ph": ("ph",),
+    "strong_acid_ph": ("concentration_m", "protons"),
+    "strong_base_ph": ("concentration_m", "hydroxides"),
+    "weak_acid_ph": ("concentration_m", "ka"),
+    "weak_base_ph": ("concentration_m", "kb"),
+    "buffer_ph": ("acid_concentration_m", "base_concentration_m", "pka"),
+    "titration_concentration": (
+        "titrant_concentration_m",
+        "titrant_volume_l",
+        "analyte_volume_l",
+    ),
+    "percent_by_mass": ("solute_mass_g", "solution_mass_g"),
+}
+
+
 class SolutionsError(ValueError):
     """The problem as stated cannot be solved as written."""
 

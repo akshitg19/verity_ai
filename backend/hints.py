@@ -31,9 +31,9 @@ import time
 from collections.abc import Callable
 
 from hint_rules import analogue_for, coaching_for
-from judge.solutions import TASKS as _SOLUTIONS_TASKS
+from judge.solutions import TASK_INPUTS as _SOLUTIONS_INPUTS
 from judge.solutions import SolutionsProblem as _SolutionsProblem
-from judge.stoichiometry import TASKS as _STOICHIOMETRY_TASKS
+from judge.stoichiometry import TASK_INPUTS as _STOICHIOMETRY_INPUTS
 from judge.stoichiometry import StoichiometryProblem as _StoichiometryProblem
 from model import ModelError, generate_json, is_configured
 from redaction import numbers_differ, redact_or_fallback
@@ -793,7 +793,7 @@ _MATH_LEVEL_2_PROMPT = (
 )
 
 
-def _numeric_contract(tasks, problem_class, answer_note: str) -> str:
+def _numeric_contract(task_inputs: dict, problem_class, answer_note: str) -> str:
     """Build the `check` contract from the dataclass that has to accept it.
 
     Hand-written, these two drifted. The stoichiometry list was missing
@@ -807,23 +807,21 @@ def _numeric_contract(tasks, problem_class, answer_note: str) -> str:
     Deriving it means a task or a field added to the judge cannot silently
     become a task level 2 can never verify.
     """
-    from dataclasses import fields
-
-    names = [
-        field.name
-        for field in fields(problem_class)
-        if field.name not in ("task", "steps")
-    ]
+    lines = "\n".join(
+        f"  {task}: {', '.join(inputs)}" for task, inputs in task_inputs.items()
+    )
     return (
-        '"check": {"task": "<one of: ' + ", ".join(tasks) + '>", '
-        '"params": {<the inputs your problem gives, using only these field '
-        "names: " + ", ".join(names) + ">}, "
+        '"check": {"task": "<the task>", "params": {<its inputs>}, '
         '"answer": <' + answer_note + ">}\n"
-        "Every value in `params` is a plain JSON number with no unit and no "
-        "quotes, except formula, element, equation and product, which are "
+        "Pick the task your invented problem actually is, and give exactly "
+        "the params it takes. Nothing else is read, and a param belonging to "
+        "a different task is not a substitute for the one this task needs.\n"
+        + lines
+        + "\nEvery value in `params` is a plain JSON number with no unit and "
+        "no quotes, except formula, element, equation and product, which are "
         "strings. `amounts` and `composition` map a formula to a plain "
-        "number: {\"N2\": 28.0, \"H2\": 6.0}, never to an object and never "
-        "to a string. Volumes are in litres and masses in grams."
+        'number: {"N2": 28.0, "H2": 6.0}, never to an object and never to a '
+        "string. Volumes are in litres and masses in grams."
     )
 
 
@@ -855,12 +853,12 @@ _CHEMISTRY_CHECK_CONTRACTS = {
         "last step of your working state the same equation the check does."
     ),
     "stoichiometry": _numeric_contract(
-        _STOICHIOMETRY_TASKS,
+        _STOICHIOMETRY_INPUTS,
         _StoichiometryProblem,
         "the final numeric answer, or the formula or species as a string",
     ),
     "solutions": _numeric_contract(
-        _SOLUTIONS_TASKS, _SolutionsProblem, "the final numeric answer"
+        _SOLUTIONS_INPUTS, _SolutionsProblem, "the final numeric answer"
     ),
     "redox": (
         '"check": {"formula": "<the species>", "element": "<element symbol>", '

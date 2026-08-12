@@ -217,13 +217,44 @@ def _parse_hydrate(body: str) -> dict[str, int]:
     return total
 
 
+def _is_charge_sign(before: str, side: str, index: int) -> bool:
+    """Whether the "+" at `index` belongs to the ion rather than separating terms."""
+    if CHARGE_SIGN_CONTEXT_RE.search(before):
+        return True  # "Fe^3+", unambiguous and always was
+    if not before or before[-1].isspace():
+        return False  # nothing to attach to, so it joins what comes next
+    after = side[index + 1:]
+    # It ends the ion: a space, a state symbol, or the end of the side.
+    return not after or after[0].isspace() or after[0] == "("
+
+
 def _split_terms(side: str) -> list[str]:
-    """Split one side on "+", leaving charge signs attached to their ion."""
+    """Split one side on "+", leaving charge signs attached to their ion.
+
+    Telling the two apart used to need a caret: the "+" in "Fe^3+" was a
+    charge and every other "+" was a separator. So "Ag+ + Cl- -> AgCl",
+    which is how the equation is written on paper and how a student writes
+    it, split into "Ag" and "(aq)" and came back as "has an empty term".
+    Live, it threw away four correct net ionic worked examples, and it would
+    have done the same to a student.
+
+    A charge sign is written against the ion it belongs to and finishes it:
+    what follows is a space, a state symbol, or the end of the side. A
+    separator joins two formulas, so what follows it starts one, which means
+    a digit or a capital letter. "Ag+ + Cl-" is one of each, and "2H2+O2",
+    written with no spaces at all, is still a separator because O begins a
+    formula. The caret rule stays as well, so anything that parsed before
+    still parses.
+    """
     terms: list[str] = []
     current: list[str] = []
-    for character in side:
-        if character == "+" and not CHARGE_SIGN_CONTEXT_RE.search("".join(current)):
-            terms.append("".join(current))
+    for index, character in enumerate(side):
+        if character == "+":
+            joined = "".join(current)
+            if _is_charge_sign(joined, side, index):
+                current.append(character)
+                continue
+            terms.append(joined)
             current = []
             continue
         current.append(character)

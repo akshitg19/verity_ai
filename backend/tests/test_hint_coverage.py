@@ -566,25 +566,29 @@ def test_the_check_contract_names_every_task_the_engine_solves():
             assert task in contract, f"{topic} contract omits {task}"
 
 
-def test_the_check_contract_names_every_field_the_problem_accepts():
-    """Same failure one level down: the solutions contract had no words for
-    titrant_concentration_m, titrant_volume_l, analyte_volume_l, protons or
-    hydroxides, which is five of the fourteen tasks it claimed to cover."""
-    from dataclasses import fields
+def test_the_check_contract_names_the_inputs_each_task_takes():
+    """The flat list of every field was not a description of any one task.
 
+    The solutions contract had no words at all for titrant_concentration_m,
+    titrant_volume_l, analyte_volume_l, protons or hydroxides, and once
+    those were added it still invited the model to reach for
+    `initial_concentration_m` on a weak acid question, because every field
+    was offered for every task. It is per task now, built from the same
+    table the solver validates against.
+    """
     from hints import _CHEMISTRY_CHECK_CONTRACTS
-    from judge.solutions import SolutionsProblem
-    from judge.stoichiometry import StoichiometryProblem
+    from judge.solutions import TASK_INPUTS as SOLUTIONS_INPUTS
+    from judge.stoichiometry import TASK_INPUTS as STOICHIOMETRY_INPUTS
 
-    for topic, problem_class in (
-        ("stoichiometry", StoichiometryProblem),
-        ("solutions", SolutionsProblem),
+    for topic, table in (
+        ("stoichiometry", STOICHIOMETRY_INPUTS),
+        ("solutions", SOLUTIONS_INPUTS),
     ):
         contract = _CHEMISTRY_CHECK_CONTRACTS[topic]
-        for field in fields(problem_class):
-            if field.name in ("task", "steps"):
-                continue
-            assert field.name in contract, f"{topic} contract omits {field.name}"
+        for task, inputs in table.items():
+            assert task in contract, f"{topic} contract omits {task}"
+            for name in inputs:
+                assert name in contract, f"{topic}:{task} contract omits {name}"
 
 
 def test_the_structure_contract_shows_what_a_smiles_is_not():
