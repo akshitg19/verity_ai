@@ -56,11 +56,6 @@ def test_wrong_numeric_exponent_result_is_invalid():
     assert not v[0].valid
 
 
-def test_variable_exponent_remains_unsupported():
-    v = check("x^2 = 9", "x = 3")
-    assert v[0].line_number == 0
-    assert v[0].error_type == "unsupported"
-
 def test_identity_equation_does_not_crash():
     v = check("x = x", "x = x")
     assert v[0].valid
@@ -79,13 +74,6 @@ def test_constant_true_equations_are_equivalent():
 def test_true_and_false_constant_equations_are_not_equivalent():
     v = check("1 = 1", "1 = 2")
     assert not v[0].valid
-
-
-def test_quadratic_problem_is_reported_as_unsupported():
-    v = check("x^2 = 1", "x = 1")
-    assert v[0].line_number == 0
-    assert v[0].error_type == "unsupported"
-
 
 # --- error classification ----------------------------------------------
 
@@ -299,4 +287,134 @@ def test_valid_step_becomes_new_reference():
     v = check("3x - 12 = 2x + 5", "x - 17 = 0", "x = 17")
     assert v[0].valid and v[1].valid
 
+# --- symbolic expressions -----------------------------------------------
 
+def test_combine_like_terms_expression():
+    v = check(
+        "3x + 2x",
+        "5x",
+    )
+
+    assert len(v) == 1
+    assert v[0].valid
+
+
+def test_distribute_expression():
+    v = check(
+        "2(x + 3)",
+        "2x + 6",
+    )
+
+    assert len(v) == 1
+    assert v[0].valid
+
+
+def test_wrong_symbolic_simplification():
+    v = check(
+        "3x + 2x",
+        "6x",
+    )
+
+    assert len(v) == 1
+    assert not v[0].valid
+
+# --- Quadratic/Polynomial -----------------------------------------------
+
+def test_valid_quadratic_factorization():
+    v = check(
+        "x^2 - 5x + 6 = 0",
+        "(x - 2)(x - 3) = 0",
+    )
+
+    assert len(v) == 1
+    assert v[0].valid
+
+
+def test_valid_quadratic_expansion():
+    v = check(
+        "(x + 2)(x + 3) = 0",
+        "x^2 + 5x + 6 = 0",
+    )
+
+    assert len(v) == 1
+    assert v[0].valid
+
+
+def test_quadratic_step_that_loses_solution_is_invalid():
+    v = check(
+        "x^2 = 9",
+        "x = 3",
+    )
+
+    assert len(v) == 1
+    assert not v[0].valid
+
+
+def test_valid_cubic_factorization():
+    v = check(
+        "x^3 - 1 = 0",
+        "(x - 1)(x^2 + x + 1) = 0",
+    )
+
+    assert len(v) == 1
+    assert v[0].valid
+
+# --- Multiple Solutions -------------------------------------------------
+
+def test_multiple_solution_final_answer():
+    v = check(
+        "x^2 = 9",
+        "x = -3 or x = 3",
+    )
+
+    assert len(v) == 1
+    assert v[0].valid
+
+
+def test_multiple_solution_order_does_not_matter():
+    v = check(
+        "x^2 = 9",
+        "x = 3 or x = -3",
+    )
+
+    assert len(v) == 1
+    assert v[0].valid
+
+
+def test_missing_quadratic_solution_is_invalid():
+    v = check(
+        "x^2 = 9",
+        "x = 3",
+    )
+
+    assert len(v) == 1
+    assert not v[0].valid
+
+def test_multiple_solution_comma_notation():
+    v = check(
+        "x^2 = 9",
+        "x = -3, 3",
+    )
+
+    assert len(v) == 1
+    assert v[0].valid
+
+
+def test_multiple_solution_and_notation():
+    v = check(
+        "x^2 = 9",
+        "x = 3 and -3",
+    )
+
+    assert len(v) == 1
+    assert v[0].valid
+
+
+def test_multiple_solution_comma_order_does_not_matter():
+    v = check(
+        "x^2 = 9",
+        "x = 3, -3",
+    )
+
+    assert len(v) == 1
+    assert v[0].valid

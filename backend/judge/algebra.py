@@ -10,12 +10,13 @@ from sympy import (
     Pow,
     Rational,
     Symbol,
-    simplify,
-    sqrt,
     GreaterThan,
     LessThan,
     StrictGreaterThan,
     StrictLessThan,
+    simplify,
+    solve,
+    sqrt,
 )
 
 from sympy.core.relational import Relational
@@ -266,15 +267,15 @@ def _support_reason(
         # Inspect the written tree before SymPy can cancel nonlinear terms.
         # For example, x(x-x)+x simplifies to x, but it is still outside the
         # one-variable linear grammar promised by this MVP.
-        for product in expression.atoms(Mul):
-            symbol_factors = sum(
-                bool(factor.free_symbols) for factor in product.args
-            )
-            if symbol_factors > 1:
-                return "products of variable expressions are not supported"
         for power in expression.atoms(Pow):
-            if power.base.free_symbols and power.exp != 1:
-                return "variable powers and variable denominators are not supported"
+            if not power.base.free_symbols:
+                continue
+
+            if power.exp.is_integer is not True:
+                return "fractional or symbolic variable powers are not supported"
+
+            if power.exp < 0:
+                return "variable denominators are not supported"
 
     parts = (
         (parsed.lhs, parsed.rhs)
@@ -295,8 +296,9 @@ def _support_reason(
                 return "only rational arithmetic is supported"
             continue
         polynomial = expression.as_poly(symbol)
-        if polynomial is None or polynomial.degree() > 1:
-            return "only linear polynomial equations are supported"
+
+        if polynomial is None:
+            return "only polynomial expressions are supported"
         if any(
             coefficient.is_rational is not True
             for coefficient in polynomial.all_coeffs()
@@ -320,6 +322,69 @@ def _equations_equivalent(eq1, eq2) -> bool:
 
     ratio = simplify(diff1 / diff2)
     return ratio.is_constant() and ratio != 0
+
+
+def _solution_set_equivalent(reference: Eq, text: str) -> bool:
+    """Check final answers written with or, and, or commas."""
+
+    parts = [
+        part.strip()
+        for part in re.split(r"\s+(?:or|and)\s+|,", text)
+        if part.strip()
+    ]
+
+    if len(parts) < 2:
+        return False
+
+    variable = None
+    submitted = set()
+
+    for index, part in enumerate(parts):
+        if "=" in part:
+            parsed = _parse_equation(part)
+
+            if not isinstance(parsed, Eq):
+                return False
+
+            if not isinstance(parsed.lhs, Symbol):
+                return False
+
+            if parsed.rhs.free_symbols:
+                return False
+
+            if variable is None:
+                variable = parsed.lhs
+            elif parsed.lhs != variable:
+                return False
+
+            submitted.add(simplify(parsed.rhs))
+
+        else:
+            # After the first "x = ...", allow shorthand such as:
+            # x = -3, 3
+            # x = 3 and -3
+            if index == 0 or variable is None:
+                return False
+
+            value = _parse_expression(part)
+
+            if value.free_symbols:
+                return False
+
+            submitted.add(simplify(value))
+
+    if variable is None:
+        return False
+
+    if reference.free_symbols != {variable}:
+        return False
+
+    expected = {
+        simplify(value)
+        for value in solve(reference, variable)
+    }
+
+    return submitted == expected
 
 
 def _inequalities_equivalent(first, second) -> bool:
@@ -490,7 +555,11 @@ class AlgebraJudge(Judge[str, Step, LineVerdict]):
         try:
             reference = _parse_equation(problem)
             reference_structural = _parse_structural(problem)
-            support_reason = _support_reason(reference, reference_structural)
+            support_reason = _support_reason(
+                reference,
+                reference_structural,
+                allow_symbolic_expression=True,
+            )
         except UnsupportedMathError as exc:
             return [
                 LineVerdict(
@@ -525,6 +594,29 @@ class AlgebraJudge(Judge[str, Step, LineVerdict]):
         # Each valid step becomes the new reference; invalid steps don't,
         # so one mistake doesn't cascade false errors down every later line.
         for step in steps:
+            if re.search(r"\s+(?:or|and)\s+|,", step.latex):
+                try:
+                    ok = (
+                        isinstance(reference, Eq)
+                        and _solution_set_equivalent(reference, step.latex)
+                    )
+                except Exception:
+                    ok = False
+
+                verdicts.append(
+                    LineVerdict(
+                        line_number=step.line_number,
+                        valid=ok,
+                        error_type=None if ok else "algebraic",
+                        detail=(
+                            None
+                            if ok
+                            else "Solution set does not match the equation"
+                        ),
+                    )
+                )
+
+                continue
             try:
                 current = _parse_equation(step.latex)
                 current_structural = _parse_structural(step.latex)
@@ -532,6 +624,7 @@ class AlgebraJudge(Judge[str, Step, LineVerdict]):
                     current,
                     current_structural,
                     allowed_symbols=problem_symbols,
+                    allow_symbolic_expression=True,
                 )
             except UnsupportedMathError as exc:
                 verdicts.append(
