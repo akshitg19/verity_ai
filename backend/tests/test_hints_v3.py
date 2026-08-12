@@ -205,6 +205,92 @@ def test_level_1_returns_the_generated_diagnosis(monkeypatch, ph_session):
     assert response.latency_ms == 420
 
 
+def test_a_level_1_that_states_the_answer_is_asked_again(monkeypatch, ph_session):
+    """Redaction catching a leak should not cost the student their hint.
+
+    Running every concept live turned this up on three questions in sixty:
+    the model reasoned aloud, arrived at the answer, said it, and redaction
+    threw the whole hint away. The student then read a generic template for
+    a reason that had nothing to do with them. Level 2 already regenerates
+    once when verification fails; this is the same trade.
+    """
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=False):
+        attempts.append(retry)
+        if retry:
+            return ("You took the log of the concentration you started with, "
+                    "not of the x you solved for. Compare those two.", 300)
+        return ("You should have got pH = 2.87 here.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    response = hints.generate_hint(request_for(ph_session, 1))
+
+    assert attempts == [False, True], "exactly one retry, and it is flagged"
+    assert response.source == "model"
+    assert "2.87" not in response.hint
+
+
+def test_the_retry_is_not_retried(monkeypatch, ph_session):
+    """A model that leaks twice is not going to stop on the third ask, and
+    every extra attempt is latency the student sits through."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=False):
+        attempts.append(retry)
+        return ("The answer is pH = 2.87.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    response = hints.generate_hint(request_for(ph_session, 1))
+
+    assert attempts == [False, True]
+    assert response.source == "fallback"
+    assert "2.87" not in response.hint
+
+
+def test_a_failed_retry_still_answers(monkeypatch, ph_session):
+    """The retry going missing entirely must leave the first result standing,
+    not an exception and not an empty hint."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+
+    def fake_level_1(req, session, *, retry=False):
+        return None if retry else ("pH = 2.87 is what you want.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    response = hints.generate_hint(request_for(ph_session, 1))
+
+    assert response.hint.strip()
+    assert response.source == "fallback"
+
+
+def test_the_retry_tells_the_model_which_rule_it_broke(monkeypatch, ph_session):
+    """A retry that repeats the identical prompt is a coin flip. The second
+    ask has to say what was wrong with the first."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    prompts = []
+
+    def fake_generate_json(messages, **kwargs):
+        prompts.append(messages[0])
+        return {"hint": "The answer is pH = 2.87."}, 300
+
+    monkeypatch.setattr(hints, "generate_json", fake_generate_json)
+    hints.generate_hint(request_for(ph_session, 1))
+
+    assert len(prompts) == 2
+    assert "thrown away" not in prompts[0]
+    assert "thrown away" in prompts[1]
+    assert "must already appear in the problem" in prompts[1]
+
+
+def test_level_1_is_told_not_to_do_the_arithmetic(monkeypatch, ph_session):
+    """The cheapest fix for a leak is a prompt that never invites one."""
+    assert "do not multiply, add, or divide anything yourself" in (
+        hints._CHEMISTRY_LEVEL_1_PROMPT
+    )
+
+
 def test_level_1_without_the_student_line_falls_back(monkeypatch, ph_session):
     """Level 1 exists to diagnose the step; with no step there is nothing to
     diagnose, and inventing one would be worse than the template."""
@@ -798,7 +884,7 @@ def test_levels_1_and_2_are_still_redacted_when_withholding_is_off(monkeypatch):
     monkeypatch.setattr(
         hints,
         "_generate_level_1",
-        lambda req, session: ("The answer is N2 + 3H2 -> 2NH3", 100),
+        lambda req, session, retry=False: ("The answer is N2 + 3H2 -> 2NH3", 100),
     )
 
     response = hints.generate_hint(request_for(session, 1, student_line="N2 + H2 -> NH3"))

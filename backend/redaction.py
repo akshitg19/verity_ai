@@ -55,6 +55,31 @@ _ASSIGNMENT_RE = re.compile(
     r"(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)",
     re.IGNORECASE,
 )
+# The shapes that declare something to be the answer. Used on forms that are
+# printed in the question and therefore not secret on their own: "H2" is one
+# of two species the question names, but "the limiting reagent is H2" states
+# the answer whatever else is on the page. Numeric answers have their own
+# assignment regex above; this one is for species and formulas.
+_ANSWER_LEAD_RE = (
+    r"(?:answer|result|limiting\s+(?:reagent|reactant)|"
+    r"excess\s+(?:reagent|reactant)|correct\s+(?:one|choice)|"
+    r"empirical\s+formula|molecular\s+formula|it)\s*"
+    r"(?:is|are|=|:|->|will\s+be|would\s+be|must\s+be|comes\s+out\s+(?:as|to\s+be))\s+"
+    r"(?:the\s+)?"
+)
+_ANSWER_TRAIL_RE = (
+    r"\s+(?:is|was|will\s+be|would\s+be)\s+(?:the\s+)?"
+    r"(?:limiting|answer|correct|one\b|right\b)"
+)
+
+
+def _declared_as_the_answer(text: str, candidate: str) -> bool:
+    escaped = re.escape(candidate)
+    leading = re.compile(_ANSWER_LEAD_RE + r"[^.]{0,12}?\b" + escaped + r"\b")
+    trailing = re.compile(r"\b" + escaped + r"\b" + _ANSWER_TRAIL_RE)
+    return bool(leading.search(text) or trailing.search(text))
+
+
 # A SMILES-looking run, long enough not to fire on ordinary prose.
 _SMILES_CANDIDATE_RE = re.compile(
     r"(?<![A-Za-z0-9])"
@@ -103,6 +128,40 @@ def _numeric_tokens(text: str) -> list[float]:
     return values
 
 
+def _problem_surface(vault: AnswerVault) -> tuple[set[str], str, list[float]]:
+    """What the student can already read on their own page.
+
+    Nothing here is a secret. The problem statement is printed in front of
+    them, so a hint repeating a word or a number out of it reveals exactly
+    nothing, and blocking one costs the whole hint.
+
+    This is not a relaxation of the gate, it is the same correction that was
+    already applied once at the vault: "H2" is the answer to a limiting
+    reagent question *and* one of the two species named in the question, so a
+    hint saying "compare the moles of N2 with the moles of H2" was being
+    thrown away for quoting the question. Same for "2.00 M" in a dilution,
+    where the given concentration and the answer coincide.
+
+    The assignment check below deliberately does not consult this. "The
+    answer is 2.00" is a leak whether or not a 2.00 appears in the question,
+    because the shape is what states it.
+    """
+    normalised = normalise(vault.problem or "")
+    tokens = tokenise(normalised)
+    given: list[float] = []
+    for token in tokens:
+        # Whole tokens only. Scanning the raw text for digits would read the
+        # 2 and the 4 out of "h2so4" and call them given quantities, and a pH
+        # of 2.00 would then be sayable because the acid has two hydrogens.
+        try:
+            value = float(token)
+        except ValueError:
+            continue
+        if math.isfinite(value):
+            given.append(value)
+    return set(tokens), normalised, given
+
+
 def check_outbound(
     text: str,
     vault: AnswerVault | None,
@@ -133,10 +192,19 @@ def check_outbound(
 
     normalised = normalise(text)
     tokens = set(tokenise(normalised))
+    problem_tokens, problem_text, problem_numbers = _problem_surface(vault)
 
     for form in vault.answer_forms:
         candidate = normalise(str(form))
         if not candidate:
+            continue
+        if candidate in problem_tokens or (
+            len(candidate) > 3 and candidate in problem_text
+        ):
+            # Printed in the question. Repeating it is quoting, not leaking,
+            # unless the sentence around it says this is the answer.
+            if _declared_as_the_answer(normalised, candidate):
+                return False, f"declares the answer form {form!r}"
             continue
         # Standalone token, not a substring: "4" inside "24" is not the
         # answer, and rejecting it would make every hint unwritable.
@@ -146,8 +214,14 @@ def check_outbound(
             return False, f"contains the answer form {form!r}"
 
     for value in _numeric_tokens(normalised):
-        if vault.matches_number(value):
-            return False, f"states a value within tolerance of the answer ({value})"
+        if not vault.matches_number(value):
+            continue
+        if any(
+            values_match(given, value, relative_floor=LEAK_TOLERANCE)
+            for given in problem_numbers
+        ):
+            continue
+        return False, f"states a value within tolerance of the answer ({value})"
 
     for match in _ASSIGNMENT_RE.finditer(normalised):
         try:

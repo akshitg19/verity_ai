@@ -88,6 +88,7 @@ def _add_ph_family(
     *,
     technique: str = "pH = -log10[H+]",
     suffix: str = "",
+    asked_for: str = "pH",
 ) -> None:
     """Given [H+], record the whole family a student may write any of.
 
@@ -126,12 +127,18 @@ def _add_ph_family(
         f"pOH{suffix}", poh, None, "log_concentration", "pOH = 14 - pH", "poh"
     )
     # All four are the answer. A hint that withholds pH while handing over
-    # pOH has handed over the answer.
-    solution.mark_answers(
+    # pOH has handed over the answer. `asked_for` goes first, because it is
+    # also the one the answer box is asking for: see `WorkedSolution.match`
+    # for why an unlabelled number is held to that one alone.
+    family = [
         f"pH{suffix}",
         f"pOH{suffix}",
         f"hydrogen ion concentration{suffix}",
         f"hydroxide ion concentration{suffix}",
+    ]
+    wanted = f"{asked_for}{suffix}"
+    solution.mark_answers(
+        *([wanted] + [name for name in family if name != wanted])
     )
 
 
@@ -243,7 +250,12 @@ def solve_solutions(problem: SolutionsProblem) -> WorkedSolution:
         )
         if hydroxide <= 0:
             raise SolutionsError("hydroxide concentration must be positive")
-        _add_ph_family(solution, KW / hydroxide, technique="[H+] = Kw / [OH-]")
+        _add_ph_family(
+            solution,
+            KW / hydroxide,
+            technique="[H+] = Kw / [OH-]",
+            asked_for="pOH",
+        )
         return solution
 
     if problem.task == "ph_from_ph":

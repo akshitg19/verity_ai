@@ -456,6 +456,10 @@ _CHEMISTRY_LEVEL_1_PROMPT = (
     "- No 'Great question', 'Let's', 'Remember that', 'It looks like', "
     "'It seems', 'I notice', 'Don't worry'.\n"
     "- Never state a corrected value, a corrected formula, or the answer.\n"
+    "- Every number you write must already appear in the problem or in "
+    "their working. You are diagnosing, not calculating: do not multiply, "
+    "add, or divide anything yourself, and do not say what a quantity "
+    "should come to. Naming the quantity is the hint; giving it is not.\n"
     "- Never do the step for them.\n"
     "Good: 'You balanced the hydrogens, but that changed the nitrogen count "
     "on the right. Count the nitrogens on each side and compare.'\n"
@@ -513,9 +517,23 @@ def _working_block(req: HintRequest) -> str:
     )
 
 
+# Appended on the one retry a redacted level 1 gets. It names the rule that
+# was broken rather than repeating the whole prompt, because the first
+# attempt was fluent and on topic and only failed on this.
+_LEVEL_1_RETRY = (
+    "\n\nYour first attempt at this hint was thrown away because it stated a "
+    "value the student is supposed to work out for themselves. Write it "
+    "again without that. Every number in your hint must already appear in "
+    "the problem or in their working above. Name which quantity is wrong "
+    "and what to compare it against, and stop there."
+)
+
+
 def _generate_level_1(
     req: HintRequest,
     session: ProblemSession,
+    *,
+    retry: bool = False,
 ) -> tuple[str, int] | None:
     base_prompt = (
         _CHEMISTRY_LEVEL_1_PROMPT
@@ -525,6 +543,7 @@ def _generate_level_1(
 
     prompt = (
         base_prompt
+        + (_LEVEL_1_RETRY if retry else "")
         + coaching_for(req.problem_type, req.topic or session.topic)
         + f"\n\nTopic: {req.topic or session.topic}"
         + f"\nProblem: {req.problem or session.problem}"
@@ -1292,7 +1311,24 @@ def generate_hint(req: HintRequest) -> HintResponse:
             req, _template_hint(req), session=session, resource=resource, trusted=True
         )
         text, latency = generated
-        return _finalise(req, text, session=session, source="model", latency_ms=latency)
+        answer = _finalise(
+            req, text, session=session, source="model", latency_ms=latency
+        )
+        if answer.source == "model":
+            return answer
+        # Redaction threw it away, which means the model stated a value it
+        # was told not to state. The filter did its job and the student is
+        # now looking at the static floor for a reason that has nothing to do
+        # with them. Level 2 already regenerates once when verification
+        # fails; this is the same trade on the same grounds.
+        retried = _generate_level_1(req, session, retry=True)
+        if retried is None:
+            return answer
+        text, latency = retried
+        second = _finalise(
+            req, text, session=session, source="model", latency_ms=latency
+        )
+        return second if second.source == "model" else answer
 
     if req.level == 2:
         generated = _generate_level_2(req, session)

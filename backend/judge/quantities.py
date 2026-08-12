@@ -106,6 +106,17 @@ _EXPONENT_RE = re.compile(
 # an addition), so it is part of the number rather than a stray operator.
 _PLAIN_NUMBER_RE = re.compile(r"[+-]?\d+(?:\.\d*)?|[+-]?\.\d+")
 _LABEL_RE = re.compile(r"^[a-zA-Zµ°Δ∆][a-zA-Z0-9µ°Δ∆_\[\]\(\)\+\-\s\.']{0,31}$")
+# What separates a label from its value. A colon reads the same as an equals
+# sign on a page of working, and reading "pH: 2.00" as a unit called "pH"
+# turned a correct answer into a parse error.
+_LABEL_SEPARATOR_RE = re.compile(r"[=:]")
+# A label written with nothing but a space after it: "pH 2.00", "mass 14.61 g".
+# Anchored on a letter so it cannot eat a sign, and it stops at the first
+# number so the unit is still read from what follows.
+_LEADING_LABEL_RE = re.compile(
+    r"^(?P<label>[a-zA-Zµ°Δ∆][a-zA-Z0-9µ°Δ∆_\[\]\(\)']*(?:\s+[a-zA-Z][a-zA-Z0-9']*)*)"
+    r"\s+(?=[+-]?[\.\d])"
+)
 
 
 @dataclass(frozen=True)
@@ -180,12 +191,23 @@ def parse_quantity(text: str) -> Quantity:
         raise QuantityParseError("quantity is too long")
 
     # A student's line is often a chain: "n = m/M = 2.5 mol". The claim is
-    # the last segment; the first is the label if it looks like one.
-    segments = [segment.strip() for segment in raw.split("=")]
+    # the last segment; the first is the label if it looks like one. A colon
+    # counts as an equals sign, because on paper "pH: 2.00" is the same
+    # sentence and reading it as a unit called "pH" produced a parse error on
+    # a correct answer.
+    segments = [segment.strip() for segment in _LABEL_SEPARATOR_RE.split(raw)]
     claim = segments[-1]
     name: str | None = None
     if len(segments) > 1 and _LABEL_RE.match(segments[0] or ""):
         name = segments[0].strip().lower()
+    elif len(segments) == 1:
+        # No separator at all. "pH 2.00" and "mass 14.61 g" are how a page of
+        # working actually reads, and the label has to come off the front
+        # before the rest is looked at for a unit.
+        leading = _LEADING_LABEL_RE.match(claim)
+        if leading and _LABEL_RE.match(leading.group("label").strip()):
+            name = leading.group("label").strip().lower()
+            claim = claim[leading.end():].strip()
     if not claim:
         raise QuantityParseError(f"{raw!r} has no value after the equals sign")
 
