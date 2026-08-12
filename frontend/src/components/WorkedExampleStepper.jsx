@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 
+import { renderStructure } from "../api";
+import {
+  isTrustedStructurePreview,
+  trustedStructurePreview,
+} from "../chemistry/structurePreview";
 import { COLORS, FONT, RADIUS, SUBJECTS } from "../theme";
 import { atomTally, parseEquation } from "../chemistry/equationModel";
 
@@ -161,6 +166,68 @@ function QuantityTrail({ quantities, index }) {
   );
 }
 
+// The molecule a structure example arrives at, drawn once the walkthrough
+// reaches its last step.
+//
+// It is the answer to the *example's* problem and not to the student's,
+// which is exactly why level 2 can be this generous: a fully worked
+// solution to a different problem contains none of their answer. Held back
+// until the end so the student watches the reasoning rather than reading
+// the destination first.
+function ExampleStructure({ smiles, reveal }) {
+  const [picture, setPicture] = useState(null);
+
+  useEffect(() => {
+    if (!smiles || !reveal) return undefined;
+    let live = true;
+    const controller = new AbortController();
+    renderStructure(smiles, { signal: controller.signal })
+      .then((data) => {
+        if (live) setPicture(trustedStructurePreview(data));
+      })
+      .catch(() => {
+        if (live) setPicture(null);
+      });
+    return () => {
+      live = false;
+      controller.abort();
+    };
+  }, [smiles, reveal]);
+
+  if (!reveal || !isTrustedStructurePreview(picture)) return null;
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: 0.6,
+          textTransform: "uppercase",
+          color: COLORS.muted,
+          marginBottom: 6,
+        }}
+      >
+        What that example comes out as
+      </div>
+      <div
+        className="structure-preview worksheet-picture"
+        style={{
+          width: "100%",
+          height: 160,
+          background: "#fff",
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: RADIUS.sm,
+          padding: 6,
+          boxSizing: "border-box",
+          animation: "verity-step-in 320ms cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+        dangerouslySetInnerHTML={{ __html: picture.svg }}
+      />
+    </div>
+  );
+}
+
 // How long each step holds while playing. Long enough to read a sentence
 // and look at what moved, short enough that five steps is not a wait.
 const STEP_MS = 2600;
@@ -311,6 +378,7 @@ export default function WorkedExampleStepper({ example }) {
         {!hasEquation && (
           <QuantityTrail quantities={example?.quantities ?? []} index={index} />
         )}
+        <ExampleStructure smiles={example?.structure} reveal={atEnd} />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>

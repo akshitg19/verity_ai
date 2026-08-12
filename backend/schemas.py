@@ -648,6 +648,12 @@ class WorkedExample(BaseModel):
     # find out which number moved, because the parser that judges the student
     # already knows.
     quantities: list["ExampleQuantity | None"] = Field(default_factory=list)
+    # The structure this worked example arrives at, for the topics where the
+    # answer is a molecule. It is the answer to the *example's* problem, not
+    # the student's, which is the whole reason level 2 can be generous: a
+    # fully worked solution to a different problem contains none of theirs.
+    # Set only after the example has been verified.
+    structure: SmilesText | None = None
     # One entry per step, aligned by index: the equation on that step as our
     # own parser reads it, or null where the step carries no equation.
     #

@@ -721,6 +721,14 @@ def _verify_example(subject: str,topic: str, payload: dict, student_problem: str
             else []
         ),
         quantities=[_step_quantity(step) for step in steps],
+        # Only where the answer genuinely is a molecule. Taken from the
+        # machine-checkable spec the model returned and which our own judge
+        # has just verified, never from the prose.
+        structure=(
+            str(check.get("smiles") or "").strip() or None
+            if topic in ("structure", "organic")
+            else None
+        ),
     )
 
 
