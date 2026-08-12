@@ -453,13 +453,21 @@ export const TOPICS = [
       return checkBalance(values.reference_equation, equationSteps, options);
     },
     session(type, values, problem) {
+      // Net ionic sends `molecular_equation`, not `reference_equation`.
+      // Sending it as the latter built a balancing vault, so the vault held
+      // the balanced equation rather than the net ionic one and guarded the
+      // wrong answer.
+      if (type.id === "net_ionic") {
+        return {
+          topic: "balancing",
+          problem,
+          molecular_equation: values.molecular_equation,
+        };
+      }
       return {
         topic: "balancing",
         problem,
-        reference_equation:
-          type.id === "net_ionic"
-            ? values.molecular_equation
-            : values.reference_equation,
+        reference_equation: values.reference_equation,
       };
     },
   },
@@ -541,7 +549,23 @@ export const TOPICS = [
           reference_equation: values.reference_equation,
         };
       }
-      return null; // solved server-side per request; no vault needed yet
+      if (type.id === "oxidation_state") {
+        return {
+          topic: "redox",
+          problem,
+          oxidation_formula: values.formula,
+          oxidation_element: values.element,
+        };
+      }
+      if (type.id === "cell_potential") {
+        return {
+          topic: "redox",
+          problem,
+          cathode: values.cathode,
+          anode: values.anode,
+        };
+      }
+      return null;
     },
   },
 
@@ -619,11 +643,25 @@ export const TOPICS = [
       return checkStructure(values.target_smiles, steps, options);
     },
     session(type, values, problem) {
-      // No session for the formula type yet: the vault would have to hold
-      // every isomer of the formula, and `answer_vault.py` has no shape for
-      // "any of these". Hints fall back to the templates, which is a worse
-      // hint and never an unsafe one. Tracked in final_tasks.md.
-      if (type.id === "isomer" || type.id === "formula_structure") return null;
+      // The formula type guards the formula rather than a set of acceptable
+      // structures. C2H6O is ethanol and it is also dimethyl ether, and the
+      // question asked for the formula, so the formula is the thing a hint
+      // must not hand over.
+      if (type.id === "formula_structure") {
+        return {
+          topic: "structure",
+          problem,
+          target_formula: values.target_formula,
+        };
+      }
+      // An isomer question hands the student a reference molecule, and the
+      // answer is any different structure with the same formula. The
+      // reference is what a hint must not simply restate.
+      if (type.id === "isomer") {
+        return values.reference_smiles
+          ? { topic: "structure", problem, target_smiles: values.reference_smiles }
+          : null;
+      }
       return { topic: "structure", problem, target_smiles: values.target_smiles };
     },
   },
@@ -722,6 +760,16 @@ export const TOPICS = [
       }
       if (type.id === "naming" && values.target_smiles) {
         return { topic: "organic", problem, target_smiles: values.target_smiles };
+      }
+      // Predicting a product: the starting material is the molecule the
+      // question is about, so it is what the vault guards. The product
+      // itself is the model path and has no deterministic answer to hold.
+      if (type.id === "reaction" && values.reactants_smiles) {
+        return {
+          topic: "organic",
+          problem,
+          target_smiles: values.reactants_smiles.split(/[.\s,]+/).filter(Boolean)[0],
+        };
       }
       return null;
     },

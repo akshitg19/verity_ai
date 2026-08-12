@@ -450,6 +450,12 @@ def open_chemistry_session(req: ChemistrySessionRequest):
 
     try:
         vault = build_vault(
+            molecular_equation=req.molecular_equation,
+            oxidation_formula=req.oxidation_formula,
+            oxidation_element=req.oxidation_element,
+            cathode=req.cathode,
+            anode=req.anode,
+            target_formula=req.target_formula,
             topic=req.topic,
             problem=req.problem,
             target_smiles=req.target_smiles,

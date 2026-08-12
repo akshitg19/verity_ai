@@ -566,6 +566,16 @@ class ChemistrySessionRequest(BaseModel):
     target_smiles: SmilesText | None = None
     target_group: Annotated[str, StringConstraints(max_length=64)] | None = None
     reference_equation: EquationText | None = None
+    # Added so the topics that used to open no session can open one. Without
+    # a session there is no vault, and without a vault the hint layer falls
+    # back to the static templates no matter what else is fixed, which is
+    # why hints looked broken on redox, net ionic, and the drawing types.
+    molecular_equation: EquationText | None = None
+    oxidation_formula: FormulaText | None = None
+    oxidation_element: Annotated[str, StringConstraints(max_length=3)] | None = None
+    cathode: EquationText | None = None
+    anode: EquationText | None = None
+    target_formula: FormulaText | None = None
     stoichiometry: StoichiometryRequest | None = None
     solutions: SolutionsRequest | None = None
 
