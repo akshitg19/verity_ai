@@ -528,6 +528,11 @@ _CHEMISTRY_LEVEL_1_PROMPT = (
     "add, or divide anything yourself, and do not say what a quantity "
     "should come to. Naming the quantity is the hint; giving it is not.\n"
     "- Never do the step for them.\n"
+    "- If their line is a drawn structure it reaches you as SMILES. That is "
+    "our own code for what the recogniser read, the student has never seen "
+    "it, and writing it back at them tells them nothing. Never put a SMILES "
+    "string in the hint. Describe the drawing instead: how long the chain "
+    "is, which atom carries what, where a group sits.\n"
     "Good: 'You balanced the hydrogens, but that changed the nitrogen count "
     "on the right. Count the nitrogens on each side and compare.'\n"
     "Bad: 'The student attempted to balance the equation by adding "
@@ -612,30 +617,95 @@ _POSITION_RE = re.compile(
     re.IGNORECASE,
 )
 
+_RETRY_SMILES = (
+    "\n\nYour first attempt wrote the SMILES string out in the hint. The "
+    "student drew a picture. SMILES is our own code for what the recogniser "
+    "read and they have never seen it, so it tells them nothing. Write it "
+    "again describing the drawing in words: how long the chain is, which "
+    "atom carries what, where a group sits. Never put a SMILES string in a "
+    "hint."
+)
+
+# Topics where the student's line is a drawing that reaches us as SMILES.
+_STRUCTURE_TOPICS = frozenset({"structure", "organic"})
+
 
 def _points_by_position(text: str) -> bool:
     return bool(_POSITION_RE.search(text or ""))
 
 
-def _without_positional_pointing(
+def _shows_smiles(text: str, req: HintRequest) -> bool:
+    """Whether a hint writes our internal notation out at a person.
+
+    Found live on the structure topics: the student drew a five carbon
+    chain, the recogniser read it as CCCCC, and the hint said "You drew
+    CCCCC". They never wrote that and would not recognise it, which is the
+    standing rule that SMILES is for the machine and the right panel and
+    never for the page.
+
+    Checked against their own line rather than by pattern, because a general
+    SMILES detector fires on H2SO4 and on [OH-], and both of those are just
+    chemistry.
+    """
+    line = (req.student_line or "").strip()
+    if len(line) < 2 or (req.topic or "") not in _STRUCTURE_TOPICS:
+        return False
+    return (
+        re.search(
+            r"(?<![A-Za-z0-9])" + re.escape(line) + r"(?![A-Za-z0-9])", text or ""
+        )
+        is not None
+    )
+
+
+def _retried_once(
     generate: Callable[..., tuple[str, int] | None],
     first: tuple[str, int],
     level: int,
+    *,
+    broken: Callable[[str], bool],
+    note: str,
+    why: str,
 ) -> tuple[str, int]:
-    """One more ask when a hint points by position, then take what we get.
+    """One more ask when a hint breaks a rule we can check, then take what we get.
 
     Deliberately not a fallback to the template: "in the first line you wrote
     53.96" is worse than quoting the work and much better than a sentence
     that would fit any problem. The retry is worth one call; giving up the
     whole hint is not.
     """
-    if not _points_by_position(first[0]):
+    if not broken(first[0]):
         return first
-    logger.warning("level %d pointed by position, asking once more", level)
-    again = generate(retry=_RETRY_POSITION)
-    if again is not None and again[0] and not _points_by_position(again[0]):
+    logger.warning("level %d %s, asking once more", level, why)
+    again = generate(retry=note)
+    if again is not None and again[0] and not broken(again[0]):
         return again
     return first
+
+
+def _cleaned_up(
+    generate: Callable[..., tuple[str, int] | None],
+    first: tuple[str, int],
+    level: int,
+    req: HintRequest,
+) -> tuple[str, int]:
+    """Both rules we can check on the text itself, before it is sent."""
+    result = _retried_once(
+        generate,
+        first,
+        level,
+        broken=lambda text: _shows_smiles(text, req),
+        note=_RETRY_SMILES,
+        why="wrote a SMILES at the student",
+    )
+    return _retried_once(
+        generate,
+        result,
+        level,
+        broken=_points_by_position,
+        note=_RETRY_POSITION,
+        why="pointed by position",
+    )
 
 
 def _generate_level_1(
@@ -1403,6 +1473,11 @@ _CHEMISTRY_LEVEL_3_PROMPT_OPEN = (
     "- No markdown, no headings, no lists, no bold.\n"
     "- No 'Great question', 'Let's dive in', 'Remember that', 'Don't "
     "worry', 'As you can see'.\n"
+    "- If their line is a drawn structure it reaches you as SMILES. That is "
+    "our own code for what the recogniser read, the student has never seen "
+    "it, and 'you drew CCCCC' means nothing to someone who drew a chain of "
+    "five carbons. Never put a SMILES string in the hint. Describe the "
+    "drawing instead.\n"
     "- Do this one step. Do not solve the rest of the problem for them.\n"
     "Length: three to five sentences.\n"
     'Reply with JSON: {"hint": "<three to five sentences>", "declined": false}'
@@ -1518,10 +1593,11 @@ def generate_hint(req: HintRequest) -> HintResponse:
             return _finalise(
             req, _template_hint(req), session=session, resource=resource, trusted=True
         )
-        text, latency = _without_positional_pointing(
+        text, latency = _cleaned_up(
             lambda retry: _generate_level_1(req, session, retry=retry),
             generated,
-            level=1,
+            1,
+            req,
         )
         answer = _finalise(
             req, text, session=session, source="model", latency_ms=latency
@@ -1596,10 +1672,11 @@ def generate_hint(req: HintRequest) -> HintResponse:
         return _finalise(
             req, _template_hint(req), session=session, resource=resource, trusted=True
         )
-    text, latency = _without_positional_pointing(
+    text, latency = _cleaned_up(
         lambda retry: _generate_level_3(req, session, retry=retry),
         generated,
-        level=3,
+        3,
+        req,
     )
     return _finalise(
         req,

@@ -1059,3 +1059,104 @@ def test_the_contract_says_what_type_each_value_has():
 
     assert "plain JSON number" in contract
     assert "never to an object" in contract
+
+
+# ---------------------------------------------------------------------------
+# SMILES is for the machine and the panel, never for the page
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def structure_session():
+    vault = vault_for_structure("Draw a structure with the formula C4H10", "CCCC")
+    return SESSIONS.create("structure", vault.problem, vault)
+
+
+def test_a_hint_that_writes_the_smiles_out_is_asked_again(
+    monkeypatch, structure_session
+):
+    """Live, on both formula structure questions: the student drew a chain of
+    five carbons, the recogniser read it as CCCCC, and the hint said "You
+    drew CCCCC". They never wrote that and would not recognise it."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=None):
+        attempts.append(retry)
+        if retry:
+            return ("You drew a chain of five carbons. Count them against "
+                    "the four the formula asks for.", 300)
+        return ("You drew CCCCC, which is five carbons.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    response = hints.generate_hint(
+        request_for(structure_session, 1, student_line="CCCCC",
+                    error_type="structure_mismatch")
+    )
+
+    assert len(attempts) == 2
+    assert "never seen it" in attempts[1]
+    assert "CCCCC" not in response.hint
+    assert "five carbons" in response.hint
+
+
+def test_level_3_gets_the_same_check(monkeypatch, structure_session):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_3(req, session, *, retry=None):
+        attempts.append(retry)
+        if retry:
+            return ("Your chain has one carbon too many. Take the end one "
+                    "off and the count matches the formula.", 700)
+        return ("You wrote CCCCC. That is one carbon too many.", 700)
+
+    monkeypatch.setattr(hints, "_generate_level_3", fake_level_3)
+    response = hints.generate_hint(
+        request_for(structure_session, 3, student_line="CCCCC",
+                    error_type="structure_mismatch")
+    )
+
+    assert len(attempts) == 2
+    assert "CCCCC" not in response.hint
+
+
+def test_a_formula_on_a_numeric_topic_is_not_a_smiles(monkeypatch, ph_session):
+    """The check is against their own line on the structure topics only. A
+    general SMILES detector fires on H2SO4 and on [OH-], which are chemistry
+    a student writes and reads every day."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=None):
+        attempts.append(retry)
+        return ("You used [OH-] where the question gives you [H+]. Convert "
+                "one to the other with Kw first.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    hints.generate_hint(request_for(ph_session, 1))
+
+    assert attempts == [None], "no retry: nothing was broken"
+
+
+def test_describing_the_drawing_is_never_retried(monkeypatch, structure_session):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=None):
+        attempts.append(retry)
+        return ("Your chain has five carbons in it. The formula asks for "
+                "four.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    hints.generate_hint(
+        request_for(structure_session, 1, student_line="CCCCC",
+                    error_type="structure_mismatch")
+    )
+
+    assert attempts == [None]
+
+
+def test_both_structure_prompts_carry_the_rule():
+    assert "never seen it" in hints._CHEMISTRY_LEVEL_1_PROMPT
+    assert "never seen it" in hints._CHEMISTRY_LEVEL_3_PROMPT_OPEN
