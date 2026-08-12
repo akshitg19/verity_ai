@@ -585,3 +585,15 @@ def test_the_check_contract_names_every_field_the_problem_accepts():
             if field.name in ("task", "steps"):
                 continue
             assert field.name in contract, f"{topic} contract omits {field.name}"
+
+
+def test_the_structure_contract_shows_what_a_smiles_is_not():
+    """The word "SMILES" alone did not carry it: the model wrote
+    CC(Cl)CH2Cl, RDKit refused it, and the student got the static floor."""
+    from hints import _CHEMISTRY_CHECK_CONTRACTS
+
+    for topic in ("structure", "organic"):
+        contract = _CHEMISTRY_CHECK_CONTRACTS[topic]
+        assert "CC(Cl)CCl" in contract
+        assert "never CH3CH2OH" in contract
+        assert "never shown to the student" in contract

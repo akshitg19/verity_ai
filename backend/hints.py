@@ -714,6 +714,22 @@ def _numeric_contract(tasks, problem_class, answer_note: str) -> str:
     )
 
 
+# `smiles` is parsed by RDKit and rejected if it does not parse, and the
+# common failure was a condensed formula written where a SMILES was asked
+# for: CC(Cl)CH2Cl is how a person writes it and is not a SMILES, so RDKit
+# refused it and the student got the static floor. The example spells out
+# the difference rather than trusting the word "SMILES" to carry it.
+_STRUCTURE_CONTRACT = (
+    '"check": {"smiles": "<the answer structure as a valid SMILES string>", '
+    '"group": "<the functional group it contains, or null>"}\n'
+    "`smiles` must be real SMILES that a parser accepts, not a condensed "
+    "formula. 1,2-dichloropropane is CC(Cl)CCl, never CC(Cl)CH2Cl. Ethanol "
+    "is CCO, never CH3CH2OH. It is read by a machine and never shown to the "
+    "student, so write it for the parser and keep the condensed formulas "
+    "for the steps, where a person will read them."
+)
+
+
 _CHEMISTRY_CHECK_CONTRACTS = {
     "balancing": (
         '"check": {"unbalanced": "<your equation, coefficients omitted>", '
@@ -731,14 +747,8 @@ _CHEMISTRY_CHECK_CONTRACTS = {
         '"check": {"formula": "<the species>", "element": "<element symbol>", '
         '"answer": <the oxidation state as a number>}'
     ),
-    "structure": (
-        '"check": {"smiles": "<the answer structure as SMILES>", '
-        '"group": "<the functional group it contains, or null>"}'
-    ),
-    "organic": (
-        '"check": {"smiles": "<the answer structure as SMILES>", '
-        '"group": "<the functional group it contains, or null>"}'
-    ),
+    "structure": _STRUCTURE_CONTRACT,
+    "organic": _STRUCTURE_CONTRACT,
 }
 
 
