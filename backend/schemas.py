@@ -651,6 +651,20 @@ class HintRequest(BaseModel):
     problem: Annotated[str, StringConstraints(max_length=1024)] | None = None
     student_line: Annotated[str, StringConstraints(max_length=512)] | None = None
     previous_line: Annotated[str, StringConstraints(max_length=512)] | None = None
+    # Which concept under the topic: "molar_mass", "buffer_ph",
+    # "oxidation_state". A hint keyed only by the topic can never be more
+    # specific than the topic, which is the same ceiling the static template
+    # ladder had, one level up. Free text rather than a Literal so a new
+    # problem type cannot 422 an otherwise valid hint request.
+    problem_type: Annotated[str, StringConstraints(max_length=64)] | None = None
+    # The student's whole working, in order, when the page has one. Level 3
+    # reads all of it: on a page where every student lays the arithmetic out
+    # differently, one line in isolation is not enough to say where it went
+    # wrong.
+    working_lines: Annotated[
+        list[Annotated[str, StringConstraints(max_length=512)]],
+        Field(max_length=40),
+    ] = Field(default_factory=list)
 
 
 class HintResponse(BaseModel):

@@ -29,6 +29,7 @@ import os
 import re
 import time
 
+from hint_rules import analogue_for, coaching_for
 from model import ModelError, generate_json, is_configured
 from redaction import numbers_differ, redact_or_fallback
 from schemas import HintRequest, HintResponse, WorkedExample
@@ -484,6 +485,27 @@ _MATH_LEVEL_1_PROMPT = (
 )
 
 
+def _working_block(req: HintRequest) -> str:
+    """The student's whole page, when they wrote one.
+
+    On the numeric topics the working is laid out however the student likes
+    and no single row is a claim on its own, so a hint written from one line
+    can only ever say "this number is wrong". Given the whole page the model
+    can say which step of their method went wrong, which is the difference
+    between a useful hint and a restatement of the verdict.
+    """
+    lines = [line.strip() for line in (req.working_lines or []) if line.strip()]
+    if not lines:
+        return ""
+    numbered = "\n".join(f"  {index + 1}. {line}" for index, line in enumerate(lines))
+    return (
+        "\nTheir whole working, as they wrote it. Read all of it before "
+        "deciding what went wrong. It will not be tidy, and the steps may "
+        "be in an order you would not have chosen, which is fine and is not "
+        "itself a mistake:\n" + numbered + "\n"
+    )
+
+
 def _generate_level_1(
     req: HintRequest,
     session: ProblemSession,
@@ -496,10 +518,12 @@ def _generate_level_1(
 
     prompt = (
         base_prompt
+        + coaching_for(req.problem_type, req.topic or session.topic)
         + f"\n\nTopic: {req.topic or session.topic}"
         + f"\nProblem: {req.problem or session.problem}"
         + f"\nThe line before: {req.previous_line or '(this is the first line)'}"
         + f"\nThe flagged line (line {req.line_number}): {req.student_line}"
+        + _working_block(req)
         + f"\nWhat the checker proved: {req.error_type}"
     )
 
@@ -609,10 +633,12 @@ def _level_2_prompt(
     topic: str,
     problem: str,
     error_type: str | None,
+    problem_type: str | None = None,
 ) -> str:
     if subject == "math":
         return (
             _MATH_LEVEL_2_PROMPT
+            + analogue_for(problem_type, topic)
             + f"\n\nTopic: {topic}"
             + f"\nThe student's problem, which must NOT be reused: {problem}"
             + f"\nThe mistake they made: {error_type}\n\n"
@@ -630,6 +656,7 @@ def _level_2_prompt(
 
     return (
         _CHEMISTRY_LEVEL_2_PROMPT
+        + analogue_for(problem_type, topic)
         + f"\nTopic: {topic}"
         + f"\nThe student's problem (for structure only, do not reuse it): {problem}"
         + f"\nThe mistake they made: {error_type}\n\n"
@@ -1042,6 +1069,7 @@ def _generate_level_2(
                         topic,
                         problem,
                         req.error_type,
+                        req.problem_type,
                     )
                 ],
             )
@@ -1160,10 +1188,12 @@ def _generate_level_3(req: HintRequest, session: ProblemSession) -> tuple[str, i
 
     prompt = (
         base_prompt
+        + coaching_for(req.problem_type, req.topic or session.topic)
         + f"\n\nTopic: {req.topic or session.topic}"
         + f"\nProblem: {req.problem or session.problem}"
         + f"\nThe line before: {req.previous_line or '(this is the first line)'}"
         + f"\nTheir line (line {req.line_number}): {req.student_line}"
+        + _working_block(req)
         + f"\nWhat the checker proved: {req.error_type}"
     )
 

@@ -50,6 +50,11 @@ import {
 } from "./worksheet";
 
 
+// A page of working, capped. Enough for any real hand-worked problem, and
+// a ceiling so a page full of doodles cannot turn one hint into forty
+// recognition calls.
+const MAX_WORKING_LINES = 12;
+
 function addReadingRow(current, row) {
   const next = new Set(current);
   next.add(row);
@@ -62,7 +67,13 @@ function removeReadingRow(current, row) {
   return next;
 }
 
-export default function useChemistry({ pageId = null } = {}) {
+export default function useChemistry({
+  pageId = null,
+  // Every stroke on the page, read on demand. Only used when a hint is
+  // asked for on a worksheet whose working we never judge: see
+  // `readWorkingLines`.
+  getStrokes = null,
+} = {}) {
   const [stored] = useState(readStoredTopic);
   const [topicId, setTopicId] = useState(stored.topicId);
   const topic = TOPICS.find((entry) => entry.id === topicId) ?? TOPICS[0];
@@ -774,6 +785,47 @@ export default function useChemistry({ pageId = null } = {}) {
 
   // -- hints --------------------------------------------------------------
 
+  // Read the working, once, at the moment a hint is asked for.
+  //
+  // The working is deliberately never judged, so it is never transcribed
+  // during writing: that is what stops a wrong verdict landing on correct
+  // scribble. But a hint that has not seen the working can only say "this
+  // number is wrong", and the whole point of the ladder is to say which
+  // step went wrong. So it is read here, lazily, on the one interaction
+  // where the student has asked us to look.
+  //
+  // Row by row through the prompt that is already known to work, rather
+  // than as one block through a prompt written for a single line. Failures
+  // are swallowed on purpose: a hint with no working is worse than a hint
+  // with it, and far better than no hint at all.
+  const readWorkingLines = useCallback(async () => {
+    const sheet = worksheetRef.current;
+    if (!sheet || sheet.kind !== KINDS.ANSWER || !getStrokes) return [];
+
+    const byRow = new Map();
+    for (const stroke of getStrokes() ?? []) {
+      const row = getStrokeRow(stroke);
+      if (zoneAtRow(sheet, row) !== ZONES.WORKING) continue;
+      if (!byRow.has(row)) byRow.set(row, []);
+      byRow.get(row).push(stroke);
+    }
+    if (byRow.size === 0) return [];
+
+    const rows = [...byRow.keys()].sort((a, b) => a - b).slice(0, MAX_WORKING_LINES);
+    const texts = await Promise.all(
+      rows.map(async (row) => {
+        try {
+          const dataUrl = await renderLineToPng([...byRow.get(row)]);
+          const data = await transcribeChemistryText(dataUrl.split(",")[1]);
+          return data.unreadable ? "" : (data.text ?? "").trim();
+        } catch {
+          return "";
+        }
+      })
+    );
+    return texts.filter(Boolean);
+  }, [getStrokes]);
+
   const requestHint = useCallback(async () => {
     if (hintLevel >= 3) return;
 
@@ -807,6 +859,9 @@ export default function useChemistry({ pageId = null } = {}) {
     const active = await ensureSession();
     if (id !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
 
+    const workingLines = await readWorkingLines();
+    if (id !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
+
     try {
       const data = await getHint({
         line_number: isDrawing ? 1 : lineIndex + 1,
@@ -816,9 +871,17 @@ export default function useChemistry({ pageId = null } = {}) {
         topic: topicId,
         session_id: active?.session_id ?? null,
         problem: problemText,
+        // The concept, not just the topic. A hint keyed only by
+        // "stoichiometry" cannot know that a molar mass fails on the
+        // bracket and a percent yield fails on which yield went on top.
+        problem_type: problemType.id,
         student_line: isDrawing
           ? answer || null
           : stepLines[lineIndex]?.text || null,
+        // The whole page, for the levels that read it. On an answer-box
+        // worksheet this is the only way the hint layer ever sees how they
+        // actually worked the problem, since the working is never judged.
+        working_lines: workingLines,
       }, { signal: abortController.signal });
       if (id !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
       setHintLevel(data.level);
@@ -831,7 +894,7 @@ export default function useChemistry({ pageId = null } = {}) {
       if (id === hintRequestId.current) setHintLoading(false);
       if (hintAbortRef.current === abortController) hintAbortRef.current = null;
     }
-  }, [answer, ensureSession, firstWrongRow, hintLevel, isDrawing, problemText, topicId, verdict, verdictsByLine]);
+  }, [answer, ensureSession, firstWrongRow, hintLevel, isDrawing, problemText, problemType.id, readWorkingLines, topicId, verdict, verdictsByLine]);
 
   const cancelHint = useCallback(() => {
     hintRequestId.current += 1;

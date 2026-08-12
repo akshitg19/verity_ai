@@ -24,7 +24,13 @@ const SIDEBAR_WIDTH = 288;
 export default function App({ theme: themeFromRoute, subject }) {
   const notebook = useNotebook();
   const pageId = notebook.activePage.id;
-  const chemistry = useChemistry({ pageId });
+  // The canvas is created below, so the getter reads through a ref rather
+  // than capturing a value that does not exist yet.
+  const canvasRef = useRef(null);
+  const chemistry = useChemistry({
+    pageId,
+    getStrokes: () => canvasRef.current?.getStrokesSnapshot() ?? [],
+  });
   const math = useMathWorkflow({ pageId });
   const theme = themeFromRoute;
   const mode = notebook.activeNote.subject;
@@ -49,6 +55,10 @@ export default function App({ theme: themeFromRoute, subject }) {
       chemistry.clearAnswer();
     },
   });
+
+  useEffect(() => {
+    canvasRef.current = canvas;
+  }, [canvas]);
 
   const workspace = useWorkspaceNavigation({ notebook, canvas, mode, chemistry, math });
 
