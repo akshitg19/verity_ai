@@ -1,11 +1,8 @@
 # Demo script: the exact questions to write on stage
 
 Written Aug 12, the night before the demo. One section per feature, in the
-order they get demoed. Every line here was run through the real judge before
-it was written down, so the expected verdict is measured, not guessed.
-
-**How to read a row.** "Write" is what goes on the tablet in that row of the
-page. "Verdict" is what the judge actually returned for that exact string.
+order they get demoed. Every verdict here was produced by the real judge, and
+the molar mass flow was driven through the real UI in a browser.
 
 ---
 
@@ -13,92 +10,95 @@ page. "Verdict" is what the judge actually returned for that exact string.
 
 Topic **Moles & stoichiometry**, problem type **Molar mass**.
 
-### The page
+### What the page looks like
 
-The formula goes in the labelled slot at the top of the page (the box that
-says **Formula**). Everything written below the slot is working, and every
-row down there is judged on its own.
+Three zones, drawn as boxes on the notes:
+
+```
+Molar mass:  [ write the formula here ]
+
+YOUR WORKING - NOT CHECKED, WORK HOWEVER YOU LIKE
+[                                               ]
+[   grows as you write                          ]
+[                                               ]
+
+ANSWER
+[                    ]  g/mol
+```
+
+- The **formula box** fills the question by itself. Write in it, nothing to tap.
+- The **working box** is never read and never judged. Multiply, divide, cross
+  things out, lay it out however you like. Nothing in there can be marked wrong.
+- The **answer box** is the only thing checked. The `g/mol` sits outside it, so
+  write the number and nothing else.
 
 ### The question
 
 > **Aluminium sulfate, Al2(SO4)3. Find its molar mass.**
 
-Chosen because it is the one that separates students: the `3` outside the
-bracket has to multiply the S *and* the four O, and forgetting that is the
-classic mistake. It also exercises the parenthesis path in the formula
-parser, which is worth showing.
+Chosen because the `3` outside the bracket has to multiply the S *and* the four
+O, and forgetting that is the classic mistake. It also exercises the
+parenthesis path in the formula parser.
 
-Say the question out loud, write the formula in the slot, and work below it.
+### The correct run
 
-### The correct run (all four lines return valid)
+| Where | Write |
+|---|---|
+| Formula box | `Al2(SO4)3` |
+| Working | whatever you like, e.g. `2 x 26.98 = 53.96`, `3 x 32.06 = 96.18`, `12 x 16.00 = 192.0` |
+| Answer box | `342.15` |
 
-| Row | Write | Verdict | Matched |
-|---|---|---|---|
-| Slot | `Al2(SO4)3` | — | the Formula slot |
-| 1 | `Al = 53.96` | valid | mass of Al |
-| 2 | `S = 96.20` | valid | mass of S |
-| 3 | `O = 191.99` | valid | mass of O |
-| 4 | `342.15 g/mol` | valid | **molar mass, the answer** |
+Answer box goes green, panel says **Correct / That is the answer.**
 
-The three intermediate lines are not decoration. They show the judge accepts
-a student's working, not only their final number, which is the thing that
-separates this from an answer checker.
+### The two mistakes to demo, in this order
 
-### The deliberate mistake (line 4 flags, and this is the one to demo)
+**1. Stopping one step early.** Answer box: `53.96`
 
-Write the first three lines exactly as above, then instead of line 4:
+> **Not the answer** — "That is a quantity from the working, not the final answer"
 
-| Row | Write | Verdict |
-|---|---|---|
-| 4 | `149.04 g/mol` | **invalid, `wrong_value`** |
+This is the one worth pausing on. That number is real, it is the mass of the
+aluminium, and **until today the app marked it correct**, because the judge
+accepted any quantity from the working. It knows which line is the answer now,
+so it catches it. Same class of bug as the pH-versus-pOH one in
+`final_tasks.md`, and this is the top row of our own failure taxonomy: being
+told you are right when you are not.
 
-That number is what you get by reading `Al2(SO4)3` as two Al plus one S plus
-four O, so the `3` outside the bracket got dropped. It is the single most
-common molar-mass error and it is worth naming out loud when the line goes
-red.
+**2. The dropped bracket.** Answer box: `149.04`
+
+> **Not the answer** — "No quantity in the correct working has this value"
+
+That is `Al2(SO4)3` read as two Al plus one S plus four O. Note the message is
+*different* from the first one, on purpose: stopping early and inventing a
+number are different mistakes.
 
 Then take the hint ladder on that line: level 1 diagnoses, level 2 works a
-parallel problem end to end, level 3 walks their own step.
+parallel problem end to end, level 3 walks the step.
 
-### Backup question, if something goes wrong with the first
+### Backup question
 
 > **Calcium nitrate, Ca(NO3)2.**
 
-| Write | Verdict |
-|---|---|
-| `Ca = 40.08` | valid |
-| `N = 28.01` | valid |
-| `O = 95.99` | valid |
-| `164.09 g/mol` | valid, the answer |
-| `102.09 g/mol` | invalid, the same dropped-bracket error |
+Answer `164.09`. The dropped-bracket error gives `102.09`. The stop-early
+error gives `40.08` (the calcium) or `95.99` (the oxygen).
 
-### Rules for writing it, all verified against the judge
+### What to write in the answer box, verified
 
-**One number per line.** This is the one that will trip the demo if it is
-forgotten. A row containing two numbers comes back `parse_error`:
+- `342.15` → correct. **The unit is printed outside the box, so do not write it.**
+- `342.2` → correct (4 sig figs; tolerance follows what you wrote)
+- `342` → correct (3 sig figs)
+- `342.15 g` → **wrong unit.** Grams is a mass, not a molar mass
+- One number only. Working belongs in the working box
 
-- `2(26.98) + 96.20 + 191.99` → **parse_error**, "contains more than one
-  number; write the result alone"
+### Two things to avoid on stage
 
-**Arithmetic is fine as long as the result is alone after the `=`.** The
-judge splits on the equals sign and reads only what follows it:
+- **No hydrates.** The formula parser has no support for the `·` in
+  `CuSO4·5H2O`. Nothing in this demo needs one.
+- **Don't write `gmol-1`** anywhere the judge reads. The `-1` parses as a
+  second number. Not an issue if you leave the answer box unitless, which is
+  what the printed `g/mol` is there for.
 
-- `2 x 26.98 = 53.96` → **valid**
-- `3 x 32.06 = 96.18` → **valid**
+### If recognition misreads the formula
 
-**Units are optional, but a wrong one is flagged.**
-
-- `342.15 g/mol` → valid
-- `342.15` → valid, no unit at all is accepted
-- `342.2` → valid (4 sig figs)
-- `342` → valid (3 sig figs; the tolerance widens to what was written)
-- `53.96 g` → **invalid, `wrong_unit`.** Grams is a mass, not a molar mass
-- `342.15 gmol-1` → **parse_error.** The `-1` reads as a second number.
-  Known bug, avoid the notation on stage and write `g/mol`
-
-**Labels are optional and help.** `M = 342.15`, `MM = 342.15 g/mol`, and a
-bare `342.15` all match. Element symbols work as labels too, which is why
-`Al = 53.96` matches the aluminium contribution specifically.
-
-**Do not write a hydrate.** The formula parser has no `·` support, so
-`CuSO4·5H2O` will not parse. Nothing in this demo needs one.
+The **Formula** field in the right-hand panel is the escape hatch. Fix it
+there and the check re-runs. That field is a correction surface now, not the
+way in.
