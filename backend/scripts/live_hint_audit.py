@@ -57,7 +57,16 @@ ROW_POINTER = re.compile(
 # Anything that reads as SMILES rather than as chemistry a person writes.
 # Deliberately narrow: it looks for the punctuation SMILES uses and school
 # chemistry does not, so "H2SO4" is not a hit and "CC(=O)OC" is.
-SMILES_SHAPE = re.compile(r"[A-Za-z][A-Za-z0-9]*\(=O\)|\[[A-Za-z][a-z]?[+-@H0-9]*\]")
+#
+# Square brackets are not enough on their own. [H+], [OH-] and [A-] are how
+# concentration is written on every pH page in the world, and flagging them
+# reported four leaks in a run where the hints were correct.
+SMILES_SHAPE = re.compile(
+    r"[A-Za-z][A-Za-z0-9]*\(=O\)"          # a carbonyl written the SMILES way
+    r"|\[[A-Za-z][a-z]?[Hh]\d?[+-]?\]"     # [NH4], [CH3], explicit hydrogens
+    r"|\[[A-Za-z][a-z]?@{1,2}"             # stereochemistry
+    r"|(?<![A-Za-z0-9])C{3,}(?![A-Za-z0-9])"  # a bare carbon chain
+)
 
 EQUATION_CONCEPTS = {"balance", "net_ionic", "half_reaction"}
 STRUCTURE_CONCEPTS = {
@@ -144,8 +153,19 @@ def grade(question: Question, level: int, payload: dict) -> list[str]:
         visible += list(example.get("steps") or [])
     searched = " ".join(visible)
 
+    # A token the student is already looking at is not a leak, which is the
+    # rule the backend applies too. On limiting reagent the answer is one of
+    # the two species the question names, and on a pH question the student
+    # often writes the right number and then converts it one step too far,
+    # so quoting their own line back is the whole hint.
+    on_the_page = " ".join([question.problem, *question.working])
     leak = question.leak or question.correct
-    if level in (1, 2) and leak and _mentions(searched, leak):
+    if (
+        level in (1, 2)
+        and leak
+        and _mentions(searched, leak)
+        and not _mentions(on_the_page, leak)
+    ):
         problems.append(f"the answer {leak!r} appears in a level {level} hint")
 
     # No SMILES may ever reach a person, on any level or topic. It is our
