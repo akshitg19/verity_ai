@@ -920,9 +920,15 @@ def _verify_example(subject: str,topic: str, payload: dict, student_problem: str
     raw_steps = payload.get("steps") or []
     check = payload.get("check") or {}
     if not problem or not technique or not isinstance(raw_steps, list):
+        logger.warning("level 2 rejected: the payload has no problem, technique or steps")
         return None
     steps = [str(step).strip() for step in raw_steps if str(step).strip()]
     if not 1 <= len(steps) <= 20 or not isinstance(check, dict):
+        logger.warning(
+            "level 2 rejected: %d steps and check is %s",
+            len(steps),
+            type(check).__name__,
+        )
         return None
 
     # The similarity guard, asserted mechanically rather than requested in
@@ -1089,6 +1095,7 @@ def _verify_math_example(problem: str, steps: list[str]) -> bool:
     from schemas import Step
 
     if not problem or not steps:
+        logger.warning("level 2 rejected: the example has no problem or no steps")
         return False
 
     judge = AlgebraJudge()
@@ -1104,13 +1111,26 @@ def _verify_math_example(problem: str, steps: list[str]) -> bool:
     verdicts = judge.check(problem, check_steps)
 
     if not verdicts:
+        logger.warning("level 2 rejected: the algebra judge returned nothing")
         return False
 
     # line 0 means the generated problem itself could not be safely judged.
     if verdicts[0].line_number == 0:
+        logger.warning(
+            "level 2 rejected: the generated problem itself is %s",
+            verdicts[0].error_type,
+        )
         return False
 
-    return all(verdict.valid for verdict in verdicts)
+    wrong = [verdict for verdict in verdicts if not verdict.valid]
+    if wrong:
+        logger.warning(
+            "level 2 rejected: line %d of the worked example is %s",
+            wrong[0].line_number,
+            wrong[0].error_type,
+        )
+        return False
+    return True
 
 
 def _check_is_correct(topic: str, check: dict, steps: list[str]) -> bool:
@@ -1130,24 +1150,41 @@ def _check_is_correct(topic: str, check: dict, steps: list[str]) -> bool:
         return False
 
 
+def _reject(why: str, *args) -> bool:
+    """Say no, and say why.
+
+    Every rejection below used to be a bare `return False`. Level 2 was the
+    most common failure in the ladder and the server could not name a single
+    reason for it: the live audit could see the floor being served on nine
+    questions and the log had one line for one of them. A verifier that
+    cannot explain itself cannot be improved, only guessed at.
+    """
+    logger.warning("level 2 rejected: " + why, *args)
+    return False
+
+
 def _verify_balancing(check: dict, steps: list[str]) -> bool:
     from judge.chemistry_equations import balance_coefficients, is_balanced, parse_equation
 
     unbalanced = str(check.get("unbalanced", "")).strip()
     balanced = str(check.get("balanced", "")).strip()
     if not unbalanced or not balanced:
-        return False
+        return _reject("the check gave no unbalanced or no balanced equation")
     if not is_balanced(balanced):
-        return False
+        return _reject("the equation it calls balanced is not balanced: %r", balanced)
     # The balanced form must be the balanced form *of that equation*, not of
     # some other reaction the model drifted into.
     left, right = parse_equation(balanced)
     correct_left, correct_right = balance_coefficients(unbalanced)
     written = [c for c, _ in left + right]
     if written != correct_left + correct_right:
-        return False
+        return _reject(
+            "the coefficients %s are not the ones %r balances to", written, unbalanced
+        )
     # And the worked steps must actually end at it.
-    return any(_same_equation(step, balanced) for step in steps[-3:])
+    if not any(_same_equation(step, balanced) for step in steps[-3:]):
+        return _reject("the last steps never arrive at %r", balanced)
+    return True
 
 
 _ARROWS = ("->", "→", "⟶", "⇒", "=>", "➔", "-->")
@@ -1219,7 +1256,7 @@ def _verify_numeric(solution, check: dict, steps: list[str]) -> bool:
 
     expected = check.get("answer")
     if not isinstance(expected, (int, float)):
-        return False
+        return _reject("the check answer is not a number: %r", expected)
     # Any member of the answer group counts: a pH problem's answer is as
     # legitimately stated as pOH or [H+], and the generated example is
     # allowed to end on whichever the question it invented asked for.
@@ -1227,7 +1264,11 @@ def _verify_numeric(solution, check: dict, steps: list[str]) -> bool:
         values_match(step.quantity.value, float(expected), sig_figs=3)
         for step in solution.answer_steps
     ):
-        return False
+        return _reject(
+            "the example answers %s, our solver gets %s",
+            expected,
+            [round(step.quantity.value, 4) for step in solution.answer_steps],
+        )
 
     # Every numeric line of the generated working is checked against our own
     # solution. The rule used to be "reject anything we did not produce",
@@ -1253,8 +1294,7 @@ def _verify_numeric(solution, check: dict, steps: list[str]) -> bool:
             for candidate in solution.steps
         )
         if contradicts:
-            logger.warning("level 2 rejected: step %r contradicts our solution", step)
-            return False
+            return _reject("step %r contradicts our solution", step)
     return True
 
 
@@ -1269,7 +1309,11 @@ def _verify_stoichiometry(check: dict, steps: list[str]) -> bool:
     if solution.formula_answer or solution.species_answer:
         expected = str(check.get("answer", "")).strip()
         symbolic = solution.formula_answer or solution.species_answer
-        return bool(expected) and expected.replace(" ", "") == symbolic
+        if not expected or expected.replace(" ", "") != symbolic:
+            return _reject(
+                "the example answers %r, our solver gets %r", expected, symbolic
+            )
+        return True
     return _verify_numeric(solution, check, steps)
 
 
@@ -1291,8 +1335,17 @@ def _verify_redox(check: dict, steps: list[str]) -> bool:
     element = str(check.get("element", ""))
     expected = check.get("answer")
     if not formula or not element or not isinstance(expected, (int, float)):
-        return False
-    return float(oxidation_state(formula, element)) == float(expected)
+        return _reject(
+            "the check needs a formula, an element and a numeric answer, got %r",
+            check,
+        )
+    actual = float(oxidation_state(formula, element))
+    if actual != float(expected):
+        return _reject(
+            "the example says %s for %s in %s, we get %s",
+            expected, element, formula, actual,
+        )
+    return True
 
 
 def _verify_structure(check: dict, steps: list[str]) -> bool:
@@ -1304,15 +1357,18 @@ def _verify_structure(check: dict, steps: list[str]) -> bool:
 
     smiles = str(check.get("smiles", "")).strip()
     if not smiles:
-        return False
+        return _reject("the check carries no structure")
     molecule = _parse_smiles(smiles)
-    if _support_reason(molecule):
-        return False
+    reason = _support_reason(molecule)
+    if reason:
+        return _reject("we cannot read %r as a structure: %s", smiles, reason)
     group = check.get("group")
     if group:
         pattern = _FUNCTIONAL_GROUP_PATTERNS.get(str(group))
-        if pattern is None or not molecule.HasSubstructMatch(pattern):
-            return False
+        if pattern is None:
+            return _reject("we have no pattern for the group %r", group)
+        if not molecule.HasSubstructMatch(pattern):
+            return _reject("%r does not contain a %s", smiles, group)
     return True
 
 

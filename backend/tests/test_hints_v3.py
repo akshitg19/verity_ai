@@ -1160,3 +1160,65 @@ def test_describing_the_drawing_is_never_retried(monkeypatch, structure_session)
 def test_both_structure_prompts_carry_the_rule():
     assert "never seen it" in hints._CHEMISTRY_LEVEL_1_PROMPT
     assert "never seen it" in hints._CHEMISTRY_LEVEL_3_PROMPT_OPEN
+
+
+# ---------------------------------------------------------------------------
+# A verifier that cannot explain itself cannot be improved
+# ---------------------------------------------------------------------------
+
+
+def test_every_level_2_rejection_says_why():
+    """Level 2 is the most common failure in the ladder and the server could
+    not name a single reason for it.
+
+    Eleven rejection sites, two of them logged. The live audit could see the
+    static floor being served on nine questions and the log had one line for
+    one of them. This walks the source and fails if a bare `return False`
+    reappears in the verification block.
+    """
+    import ast
+    import inspect
+
+    import hints as module
+
+    source = inspect.getsource(module)
+    tree = ast.parse(source)
+    checked = {
+        "_verify_balancing",
+        "_verify_numeric",
+        "_verify_stoichiometry",
+        "_verify_solutions",
+        "_verify_redox",
+        "_verify_structure",
+        "_verify_math_example",
+    }
+    silent = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef) or node.name not in checked:
+            continue
+        for statement in ast.walk(node):
+            if not isinstance(statement, ast.Return):
+                continue
+            value = statement.value
+            is_false = isinstance(value, ast.Constant) and value.value is False
+            if not is_false:
+                continue
+            # A bare `return False` is allowed only where a log sits just
+            # above it. Anything else is a rejection with no reason. The
+            # window is wide enough for a multi-line logger call.
+            line = statement.lineno
+            window = source.splitlines()[max(0, line - 9):line]
+            if not any("logger." in text for text in window):
+                silent.append(f"{node.name}:{line}")
+
+    assert not silent, f"rejections with no reason logged: {silent}"
+
+
+def test_the_reject_helper_logs_and_returns_false(caplog):
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="hints"):
+        result = hints._reject("because %s", "reasons")
+
+    assert result is False
+    assert "level 2 rejected: because reasons" in caplog.text
