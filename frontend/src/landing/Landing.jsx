@@ -55,6 +55,39 @@ const STEPS = [
   },
 ];
 
+const TECH_STACK = [
+  {
+    title: "React + Vite",
+    label: "Frontend",
+    body: "Tablet-first handwriting workspace, notebook UI, subject switching, feedback panels and hint interactions.",
+  },
+  {
+    title: "FastAPI + Python",
+    label: "Backend",
+    body: "API layer coordinating handwriting transcription, deterministic checking, sessions and hint generation.",
+  },
+  {
+    title: "Gemini + Vertex AI",
+    label: "AI / Handwriting",
+    body: "Transcribes handwritten work and helps generate contextual tutoring language without deciding correctness.",
+  },
+  {
+    title: "SymPy",
+    label: "Math verification",
+    body: "Parses and symbolically verifies arithmetic, algebraic transformations, equations, inequalities and polynomial work.",
+  },
+  {
+    title: "RDKit + chemistry logic",
+    label: "Chemistry verification",
+    body: "Checks chemistry-specific structures and reasoning with deterministic domain tools instead of relying on an LLM verdict.",
+  },
+  {
+    title: "Browser-local notebooks",
+    label: "Persistence",
+    body: "Stores notebook pages and student work locally in the browser so the workspace persists between sessions.",
+  },
+];
+
 const FAQ = [
   {
     q: "Is it free?",
@@ -596,6 +629,105 @@ export default function Landing({ theme }) {
                 {who}
               </div>
               <div style={{ fontSize: 15.5, lineHeight: 1.65, color: COLORS.muted }}>{body}</div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* ---------------------------------------------------- technology & architecture */}
+      <Section
+        style={{
+          paddingTop: 64,
+          paddingBottom: 64,
+          background: COLORS.surface,
+          borderTop: `1px solid ${COLORS.border}`,
+          borderBottom: `1px solid ${COLORS.border}`,
+        }}
+      >
+        <SectionHeading>Technology & architecture</SectionHeading>
+
+        <p
+          style={{
+            marginTop: 12,
+            marginBottom: 28,
+            maxWidth: 680,
+            fontSize: 16.5,
+            lineHeight: 1.6,
+            color: COLORS.muted,
+          }}
+        >
+          verity.ai separates handwriting recognition from correctness checking.
+          AI interprets what the student wrote, while deterministic math and
+          chemistry engines decide whether the work is actually valid.
+        </p>
+
+        <div
+          style={{
+            padding: "18px 22px",
+            marginBottom: 32,
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: RADIUS.lg,
+            background: COLORS.background,
+            fontSize: 16,
+            fontWeight: 600,
+            lineHeight: 1.6,
+            color: COLORS.text,
+          }}
+        >
+          Handwriting → Gemini transcription → deterministic verification →
+          targeted feedback → progressive hints
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+            gap: 18,
+          }}
+        >
+          {TECH_STACK.map((item) => (
+            <div
+              key={item.title}
+              style={{
+                padding: 22,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: RADIUS.lg,
+                background: COLORS.background,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  letterSpacing: 0.7,
+                  textTransform: "uppercase",
+                  color: COLORS.muted,
+                  marginBottom: 6,
+                }}
+              >
+                {item.label}
+              </div>
+
+              <div
+                style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  marginBottom: 8,
+                  color: COLORS.primary,
+                }}
+              >
+                {item.title}
+              </div>
+
+              <div
+                style={{
+                  fontSize: 15,
+                  lineHeight: 1.6,
+                  color: COLORS.muted,
+                }}
+              >
+                {item.body}
+              </div>
             </div>
           ))}
         </div>
