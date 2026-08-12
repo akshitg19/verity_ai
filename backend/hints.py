@@ -720,7 +720,33 @@ def _verify_example(subject: str,topic: str, payload: dict, student_problem: str
             if subject == "chemistry"
             else []
         ),
+        quantities=[_step_quantity(step) for step in steps],
     )
+
+
+def _step_quantity(step: str):
+    """The single quantity a worked step states, or None.
+
+    Same argument as `_step_equation`: our parser, not the client's regex.
+    A step with two numbers in it is working rather than a claim, and
+    `parse_quantity` refuses it, which is exactly the answer we want here.
+    """
+    from judge.quantities import QuantityParseError, format_quantity, parse_quantity
+    from schemas import ExampleQuantity
+
+    text = step.split(":")[-1].strip() if ":" in step else step
+    for candidate in (text, step):
+        try:
+            quantity = parse_quantity(candidate)
+        except QuantityParseError:
+            continue
+        return ExampleQuantity(
+            value=quantity.value,
+            unit=quantity.unit,
+            label=quantity.name,
+            text=format_quantity(quantity),
+        )
+    return None
 
 
 # ---------------------------------------------------------------------------

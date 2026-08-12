@@ -613,6 +613,22 @@ HintText = Annotated[
 ]
 
 
+class ExampleQuantity(BaseModel):
+    """One number a worked step states, so the client can show it moving.
+
+    Carries no part of any answer to the student's own problem: a worked
+    example is a *different* problem by construction, and the redaction pass
+    runs over the whole example before it is returned.
+    """
+
+    value: float
+    unit: str | None = None
+    label: str | None = None
+    # As the student would write it, e.g. "0.250 M". Rendered rather than
+    # reformatted on the client, so the two cannot disagree about rounding.
+    text: str
+
+
 class WorkedExample(BaseModel):
     """A different problem, worked in full, verified line by line.
 
@@ -625,6 +641,13 @@ class WorkedExample(BaseModel):
     technique: str
     steps: Annotated[list[str], Field(min_length=1, max_length=20)]
     verified: bool = False
+    # One entry per step, aligned by index: the quantity that step states, as
+    # `judge.quantities.parse_quantity` reads it, or null where the step
+    # states no single quantity. Same reasoning as `equations` below, for the
+    # numeric topics: the client should not be running a regex over prose to
+    # find out which number moved, because the parser that judges the student
+    # already knows.
+    quantities: list["ExampleQuantity | None"] = Field(default_factory=list)
     # One entry per step, aligned by index: the equation on that step as our
     # own parser reads it, or null where the step carries no equation.
     #
