@@ -106,6 +106,15 @@ def judge(base: str, question: Question, line: str) -> str:
     return status_of(post(base, question.check_path, body))
 
 
+def _mentions(text: str, needle: str) -> bool:
+    """Whole-token containment, so CC(C)C is not found inside CC(C)CC."""
+    pattern = re.compile(
+        r"(?<![A-Za-z0-9()=\[\]])" + re.escape(needle) + r"(?![A-Za-z0-9()=\[\]])",
+        re.IGNORECASE,
+    )
+    return bool(pattern.search(text))
+
+
 def grade(question: Question, level: int, payload: dict) -> list[str]:
     """Every rule this hint could break, as a list of plain sentences."""
     problems: list[str] = []
@@ -125,16 +134,28 @@ def grade(question: Question, level: int, payload: dict) -> list[str]:
     if len(hint) < 25:
         problems.append(f"hint is {len(hint)} characters, too short to help")
 
-    leak = question.leak or question.correct
-    searched = hint
+    # Only what a person reads. `structure` is a SMILES handed to the
+    # renderer and drawn as a picture, and searching it for the answer as a
+    # substring reported CC(C)C leaking out of an example whose answer was
+    # CC(C)CC, which is a different molecule.
+    visible = [hint]
     if example:
-        searched += " " + json.dumps(example)
-    if level in (1, 2) and leak and leak.lower() in searched.lower():
+        visible += [example.get("problem") or "", example.get("technique") or ""]
+        visible += list(example.get("steps") or [])
+    searched = " ".join(visible)
+
+    leak = question.leak or question.correct
+    if level in (1, 2) and leak and _mentions(searched, leak):
         problems.append(f"the answer {leak!r} appears in a level {level} hint")
 
-    if SMILES_SHAPE.search(hint):
-        found = SMILES_SHAPE.search(hint).group(0)
-        problems.append(f"SMILES reached the student: {found!r}")
+    # No SMILES may ever reach a person, on any level or topic. It is our
+    # internal representation, and a student who has never heard of it reads
+    # CC(=O)OC as noise.
+    for text in visible:
+        found = SMILES_SHAPE.search(text or "")
+        if found:
+            problems.append(f"SMILES reached the student: {found.group(0)!r}")
+            break
 
     if level == 2:
         if not example:

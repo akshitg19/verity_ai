@@ -80,6 +80,45 @@ def _declared_as_the_answer(text: str, candidate: str) -> bool:
     return bool(leading.search(text) or trailing.search(text))
 
 
+# A word that could be an IUPAC name, by its ending. Deliberately a short
+# list of the suffixes school chemistry actually uses, because every hit
+# costs an OPSIN call and a hint is not a place to run a dictionary over.
+_NAME_CANDIDATE_RE = re.compile(
+    r"\b[a-z][a-z0-9\-,\[\]']{2,40}"
+    r"(?:ane|ene|yne|anol|enol|ol|anal|al|anone|one|"
+    r"oic acid|anoate|oate|amine|amide|ether|benzene)\b"
+)
+# Bounded so a long hint cannot turn into a stream of subprocess calls.
+_MAX_NAME_CANDIDATES = 6
+
+
+def _name_candidates(text: str) -> list[str]:
+    seen: list[str] = []
+    for match in _NAME_CANDIDATE_RE.finditer(text):
+        word = match.group(0)
+        if word not in seen:
+            seen.append(word)
+        if len(seen) >= _MAX_NAME_CANDIDATES:
+            break
+    return seen
+
+
+def _name_to_structure(name: str) -> str | None:
+    """Resolve a name to a canonical SMILES, or None if we cannot.
+
+    Naming needs a Java runtime for OPSIN and the container deliberately has
+    none, so this returns None in production and the check simply does not
+    fire. That is a gap, recorded here rather than hidden: on a deployment
+    without Java a hint can still name the target molecule.
+    """
+    try:
+        from judge.naming import name_to_smiles
+
+        return canonical_smiles(name_to_smiles(name))
+    except Exception:
+        return None
+
+
 # A SMILES-looking run, long enough not to fire on ordinary prose.
 _SMILES_CANDIDATE_RE = re.compile(
     r"(?<![A-Za-z0-9])"
@@ -128,7 +167,9 @@ def _numeric_tokens(text: str) -> list[float]:
     return values
 
 
-def _problem_surface(vault: AnswerVault) -> tuple[set[str], str, list[float]]:
+def _problem_surface(
+    vault: AnswerVault, also_visible: str = ""
+) -> tuple[set[str], str, list[float]]:
     """What the student can already read on their own page.
 
     Nothing here is a secret. The problem statement is printed in front of
@@ -145,8 +186,14 @@ def _problem_surface(vault: AnswerVault) -> tuple[set[str], str, list[float]]:
     The assignment check below deliberately does not consult this. "The
     answer is 2.00" is a leak whether or not a 2.00 appears in the question,
     because the shape is what states it.
+
+    `also_visible` carries the student's own line and working for the same
+    reason. On the net ionic question the vault lists the complete ionic
+    equation, the student had written the complete ionic equation, and a
+    level 1 hint quoting their own line back to them was thrown away for
+    containing an answer form. They wrote it. There is nothing to protect.
     """
-    normalised = normalise(vault.problem or "")
+    normalised = normalise(f"{vault.problem or ''} {also_visible}")
     tokens = tokenise(normalised)
     given: list[float] = []
     for token in tokens:
@@ -167,12 +214,18 @@ def check_outbound(
     vault: AnswerVault | None,
     *,
     allow_near_answer: bool = False,
+    also_visible: str = "",
 ) -> tuple[bool, str | None]:
     """The single gate. Returns (allowed, violation).
 
     `allow_near_answer` is set only for level 3, which is permitted to work
     the student's own step and therefore to restate quantities they have
     already produced. It never relaxes the answer check itself.
+
+    `also_visible` is text already on the student's page, usually their own
+    working. Quoting it back is not a disclosure. It never relaxes the
+    assignment shapes, which state the answer regardless of what else is
+    written anywhere.
 
     Note for anyone tempted to add a relaxation here: the reason level 2 and
     level 1 were once blocked on every balancing problem was not this filter
@@ -192,7 +245,9 @@ def check_outbound(
 
     normalised = normalise(text)
     tokens = set(tokenise(normalised))
-    problem_tokens, problem_text, problem_numbers = _problem_surface(vault)
+    problem_tokens, problem_text, problem_numbers = _problem_surface(
+        vault, also_visible
+    )
 
     for form in vault.answer_forms:
         candidate = normalise(str(form))
@@ -238,6 +293,15 @@ def check_outbound(
                     return False, "contains a SMILES equal to the target structure"
             except (ChemistryParseError, UnsupportedChemistryError, ValueError):
                 continue
+        # The same check, for the other way of writing a molecule. "Name this
+        # molecule" has an answer the vault cannot enumerate, because we hold
+        # the structure and there is no structure-to-name direction here. A
+        # hint said "ethanol" and nothing stopped it. Resolving the name back
+        # to a structure is the direction we do have.
+        for candidate in _name_candidates(normalised):
+            resolved = _name_to_structure(candidate)
+            if resolved is not None and resolved in vault.structure_forms:
+                return False, "names the target structure"
 
     if not allow_near_answer:
         for line in vault.near_answer_lines:
@@ -254,6 +318,7 @@ def redact_or_fallback(
     fallback: str,
     *,
     allow_near_answer: bool = False,
+    also_visible: str = "",
 ) -> tuple[str, str | None]:
     """Return the text if it passes, otherwise the static fallback.
 
@@ -265,6 +330,7 @@ def redact_or_fallback(
         text,
         vault,
         allow_near_answer=allow_near_answer,
+        also_visible=also_visible,
     )
     if allowed:
         return text, None

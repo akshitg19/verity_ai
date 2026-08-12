@@ -292,6 +292,88 @@ def test_a_subscript_is_not_a_given_quantity():
     assert allowed is False
 
 
+def test_quoting_the_students_own_line_is_not_leaking():
+    """Their page is not a secret from them.
+
+    The net ionic vault lists the complete ionic equation, the student had
+    written the complete ionic equation, and the level 1 hint quoting their
+    own line back was thrown away for containing an answer form. Live, on
+    the first of the two net ionic questions.
+    """
+    from answer_vault import vault_for_net_ionic
+
+    written = "Ag^+ + NO3^- + Na^+ + Cl^- -> AgCl + Na^+ + NO3^-"
+    vault = vault_for_net_ionic(
+        "Write the net ionic equation for AgNO3 + NaCl -> AgCl + NaNO3",
+        "AgNO3 + NaCl -> AgCl + NaNO3",
+    )
+
+    allowed, violation = check_outbound(
+        f"You wrote {written}, which is the complete ionic equation. Look "
+        "for the ions that are identical on both sides.",
+        vault,
+        also_visible=written,
+    )
+
+    assert allowed is True, violation
+
+
+def test_the_students_page_does_not_license_the_answer_they_did_not_write():
+    vault = vault_for_solutions(
+        "What is the pH of 0.100 M acetic acid? Ka = 1.8 x 10^-5",
+        SolutionsProblem(task="weak_acid_ph", concentration_m=0.1, ka=1.8e-5),
+    )
+    allowed, _ = check_outbound(
+        "You should get 2.88.", vault, also_visible="pH = 4.20"
+    )
+
+    assert allowed is False
+
+
+@pytest.mark.skipif(
+    not __import__("judge.naming", fromlist=["x"]).opsin_available(),
+    reason="naming needs a Java runtime",
+)
+def test_naming_the_target_molecule_is_caught(structure_vault):
+    """The vault holds the structure and there is no structure-to-name
+    direction, so "ethanol" was sayable and was said. Resolving a name back
+    to a structure is the direction we do have."""
+    vault = vault_for_structure("Name this molecule.", "CCO")
+    allowed, violation = check_outbound(
+        "This one is ethanol, count the carbons again.", vault
+    )
+
+    assert allowed is False
+    assert violation == "names the target structure"
+
+
+@pytest.mark.skipif(
+    not __import__("judge.naming", fromlist=["x"]).opsin_available(),
+    reason="naming needs a Java runtime",
+)
+def test_naming_a_different_molecule_is_fine():
+    """Including the wrong name the student wrote, which is the whole point
+    of level 1: say what they did."""
+    vault = vault_for_structure("Name this molecule.", "CCO")
+    allowed, violation = check_outbound(
+        "You wrote methanol, which has one carbon. Count the carbons in the "
+        "drawing and compare.",
+        vault,
+    )
+
+    assert allowed is True, violation
+
+
+def test_the_name_check_is_bounded():
+    """A hint is not a place to run a dictionary over: every candidate costs
+    an OPSIN call, so the number of candidates is capped."""
+    from redaction import _MAX_NAME_CANDIDATES, _name_candidates
+
+    text = " ".join(f"compound{index}ane" for index in range(40))
+
+    assert len(_name_candidates(text)) <= _MAX_NAME_CANDIDATES
+
+
 def test_a_safe_hint_passes(ph_vault):
     allowed, violation = check_outbound(
         "Look at the ICE table again: the x you subtract from the initial "

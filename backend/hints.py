@@ -347,6 +347,21 @@ def _template_hint(req: HintRequest) -> str:
 # is constructed and the only place redaction runs, so the guarantee can be
 # audited by reading one function.
 # ---------------------------------------------------------------------------
+def _student_page(req: HintRequest) -> str:
+    """Everything the student has already written, as one string.
+
+    Handed to redaction so a hint may quote their own work back at them. On
+    the net ionic question the vault lists the complete ionic equation as an
+    answer form, the student had written the complete ionic equation, and
+    the level 1 hint quoting their line was thrown away for containing an
+    answer. Nothing is disclosed by reading a page back to the person who
+    wrote it.
+    """
+    parts = [req.student_line or "", req.previous_line or ""]
+    parts.extend(req.working_lines or [])
+    return " ".join(part for part in parts if part)
+
+
 def _finalise(
     req: HintRequest,
     text: str,
@@ -380,7 +395,11 @@ def _finalise(
         safe_text, violation = text, None
     else:
         safe_text, violation = redact_or_fallback(
-            text, vault, fallback, allow_near_answer=allow_near_answer
+            text,
+            vault,
+            fallback,
+            allow_near_answer=allow_near_answer,
+            also_visible=_student_page(req),
         )
 
     if violation:
@@ -565,7 +584,7 @@ def _without_positional_pointing(
     """
     if not _points_by_position(first[0]):
         return first
-    logger.info("level %d pointed by position, asking once more", level)
+    logger.warning("level %d pointed by position, asking once more", level)
     again = generate(retry=_RETRY_POSITION)
     if again is not None and again[0] and not _points_by_position(again[0]):
         return again
@@ -761,12 +780,12 @@ def _verify_example(subject: str,topic: str, payload: dict, student_problem: str
     # the prompt: an analogue that reuses the student's numbers is the
     # student's problem wearing a hat.
     if not numbers_differ(problem, student_problem):
-        logger.info("level 2 rejected: analogue reuses the student's numbers")
+        logger.warning("level 2 rejected: analogue reuses the student's numbers")
         return None
 
     if subject == "math":
         if topic != "algebra":
-            logger.info(
+            logger.warning(
                 "level 2 rejected: no deterministic math verifier for topic %s",
                 topic,
             )
@@ -958,7 +977,7 @@ def _check_is_correct(topic: str, check: dict, steps: list[str]) -> bool:
             return _verify_redox(check, steps)
         return _verify_structure(check, steps)
     except Exception as exc:  # any engine failure is a failed verification
-        logger.info("level 2 verification raised, rejecting example: %s", exc)
+        logger.warning("level 2 verification raised, rejecting example: %s", exc)
         return False
 
 
@@ -1085,7 +1104,7 @@ def _verify_numeric(solution, check: dict, steps: list[str]) -> bool:
             for candidate in solution.steps
         )
         if contradicts:
-            logger.info("level 2 rejected: step %r contradicts our solution", step)
+            logger.warning("level 2 rejected: step %r contradicts our solution", step)
             return False
     return True
 
@@ -1188,7 +1207,7 @@ def _generate_level_2(
         )
         if example is not None:
             return example, total_latency
-        logger.info("level 2 example failed verification, attempt %d", attempt + 1)
+        logger.warning("level 2 example failed verification, attempt %d", attempt + 1)
     return None
 
 
