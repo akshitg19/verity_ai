@@ -513,3 +513,29 @@ def test_a_wrong_worked_example_is_still_thrown_away(monkeypatch):
     assert data["worked_example"] is None
     assert data["source"] == "fallback"
     assert data["hint"].strip()
+
+
+def test_prompts_forbid_pointing_by_line_number():
+    """A hint has to say where by quoting the work, not by counting rows.
+
+    On a worksheet the student laid the page out themselves, so our row
+    index is not the one they see. "Where you wrote minus 2 on the oxygen"
+    lands; "line 3" makes them count first.
+    """
+    for prompt in (
+        hints._CHEMISTRY_LEVEL_1_PROMPT,
+        hints._MATH_LEVEL_1_PROMPT,
+        hints._CHEMISTRY_LEVEL_3_PROMPT,
+        hints._CHEMISTRY_LEVEL_3_PROMPT_OPEN,
+    ):
+        assert "row number" in prompt or "numbering it" in prompt
+
+
+def test_no_prompt_teaches_the_model_to_use_an_em_dash():
+    """The model copies the register it is given."""
+    for name in dir(hints):
+        if not name.endswith("_PROMPT") and not name.endswith("_PROMPT_OPEN"):
+            continue
+        value = getattr(hints, name)
+        if isinstance(value, str):
+            assert "—" not in value, name

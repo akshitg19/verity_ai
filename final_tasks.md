@@ -2802,3 +2802,118 @@ The student's own framing, which is the right one: *"it's really impossible
 to check each line because it's hard for it to actually understand, and we
 need a stronger model."* That is the honest position, and it belongs in the
 demo script rather than in a footnote.
+
+---
+
+# The hint pass, Aug 12: what was actually wrong
+
+## 20. Seven problem types opened no session
+
+The finding that explains why hints felt broken on some topics and fine on
+others. `topics.js` returned `null` from `session()` for oxidation state,
+cell potential, both isomer types, the formula-structure type, naming from a
+name, and reaction prediction. No session means no vault, and
+`generate_hint` serves the static template floor whenever the vault is
+missing, by design, because a vault is the redaction reference and
+generating against no reference is the leak this file exists to prevent.
+
+So the ladder was working exactly as written and the hints were still
+generic, and nothing anywhere logged a problem. **A feature that degrades
+silently to a worse version of itself is the hardest kind to notice.**
+
+Three vaults already existed and were simply never called:
+`vault_for_oxidation_state`, `vault_for_cell_potential`,
+`vault_for_net_ionic`. Net ionic was worse than missing: it sent its
+molecular equation as `reference_equation`, so the vault held the *balanced*
+equation and guarded the wrong answer.
+
+`vault_for_formula_structure` is new and closes the "the vault would have to
+hold any of these" note. It guards the **formula**, not the set of
+acceptable structures, which is right: the question asked for the formula.
+
+- [x] Every problem type opens a session
+- [x] `tests/test_hint_coverage.py` asserts it, per type
+
+## 21. Hints were keyed by topic, which is one level too coarse
+
+Level 1 received the subject and the topic. So every stoichiometry hint was
+written against the same coaching whether the student was finding a molar
+mass or a percent yield, and a hint keyed only by the topic can never be
+more specific than the topic. That is the same ceiling the static templates
+had, one rung up.
+
+`backend/hint_rules.py` gives all thirty concepts their own entry: what a
+level 1 hint must point at, the errors that actually happen on that concept
+in the order a teacher expects them, and what a level 2 analogue must
+preserve. A molar mass analogue keeps the bracket. An empirical formula
+analogue keeps a half-integer ratio. A strong base analogue keeps two
+hydroxides. Without those constraints the "parallel problem" drifts to an
+easier problem than the one the student is stuck on, which teaches nothing.
+
+The model is told to decide which known error it is **before** writing, and
+to describe what the student actually did if it is none of them. Forcing a
+known error onto work that does not fit it is worse than a general hint.
+
+- [x] `problem_type` on `HintRequest`, additive
+- [x] Rules for all thirty concepts, no two coaching identically
+- [x] Hints point at the place by quoting it, never by row number, because
+      on a worksheet the student laid the page out and our numbering is not
+      theirs
+
+## 22. The working now reaches the hint layer
+
+Section 19 said the working is not read. It still is not *judged*, and that
+call stands. But a hint that has never seen the working can only say "this
+number is wrong", so `working_lines` is read once, lazily, at the moment a
+hint is asked for, and passed to levels 1 and 3.
+
+Row by row through the prompt already known to work, rather than as one
+block through a prompt written for a single line. Failures are swallowed: a
+hint without the working beats no hint.
+
+## 23. Level 2 animates on every topic now, and plays
+
+Balancing already animated. The other two families did not, and structure is
+the worst place to show prose, because the thing being taught is a picture.
+
+| Family | What moves |
+|---|---|
+| Balancing, net ionic, half-reactions | Coefficients pop, atom tally goes green per element |
+| Numeric | A quantity card lands per step, building the working |
+| Structure, organic | The molecule is drawn at the last step |
+
+`equations`, `quantities` and `structure` all come from **our** parsers, not
+from the client reading prose. That distinction already ended one class of
+bug where the client tallied the word "Balance" as an element.
+
+A Play control walks the steps at 2.6s each and stops at the end. Off by
+default: a panel that starts moving under the student is the complaint that
+closed the old one.
+
+## 24. What the suite now covers, and the one gap left
+
+900 backend tests and 311 frontend. New this pass: thirty concepts x three
+levels, plus three tests proving the animation payload arrives, plus the
+guard that a wrong worked example is still thrown away whole.
+
+Those three matter more than they look. **The suite tested only that
+verification rejects bad examples, never that it accepts good ones**, which
+is exactly how three bugs that each rejected a correct example shipped
+together. That asymmetry is now fixed in both directions.
+
+**The gap: none of this has run against a live model in this pass.** The ADC
+token expired mid-session, so every assertion above is against a mocked
+model. What is proven is our own code: sessions open, vaults build, prompts
+carry the concept, verification accepts and rejects correctly, and the
+payloads the animations need arrive. What is not proven is hint quality,
+which needs:
+
+```powershell
+gcloud auth application-default login
+.\backend\venv\Scripts\python.exe backend\scripts\student_walkthrough.py
+```
+
+- [ ] Run the walkthrough live and record level 1, 2, 3 generation rates
+- [ ] Re-check the three strong-acid and strong-base questions that fell
+      back in both runs on Aug 10. They now have concept rules naming the
+      pOH-for-pH trap directly, which is the most likely cause
