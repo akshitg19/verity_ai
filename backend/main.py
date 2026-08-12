@@ -343,9 +343,11 @@ def check_stoichiometry_steps(req: StoichiometryRequest):
 @app.post("/chemistry/solutions", response_model=ChemistryCheckResponse)
 def check_solutions_steps(req: SolutionsRequest):
     problem = SolutionsProblem(
-        **req.model_dump(exclude={"steps"})
+        **req.model_dump(exclude={"steps", "answers_only"})
     )
-    return _chemistry_response(solutions_judge.check(problem, req.steps))
+    return _chemistry_response(
+        solutions_judge.check(problem, req.steps, answers_only=req.answers_only)
+    )
 
 
 @app.post("/chemistry/oxidation-state", response_model=ChemistryCheckResponse)
@@ -442,7 +444,9 @@ def open_chemistry_session(req: ChemistrySessionRequest):
         )
     solutions = None
     if req.solutions is not None:
-        solutions = SolutionsProblem(**req.solutions.model_dump(exclude={"steps"}))
+        solutions = SolutionsProblem(
+            **req.solutions.model_dump(exclude={"steps", "answers_only"})
+        )
 
     try:
         vault = build_vault(

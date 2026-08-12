@@ -135,10 +135,25 @@ describe("promptsComplete", () => {
   });
 
   it("does not wait on an optional one", () => {
+    const sheet = buildWorksheet(stoichiometry, {
+      label: "Made up",
+      fields: [
+        { name: "formula", label: "Formula", ink: "formula" },
+        { name: "note", label: "Note (optional)", ink: "note" },
+      ],
+    });
+    expect(promptsComplete(sheet, { formula: "C6H12O6" })).toBe(true);
+  });
+
+  it("waits on the element for percent composition", () => {
+    // The element is the question on that type, not a refinement of it.
     const percent = stoichiometry.types.find(
       (type) => type.id === "percent_composition"
     );
     const sheet = buildWorksheet(stoichiometry, percent);
-    expect(promptsComplete(sheet, { formula: "C6H12O6" })).toBe(true);
+    expect(promptsComplete(sheet, { formula: "C6H12O6" })).toBe(false);
+    expect(promptsComplete(sheet, { formula: "C6H12O6", element: "C" })).toBe(
+      true
+    );
   });
 });

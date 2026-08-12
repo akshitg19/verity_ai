@@ -1,5 +1,5 @@
 import { DEFAULT_LINE_HEIGHT } from "../canvas/geometry";
-import { COLORS, FONT, RADIUS, SUBJECTS, VERDICT_STYLES } from "../theme";
+import { FONT, PAPER, RADIUS, SUBJECTS, VERDICT_STYLES } from "../theme";
 import { rowBand } from "./worksheet";
 
 // The worksheet, drawn on the page.
@@ -16,7 +16,7 @@ import { rowBand } from "./worksheet";
 
 const accent = SUBJECTS.chemistry.accent;
 
-function Caption({ top, left = 10, color = COLORS.muted, children }) {
+function Caption({ top, left = 10, color = PAPER.muted, children }) {
   return (
     <div
       style={{
@@ -49,10 +49,10 @@ function Box({ top, left, width, height, filled, tone }) {
         width,
         height,
         border: `1.5px ${filled ? "solid" : "dashed"} ${
-          tone ?? (filled ? accent : COLORS.border)
+          tone ?? (filled ? accent : PAPER.line)
         }`,
         borderRadius: RADIUS.sm,
-        background: filled ? "transparent" : "rgba(127,127,127,0.035)",
+        background: filled ? "transparent" : PAPER.fill,
         pointerEvents: "none",
       }}
     />
@@ -108,7 +108,7 @@ export default function WorksheetOverlay({
                   left,
                   fontSize: 17,
                   fontWeight: 700,
-                  color: COLORS.text,
+                  color: PAPER.ink,
                   fontFamily: FONT.sans,
                   pointerEvents: "none",
                   userSelect: "none",
@@ -134,11 +134,10 @@ export default function WorksheetOverlay({
                 (prompt.row === 0 ? left + titleWidth(worksheet.title) : left) + 8
               }
             >
-              {filled
-                ? prompt.label
-                : `write the ${prompt.label.toLowerCase()} here${
-                    prompt.optional ? " (optional)" : ""
-                  }`}
+              {/* Before it is filled the caption has to say what to write
+                  and, where it is not obvious, what it is for. "Write the
+                  amounts here" does not tell anyone which amounts. */}
+              {filled ? prompt.label : prompt.prompt}
             </Caption>
             {prompt.unit && (
               <div
@@ -155,7 +154,7 @@ export default function WorksheetOverlay({
                     10,
                   fontSize: 13,
                   fontWeight: 600,
-                  color: COLORS.muted,
+                  color: PAPER.muted,
                   pointerEvents: "none",
                 }}
               >
@@ -175,9 +174,10 @@ export default function WorksheetOverlay({
         height={working.height - 8}
         filled={false}
       />
-      <Caption top={working.top + 8}>
-        Your working — not checked, work however you like
-      </Caption>
+      {/* Says "work however you like" and not "not checked". Both are true,
+          but the second reads as a broken feature and invites the student to
+          skip the working, which is the part they are meant to be doing. */}
+      <Caption top={working.top + 8}>Your working, laid out however you like</Caption>
 
       <Box
         top={answer.top + 4}
@@ -202,7 +202,7 @@ export default function WorksheetOverlay({
             left: left + Math.min(300, boxWidth) + 12,
             fontSize: 16,
             fontWeight: 600,
-            color: COLORS.muted,
+            color: PAPER.muted,
             fontFamily: FONT.sans,
             pointerEvents: "none",
             userSelect: "none",

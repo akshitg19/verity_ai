@@ -50,6 +50,16 @@
      --v-paper under the dark block. */
   --v-ink: #1f2926;
 
+  /* Anything printed ON the paper: the worksheet labels, the box outlines.
+     The paper never inverts, so these must not either. Using --v-text here
+     turns the heading near-white on a light sheet in dark mode, which is
+     invisible rather than themed. Defined once and deliberately not
+     overridden in the dark block below. */
+  --v-paper-ink: #1b1c1a;
+  --v-paper-muted: #6b6a65;
+  --v-paper-line: #c9c6bc;
+  --v-paper-fill: rgba(27, 28, 26, 0.035);
+
   --v-shadow-card: 0 10px 30px rgba(27, 28, 26, 0.10);
   --v-shadow-raised: 0 1px 3px rgba(27, 28, 26, 0.06);
   --v-shadow-float: 0 8px 24px rgba(27, 28, 26, 0.14);

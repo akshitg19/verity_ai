@@ -99,15 +99,30 @@ export const TOPICS = [
         id: "molar_mass",
         label: "Molar mass",
         answerUnit: "g/mol",
-        fields: [inkField("formula", "Formula", "formula", { placeholder: "H2SO4" })],
+        fields: [
+          inkField("formula", "Formula", "formula", {
+            placeholder: "H2SO4",
+            prompt: "write the formula, like H2SO4",
+          }),
+        ],
       },
       {
         id: "percent_composition",
         label: "Percent composition",
         answerUnit: "%",
         fields: [
-          inkField("formula", "Formula", "formula", { placeholder: "C6H12O6" }),
-          inkField("element", "Element (optional)", "element", { placeholder: "C" }),
+          inkField("formula", "Formula", "formula", {
+            placeholder: "C6H12O6",
+            prompt: "write the compound, like C6H12O6",
+          }),
+          // Was labelled "Element (optional)", which told a student it did
+          // not matter when it is the whole question: the percent *of what*.
+          // Required now, and the answer is that element's percent rather
+          // than whichever element happens to sort last.
+          inkField("element", "Element", "element", {
+            placeholder: "C",
+            prompt: "which element do you want the percent of?",
+          }),
         ],
       },
       {
@@ -115,8 +130,14 @@ export const TOPICS = [
         label: "Moles from mass",
         answerUnit: "mol",
         fields: [
-          inkField("formula", "Formula", "formula", { placeholder: "H2O" }),
-          inkField("mass_g", "Mass (g)", "mass", { placeholder: "36.03" }),
+          inkField("formula", "Formula", "formula", {
+            placeholder: "H2O",
+            prompt: "write the compound, like H2O",
+          }),
+          inkField("mass_g", "Mass (g)", "mass", {
+            placeholder: "36.03",
+            prompt: "how many grams of it do you have?",
+          }),
         ],
       },
       {
@@ -124,8 +145,14 @@ export const TOPICS = [
         label: "Mass from moles",
         answerUnit: "g",
         fields: [
-          inkField("formula", "Formula", "formula", { placeholder: "NaCl" }),
-          inkField("moles", "Moles", "amount in moles", { placeholder: "0.25" }),
+          inkField("formula", "Formula", "formula", {
+            placeholder: "NaCl",
+            prompt: "write the compound, like NaCl",
+          }),
+          inkField("moles", "Moles", "amount in moles", {
+            placeholder: "0.25",
+            prompt: "how many moles of it do you have?",
+          }),
         ],
       },
       {
@@ -135,6 +162,7 @@ export const TOPICS = [
         fields: [
           inkField("composition", "Composition by mass %", "composition", {
             placeholder: "C: 40.0, H: 6.7, O: 53.3",
+            prompt: "each element and its mass percent, like C: 40.0, H: 6.7, O: 53.3",
           }),
         ],
       },
@@ -144,9 +172,11 @@ export const TOPICS = [
         fields: [
           inkField("composition", "Composition by mass %", "composition", {
             placeholder: "C: 40.0, H: 6.7, O: 53.3",
+            prompt: "each element and its mass percent, like C: 40.0, H: 6.7, O: 53.3",
           }),
           inkField("target_molar_mass", "Molar mass (g/mol)", "molar mass", {
             placeholder: "180",
+            prompt: "the molar mass the question gives you",
           }),
         ],
       },
@@ -155,8 +185,14 @@ export const TOPICS = [
         label: "Limiting reagent",
         // No unit: the answer is a species.
         fields: [
-          inkField("equation", "Equation", "equation", { placeholder: "N2 + H2 -> NH3" }),
-          inkField("amounts", "Amounts (g)", "amounts", { placeholder: "N2: 28.0, H2: 6.0" }),
+          inkField("equation", "Equation", "equation", {
+            placeholder: "N2 + H2 -> NH3",
+            prompt: "write the reaction, like N2 + H2 -> NH3",
+          }),
+          inkField("amounts", "Amounts (g)", "amounts", {
+            placeholder: "N2: 28.0, H2: 6.0",
+            prompt: "how many grams of each reactant, like N2: 28.0, H2: 6.0",
+          }),
         ],
       },
       {
@@ -164,9 +200,18 @@ export const TOPICS = [
         label: "Theoretical yield",
         answerUnit: "g",
         fields: [
-          inkField("equation", "Equation", "equation", { placeholder: "N2 + H2 -> NH3" }),
-          inkField("amounts", "Amounts (g)", "amounts", { placeholder: "N2: 28.0, H2: 6.0" }),
-          inkField("product", "Product", "product", { placeholder: "NH3" }),
+          inkField("equation", "Equation", "equation", {
+            placeholder: "N2 + H2 -> NH3",
+            prompt: "write the reaction, like N2 + H2 -> NH3",
+          }),
+          inkField("amounts", "Amounts (g)", "amounts", {
+            placeholder: "N2: 28.0, H2: 6.0",
+            prompt: "how many grams of each reactant, like N2: 28.0, H2: 6.0",
+          }),
+          inkField("product", "Product", "product", {
+            placeholder: "NH3",
+            prompt: "which product are you finding the yield of?",
+          }),
         ],
       },
       {
@@ -174,11 +219,21 @@ export const TOPICS = [
         label: "Percent yield",
         answerUnit: "%",
         fields: [
-          inkField("equation", "Equation", "equation", { placeholder: "N2 + H2 -> NH3" }),
-          inkField("amounts", "Amounts (g)", "amounts", { placeholder: "N2: 28.0, H2: 6.0" }),
-          inkField("product", "Product", "product", { placeholder: "NH3" }),
+          inkField("equation", "Equation", "equation", {
+            placeholder: "N2 + H2 -> NH3",
+            prompt: "write the reaction, like N2 + H2 -> NH3",
+          }),
+          inkField("amounts", "Amounts (g)", "amounts", {
+            placeholder: "N2: 28.0, H2: 6.0",
+            prompt: "how many grams of each reactant, like N2: 28.0, H2: 6.0",
+          }),
+          inkField("product", "Product", "product", {
+            placeholder: "NH3",
+            prompt: "which product are you finding the yield of?",
+          }),
           inkField("actual_yield_g", "Mass you collected (g)", "mass collected", {
             placeholder: "25.0",
+            prompt: "how many grams did the experiment actually produce?",
           }),
         ],
       },
@@ -230,9 +285,9 @@ export const TOPICS = [
         label: "Molarity",
         answerUnit: "M",
         fields: [
-          inkField("formula", "Solute formula", "solute", { placeholder: "NaCl" }),
-          inkField("mass_g", "Mass (g)", "mass", { placeholder: "5.85" }),
-          inkField("volume_l", "Volume (L)", "volume", { placeholder: "1.00" }),
+          inkField("formula", "Solute formula", "solute", { placeholder: "NaCl", prompt: "write the solute, like NaCl" }),
+          inkField("mass_g", "Mass (g)", "mass", { placeholder: "5.85", prompt: "how many grams of solute?" }),
+          inkField("volume_l", "Volume (L)", "volume", { placeholder: "1.00", prompt: "what volume of solution, in litres?" }),
         ],
       },
       {
@@ -241,10 +296,10 @@ export const TOPICS = [
         // The blank one may be a concentration or a volume, so no unit is
         // printed rather than printing a wrong one.
         fields: [
-          inkField("initial_concentration_m", "M1", "starting concentration", { placeholder: "2.00" }),
-          inkField("initial_volume_l", "V1 (L)", "starting volume", { placeholder: "0.050" }),
-          inkField("final_concentration_m", "M2", "final concentration", { placeholder: "leave blank to solve" }),
-          inkField("final_volume_l", "V2 (L)", "final volume", { placeholder: "0.500" }),
+          inkField("initial_concentration_m", "M1", "starting concentration", { placeholder: "2.00", prompt: "starting concentration, in M" }),
+          inkField("initial_volume_l", "V1 (L)", "starting volume", { placeholder: "0.050", prompt: "starting volume, in litres" }),
+          inkField("final_concentration_m", "M2", "final concentration", { placeholder: "leave blank to solve", prompt: "final concentration, or leave this box empty to solve for it" }),
+          inkField("final_volume_l", "V2 (L)", "final volume", { placeholder: "0.500", prompt: "final volume, or leave this box empty to solve for it" }),
         ],
       },
       {
@@ -252,41 +307,41 @@ export const TOPICS = [
         label: "pH of a strong acid",
         // pH is unitless. Printing a unit here would be wrong, not just noisy.
         fields: [
-          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.010" }),
-          inkField("protons", "Protons per formula", "protons per formula", { placeholder: "1" }),
+          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.010", prompt: "concentration of the acid, in M" }),
+          inkField("protons", "Protons per formula", "protons per formula", { placeholder: "1", prompt: "how many H+ does one formula unit give? 1 for HCl, 2 for H2SO4" }),
         ],
       },
       {
         id: "strong_base_ph",
         label: "pH of a strong base",
         fields: [
-          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.010" }),
-          inkField("hydroxides", "OH per formula", "OH per formula", { placeholder: "1" }),
+          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.010", prompt: "concentration of the base, in M" }),
+          inkField("hydroxides", "OH per formula", "OH per formula", { placeholder: "1", prompt: "how many OH- does one formula unit give? 1 for NaOH, 2 for Ca(OH)2" }),
         ],
       },
       {
         id: "weak_acid_ph",
         label: "pH of a weak acid",
         fields: [
-          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.100" }),
-          inkField("ka", "Ka", "Ka", { placeholder: "1.8e-5" }),
+          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.100", prompt: "starting concentration of the acid, in M" }),
+          inkField("ka", "Ka", "Ka", { placeholder: "1.8e-5", prompt: "the acid dissociation constant the question gives you" }),
         ],
       },
       {
         id: "weak_base_ph",
         label: "pH of a weak base",
         fields: [
-          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.100" }),
-          inkField("kb", "Kb", "Kb", { placeholder: "1.8e-5" }),
+          inkField("concentration_m", "Concentration (M)", "concentration", { placeholder: "0.100", prompt: "starting concentration of the base, in M" }),
+          inkField("kb", "Kb", "Kb", { placeholder: "1.8e-5", prompt: "the base dissociation constant the question gives you" }),
         ],
       },
       {
         id: "buffer_ph",
         label: "Buffer (Henderson-Hasselbalch)",
         fields: [
-          inkField("acid_concentration_m", "[HA]", "acid concentration", { placeholder: "0.100" }),
-          inkField("base_concentration_m", "[A-]", "base concentration", { placeholder: "0.100" }),
-          inkField("pka", "pKa", "pKa", { placeholder: "4.74" }),
+          inkField("acid_concentration_m", "[HA]", "acid concentration", { placeholder: "0.100", prompt: "concentration of the weak acid, in M" }),
+          inkField("base_concentration_m", "[A-]", "base concentration", { placeholder: "0.100", prompt: "concentration of its conjugate base, in M" }),
+          inkField("pka", "pKa", "pKa", { placeholder: "4.74", prompt: "the pKa of the acid" }),
         ],
       },
       {
@@ -294,9 +349,9 @@ export const TOPICS = [
         label: "Titration",
         answerUnit: "M",
         fields: [
-          inkField("titrant_concentration_m", "Titrant (M)", "titrant concentration", { placeholder: "0.100" }),
-          inkField("titrant_volume_l", "Titrant volume (L)", "titrant volume", { placeholder: "0.0250" }),
-          inkField("analyte_volume_l", "Analyte volume (L)", "analyte volume", { placeholder: "0.0200" }),
+          inkField("titrant_concentration_m", "Titrant (M)", "titrant concentration", { placeholder: "0.100", prompt: "concentration of the titrant, in M" }),
+          inkField("titrant_volume_l", "Titrant volume (L)", "titrant volume", { placeholder: "0.0250", prompt: "volume of titrant added, in litres" }),
+          inkField("analyte_volume_l", "Analyte volume (L)", "analyte volume", { placeholder: "0.0200", prompt: "volume of the unknown you started with, in litres" }),
         ],
       },
       {
@@ -304,8 +359,8 @@ export const TOPICS = [
         label: "Percent by mass",
         answerUnit: "%",
         fields: [
-          inkField("solute_mass_g", "Solute (g)", "solute mass", { placeholder: "5.0" }),
-          inkField("solution_mass_g", "Solution (g)", "solution mass", { placeholder: "100.0" }),
+          inkField("solute_mass_g", "Solute (g)", "solute mass", { placeholder: "5.0", prompt: "grams of solute" }),
+          inkField("solution_mass_g", "Solution (g)", "solution mass", { placeholder: "100.0", prompt: "grams of the whole solution" }),
         ],
       },
     ],
@@ -341,7 +396,11 @@ export const TOPICS = [
       return payload;
     },
     check(type, values, steps, options) {
-      return checkSolutions(this.buildPayload(type, values, steps), options);
+      const payload = this.buildPayload(type, values, steps);
+      // Matters most here: the pH answer group holds pH, pOH, [H+] and
+      // [OH-], so without this the answer box takes the pOH for a pH.
+      if (options?.answersOnly) payload.answers_only = true;
+      return checkSolutions(payload, options);
     },
     session(type, values, problem) {
       return {

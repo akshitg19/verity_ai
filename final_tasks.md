@@ -2756,3 +2756,49 @@ front rather than by tightening a parser against handwriting.
 - [ ] **Hint level 1 no longer sees the working**, because we no longer read
       it. It diagnoses from the answer alone. Sending the working as hint
       context without judging it is the obvious next move and was not built
+
+## 19. Why the working is not checked, and what would change that
+
+Recorded because it is a **retreat from the product promise**, and a retreat
+that is not written down gets quietly forgotten and then contradicted on
+stage.
+
+The promise, from the top of this file: *"which line broke, why that kind of
+thing breaks"*, checked line by line against the line above. On the numeric
+topics we are not doing that any more. We check the answer.
+
+**It is not a judge problem.** `judge_quantity_steps` will happily judge
+every line, and does, on every other topic. It is a reading problem, and it
+has two halves:
+
+1. **Layout.** People do not write molar mass down the page one claim per
+   row. They write `2 x 26.98 = 53.96` beside `3 x 32.06`, or run the whole
+   sum across one line, or work it in their head and write the total. Row
+   segmentation assumes a row is a claim, and here it is not.
+2. **A line of working is often not a claim at all.** `2(26.98) + 96.20 +
+   191.99` is three numbers and no assertion, and `parse_quantity` refuses
+   it deliberately, because guessing which number is the claim is the
+   confident-wrong behaviour this file bans everywhere else.
+
+**What would actually fix it**, in the order they are worth doing:
+
+- [ ] **A recogniser that reads a region rather than a row.** Hand the model
+      the whole working area as one image and ask for the arithmetic it
+      contains as structured claims, rather than reading each row blind. The
+      model is capable of this; the current prompt is not asked to do it,
+      and the 128-token row-shaped call is the wrong shape for a page
+- [ ] **Verify the claims it extracts, do not trust them.** Each extracted
+      claim goes through the same deterministic comparison the answer does.
+      The generator can be loose because the verifier is exact, which is the
+      argument this file already makes for level 2 hints
+- [ ] **Only then flag a working line**, and only where the extraction is
+      confident. An `unsupported` on a line we could not read is honest; an
+      `invalid` on a line we misread is the fatal row in our own taxonomy
+- [ ] Until that exists, **say so out loud in the demo** rather than letting
+      a judge assume we check every line on every topic. We check every line
+      on balancing, redox and structure, where a line genuinely is a step
+
+The student's own framing, which is the right one: *"it's really impossible
+to check each line because it's hard for it to actually understand, and we
+need a stronger model."* That is the honest position, and it belongs in the
+demo script rather than in a footnote.

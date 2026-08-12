@@ -53,10 +53,17 @@ export function hasWorksheet(topic, problemType) {
 
 function promptFor(field, row) {
   const unit = field.unit ?? unitFromLabel(field.label);
+  const label = labelWithoutUnit(field.label, unit);
   return {
     key: field.name,
-    label: labelWithoutUnit(field.label, unit),
+    label,
     unit,
+    // What the empty box says. A topic supplies its own wherever the field
+    // name alone leaves a question open: "write the amounts here" never
+    // said which amounts, and "write the product here" never said which
+    // product. The fallback is only for fields where the label is the whole
+    // answer, like a formula.
+    prompt: field.prompt ?? `write the ${label.toLowerCase()} here`,
     placeholder: field.placeholder ?? null,
     optional:
       field.optional === true || /optional/i.test(field.label ?? ""),

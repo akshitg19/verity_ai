@@ -382,6 +382,10 @@ class SolutionsRequest(BaseModel):
     solute_mass_g: Annotated[float, Field(gt=0, le=1e9)] | None = None
     solution_mass_g: Annotated[float, Field(gt=0, le=1e9)] | None = None
     steps: Annotated[list[ChemistryStep], Field(min_length=1, max_length=50)]
+    # See the note on StoichiometryRequest.answers_only. It matters most
+    # here: a pH answer group holds pH, pOH, [H+] and [OH-], so without it
+    # the answer box accepts the pOH for a pH question.
+    answers_only: bool = False
 
     @model_validator(mode="after")
     def steps_are_unique_and_ordered(self):

@@ -461,6 +461,8 @@ class SolutionsJudge(Judge[SolutionsProblem, ChemistryStep, ChemistryLineVerdict
         self,
         problem: SolutionsProblem,
         steps: list[ChemistryStep],
+        *,
+        answers_only: bool = False,
     ) -> list[ChemistryLineVerdict]:
         try:
             solution = solve_solutions(problem)
@@ -495,7 +497,7 @@ class SolutionsJudge(Judge[SolutionsProblem, ChemistryStep, ChemistryLineVerdict
                 )
             ]
 
-        return judge_quantity_steps(solution, steps)
+        return judge_quantity_steps(solution, steps, answers_only=answers_only)
 
 
 __all__ = [
