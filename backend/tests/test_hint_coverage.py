@@ -539,3 +539,49 @@ def test_no_prompt_teaches_the_model_to_use_an_em_dash():
         value = getattr(hints, name)
         if isinstance(value, str):
             assert "—" not in value, name
+
+
+# ---------------------------------------------------------------------------
+# The level 2 contract has to describe the engine that verifies it
+# ---------------------------------------------------------------------------
+
+
+def test_the_check_contract_names_every_task_the_engine_solves():
+    """A task missing from the contract is a task level 2 can never verify.
+
+    `molecular_formula` was missing and both molecular formula questions
+    fell back to the static floor in a live run. The model was asked to
+    describe its own problem in a vocabulary that had no word for it.
+    """
+    from hints import _CHEMISTRY_CHECK_CONTRACTS
+    from judge.solutions import TASKS as SOLUTIONS_TASKS
+    from judge.stoichiometry import TASKS as STOICHIOMETRY_TASKS
+
+    for topic, tasks in (
+        ("stoichiometry", STOICHIOMETRY_TASKS),
+        ("solutions", SOLUTIONS_TASKS),
+    ):
+        contract = _CHEMISTRY_CHECK_CONTRACTS[topic]
+        for task in tasks:
+            assert task in contract, f"{topic} contract omits {task}"
+
+
+def test_the_check_contract_names_every_field_the_problem_accepts():
+    """Same failure one level down: the solutions contract had no words for
+    titrant_concentration_m, titrant_volume_l, analyte_volume_l, protons or
+    hydroxides, which is five of the fourteen tasks it claimed to cover."""
+    from dataclasses import fields
+
+    from hints import _CHEMISTRY_CHECK_CONTRACTS
+    from judge.solutions import SolutionsProblem
+    from judge.stoichiometry import StoichiometryProblem
+
+    for topic, problem_class in (
+        ("stoichiometry", StoichiometryProblem),
+        ("solutions", SolutionsProblem),
+    ):
+        contract = _CHEMISTRY_CHECK_CONTRACTS[topic]
+        for field in fields(problem_class):
+            if field.name in ("task", "steps"):
+                continue
+            assert field.name in contract, f"{topic} contract omits {field.name}"

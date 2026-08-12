@@ -31,6 +31,10 @@ import time
 from collections.abc import Callable
 
 from hint_rules import analogue_for, coaching_for
+from judge.solutions import TASKS as _SOLUTIONS_TASKS
+from judge.solutions import SolutionsProblem as _SolutionsProblem
+from judge.stoichiometry import TASKS as _STOICHIOMETRY_TASKS
+from judge.stoichiometry import StoichiometryProblem as _StoichiometryProblem
 from model import ModelError, generate_json, is_configured
 from redaction import numbers_differ, redact_or_fallback
 from schemas import HintRequest, HintResponse, WorkedExample
@@ -676,30 +680,47 @@ _MATH_LEVEL_2_PROMPT = (
 )
 
 
+def _numeric_contract(tasks, problem_class, answer_note: str) -> str:
+    """Build the `check` contract from the dataclass that has to accept it.
+
+    Hand-written, these two drifted. The stoichiometry list was missing
+    `molecular_formula` entirely and the solutions list was missing
+    `titrant_concentration_m`, `titrant_volume_l`, `analyte_volume_l`,
+    `protons` and `hydroxides`, so on those tasks the model was asked to
+    describe its own problem in a vocabulary that had no words for it, and
+    the example it invented failed verification every time. That was five of
+    the twenty level 2 fallbacks in a live run of all thirty concepts.
+
+    Deriving it means a task or a field added to the judge cannot silently
+    become a task level 2 can never verify.
+    """
+    from dataclasses import fields
+
+    names = [
+        field.name
+        for field in fields(problem_class)
+        if field.name not in ("task", "steps")
+    ]
+    return (
+        '"check": {"task": "<one of: ' + ", ".join(tasks) + '>", '
+        '"params": {<the inputs your problem gives, using only these field '
+        "names: " + ", ".join(names) + ">}, "
+        '"answer": <' + answer_note + ">}"
+    )
+
+
 _CHEMISTRY_CHECK_CONTRACTS = {
     "balancing": (
         '"check": {"unbalanced": "<your equation, coefficients omitted>", '
         '"balanced": "<the same equation, fully balanced>"}'
     ),
-    "stoichiometry": (
-        '"check": {"task": "<one of: molar_mass, percent_composition, '
-        'moles_from_mass, mass_from_moles, empirical_formula, '
-        'limiting_reagent, theoretical_yield, percent_yield>", '
-        '"params": {<the inputs your problem gives, using the field names '
-        'formula, element, mass_g, moles, equation, amounts, product, '
-        'actual_yield_g, composition, target_molar_mass>}, '
-        '"answer": <the final numeric answer, or the formula as a string>}'
+    "stoichiometry": _numeric_contract(
+        _STOICHIOMETRY_TASKS,
+        _StoichiometryProblem,
+        "the final numeric answer, or the formula or species as a string",
     ),
-    "solutions": (
-        '"check": {"task": "<one of: molarity, dilution, ph_from_concentration, '
-        'strong_acid_ph, strong_base_ph, weak_acid_ph, weak_base_ph, buffer_ph, '
-        'titration_concentration, percent_by_mass>", '
-        '"params": {<the inputs your problem gives, using the field names '
-        'moles, mass_g, formula, volume_l, concentration_m, ka, kb, pka, '
-        'acid_concentration_m, base_concentration_m, initial_concentration_m, '
-        'initial_volume_l, final_volume_l, final_concentration_m, '
-        'hydrogen_concentration_m, solute_mass_g, solution_mass_g>}, '
-        '"answer": <the final numeric answer>}'
+    "solutions": _numeric_contract(
+        _SOLUTIONS_TASKS, _SolutionsProblem, "the final numeric answer"
     ),
     "redox": (
         '"check": {"formula": "<the species>", "element": "<element symbol>", '
