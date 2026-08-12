@@ -25,11 +25,34 @@ import { labelWithoutUnit, unitFromLabel } from "./problemSlots";
 export const ZONES = {
   // A field of the question. One row each, filled by writing in the box.
   PROMPT: "prompt",
-  // The student's working. Never transcribed, never judged, never sent.
+  // The middle of the page. What happens here depends on the kind below.
   WORKING: "working",
-  // The one line that gets checked.
+  // The one line that gets checked, on ANSWER worksheets only.
   ANSWER: "answer",
 };
+
+// Three shapes of page, because chemistry has three shapes of question and
+// pretending otherwise is what made the numeric topics feel broken.
+export const KINDS = {
+  // Question boxes, working we do not read, one answer box with a unit.
+  // Molar mass, pH, oxidation state, cell potential.
+  ANSWER: "answer",
+  // Question boxes, then working where **every row is a step and is judged
+  // against the row above**. This is the original behaviour and it is the
+  // one that works well today, so balancing, net ionic and half-reactions
+  // keep it exactly. They gain the labelled question box and the growing
+  // area, and nothing about their judging or their hints changes.
+  STEPS: "steps",
+  // Question boxes, then a space to draw in. The drawing is read as one
+  // figure, so the prompt rows have to be kept out of the image.
+  DRAW: "draw",
+};
+
+export function worksheetKindFor(inputMode) {
+  if (inputMode === "drawing") return KINDS.DRAW;
+  if (inputMode === "equation") return KINDS.STEPS;
+  return KINDS.ANSWER;
+}
 
 // Enough room to do the arithmetic without the box feeling like a slot, and
 // a ceiling so a runaway row count cannot push the answer box off the page.
@@ -48,8 +71,20 @@ const HEADROOM_ROWS = 2;
  * judging each one is right.
  */
 export function hasWorksheet(topic, problemType) {
-  return topic?.input === "numeric" && Boolean(problemType?.fields?.length);
+  return Boolean(topic && problemType);
 }
+
+// A field the student can be asked to write. Everything else stays in the
+// panel: a SMILES is ours and not theirs -- they do not know what it is and
+// must never be asked to write one as the question -- and a fixed set of
+// choices is a dropdown with nothing to write.
+function isWritable(field) {
+  return Boolean(field.ink) && field.type !== "select";
+}
+
+// Things a student writes out as a whole line rather than as one value.
+const WIDE_FIELDS =
+  /equation|half-reaction|reaction|composition|amounts|name|reagent|cathode|anode/i;
 
 function promptFor(field, row) {
   const unit = field.unit ?? unitFromLabel(field.label);
@@ -64,6 +99,11 @@ function promptFor(field, row) {
     // product. The fallback is only for fields where the label is the whole
     // answer, like a formula.
     prompt: field.prompt ?? `write the ${label.toLowerCase()} here`,
+    // A box for a whole written line runs the width of the page; a box for
+    // one value does not need to. Judged by what goes in it rather than by
+    // how long the caption is, so the box does not change size when the
+    // wording is edited.
+    wide: WIDE_FIELDS.test(`${field.name} ${field.ink ?? ""}`),
     placeholder: field.placeholder ?? null,
     optional:
       field.optional === true || /optional/i.test(field.label ?? ""),
@@ -84,14 +124,16 @@ function promptFor(field, row) {
 export function buildWorksheet(
   topic,
   problemType,
-  { workingRows = MIN_WORKING_ROWS } = {}
+  { workingRows = MIN_WORKING_ROWS, inputMode } = {}
 ) {
   if (!hasWorksheet(topic, problemType)) return null;
 
-  const prompts = problemType.fields
-    .map((field, index) => promptFor(field, index))
-    .filter((prompt) => !prompt.typed)
-    .map((prompt, index) => ({ ...prompt, row: index }));
+  const mode = inputMode ?? problemType.input ?? topic.input ?? "drawing";
+  const kind = worksheetKindFor(mode);
+
+  const prompts = (problemType.fields ?? [])
+    .filter(isWritable)
+    .map((field, index) => promptFor(field, index));
 
   const workingStart = prompts.length;
   const rows = Math.min(
@@ -100,20 +142,34 @@ export function buildWorksheet(
   );
 
   return {
+    kind,
     title: problemType.label,
     prompts,
     workingStart,
     workingRows: rows,
-    answerRow: workingStart + rows,
-    answerUnit: problemType.answerUnit ?? null,
+    // Only an ANSWER page has an answer box. On a STEPS page the last line
+    // of the working is the answer, and on a DRAW page the answer is the
+    // picture.
+    answerRow: kind === KINDS.ANSWER ? workingStart + rows : null,
+    answerUnit: kind === KINDS.ANSWER ? problemType.answerUnit ?? null : null,
+    workingLabel:
+      kind === KINDS.DRAW
+        ? "Draw it below"
+        : kind === KINDS.STEPS
+        ? "Your working, one line at a time"
+        : "Your working, laid out however you like",
   };
 }
 
-/** Which zone a row belongs to, or null for the empty page below the answer. */
+/** Which zone a row belongs to, or null for the empty page below it all. */
 export function zoneAtRow(worksheet, row) {
   if (!worksheet || row === null || row === undefined) return null;
   if (row < 0) return null;
   if (row < worksheet.workingStart) return ZONES.PROMPT;
+  // A page with no answer box has no floor: the working runs on, because a
+  // student balancing an equation may take more lines than we guessed and
+  // must never hit a wall.
+  if (worksheet.answerRow === null) return ZONES.WORKING;
   if (row < worksheet.answerRow) return ZONES.WORKING;
   if (row === worksheet.answerRow) return ZONES.ANSWER;
   return null;
@@ -135,7 +191,18 @@ export function promptAtRow(worksheet, row) {
  */
 export function isReadableRow(worksheet, row) {
   const zone = zoneAtRow(worksheet, row);
-  return zone === ZONES.PROMPT || zone === ZONES.ANSWER;
+  if (zone === ZONES.PROMPT || zone === ZONES.ANSWER) return true;
+  // On a STEPS page every working row IS a step and must be read, which is
+  // the behaviour balancing and net ionic already have and that this change
+  // must not disturb. On a DRAW page the middle is one figure, read whole
+  // rather than row by row.
+  return zone === ZONES.WORKING && worksheet?.kind === KINDS.STEPS;
+}
+
+/** Rows a drawing is made of: everything below the question boxes. */
+export function isDrawingRow(worksheet, row) {
+  if (worksheet?.kind !== KINDS.DRAW) return false;
+  return zoneAtRow(worksheet, row) === ZONES.WORKING;
 }
 
 /**
@@ -151,7 +218,7 @@ export function growWorkingRows(
   { inkRows = [], answerFilled = false } = {}
 ) {
   if (!worksheet) return MIN_WORKING_ROWS;
-  if (answerFilled) return worksheet.workingRows;
+  if (worksheet.answerRow !== null && answerFilled) return worksheet.workingRows;
 
   const used = inkRows
     .filter((row) => zoneAtRow(worksheet, row) === ZONES.WORKING)

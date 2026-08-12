@@ -425,8 +425,9 @@ export const TOPICS = [
         id: "balance",
         label: "Balance the equation",
         fields: [
-          field("reference_equation", "Unbalanced equation", {
+          inkField("reference_equation", "Unbalanced equation", "equation", {
             placeholder: "C3H8 + O2 -> CO2 + H2O",
+            prompt: "write the unbalanced equation, like C3H8 + O2 -> CO2 + H2O",
           }),
         ],
       },
@@ -434,8 +435,9 @@ export const TOPICS = [
         id: "net_ionic",
         label: "Net ionic equation",
         fields: [
-          field("molecular_equation", "Molecular equation", {
+          inkField("molecular_equation", "Molecular equation", "equation", {
             placeholder: "AgNO3 + NaCl -> AgCl + NaNO3",
+            prompt: "write the full equation, like AgNO3 + NaCl -> AgCl + NaNO3",
           }),
         ],
       },
@@ -475,8 +477,9 @@ export const TOPICS = [
         label: "Balance a half-reaction",
         input: "equation",
         fields: [
-          field("reference_equation", "Half-reaction", {
+          inkField("reference_equation", "Half-reaction", "half-reaction", {
             placeholder: "MnO4^- + 8H^+ + 5e- -> Mn^2+ + 4H2O",
+            prompt: "write the unbalanced half-reaction",
           }),
         ],
       },
@@ -484,21 +487,32 @@ export const TOPICS = [
         id: "oxidation_state",
         label: "Oxidation state",
         input: "numeric",
+        // No unit: an oxidation state is a signed number, and printing one
+        // beside the box would be wrong rather than merely noisy.
         fields: [
-          inkField("formula", "Species", "species", { placeholder: "Cr2O7^2-" }),
-          inkField("element", "Element", "element", { placeholder: "Cr" }),
+          inkField("formula", "Species", "species", {
+            placeholder: "Cr2O7^2-",
+            prompt: "write the ion or compound, like Cr2O7^2-",
+          }),
+          inkField("element", "Element", "element", {
+            placeholder: "Cr",
+            prompt: "which element do you want the oxidation state of?",
+          }),
         ],
       },
       {
         id: "cell_potential",
         label: "Standard cell potential",
         input: "numeric",
+        answerUnit: "V",
         fields: [
           inkField("cathode", "Cathode half-reaction", "cathode half-reaction", {
             placeholder: "Cu^2+ + 2e- -> Cu",
+            prompt: "the half-reaction being reduced, like Cu^2+ + 2e- -> Cu",
           }),
           inkField("anode", "Anode half-reaction", "anode half-reaction", {
             placeholder: "Zn^2+ + 2e- -> Zn",
+            prompt: "the half-reaction being oxidised, like Zn^2+ + 2e- -> Zn",
           }),
         ],
       },
@@ -555,10 +569,16 @@ export const TOPICS = [
         fields: [
           inkField("target_formula", "Formula", "formula to draw", {
             placeholder: "C2H6O",
+            prompt: "write the formula you want to draw, like C2H6O",
           }),
         ],
       },
       {
+        // The target is a SMILES, which is ours and not the student's. It
+        // has no `ink`, so it never appears as a box on the page: a student
+        // does not know what a SMILES is and must never be asked to write
+        // one. The teacher sets it in the panel, and the page just says
+        // "draw it below".
         id: "match_structure",
         label: "Draw this exact structure",
         fields: [
@@ -635,7 +655,12 @@ export const TOPICS = [
       {
         id: "draw_from_name",
         label: "Draw this named compound",
-        fields: [inkField("target_name", "Name", "name", { placeholder: "propan-2-ol" })],
+        fields: [
+          inkField("target_name", "Name", "name", {
+            placeholder: "propan-2-ol",
+            prompt: "write the name of the compound, like propan-2-ol",
+          }),
+        ],
       },
       {
         id: "reaction",
@@ -644,7 +669,10 @@ export const TOPICS = [
           field("reactants_smiles", "Starting material (SMILES)", {
             placeholder: "C=C",
           }),
-          inkField("reagent", "Reagent / conditions", "reagent", { placeholder: "H2, Pd" }),
+          inkField("reagent", "Reagent / conditions", "reagent", {
+            placeholder: "H2, Pd",
+            prompt: "write the reagent and conditions, like H2, Pd",
+          }),
           {
             name: "reaction_type",
             label: "Reaction type",

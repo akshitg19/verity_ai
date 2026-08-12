@@ -73,7 +73,10 @@ export default function WorksheetOverlay({
   const boxWidth = Math.max(120, width - 16);
   const promptWidth = Math.min(360, boxWidth);
   const working = rowBand(worksheet.workingStart, worksheet.workingRows, lineHeight);
-  const answer = rowBand(worksheet.answerRow, 1, lineHeight);
+  const hasAnswer = worksheet.answerRow !== null;
+  const answer = hasAnswer
+    ? rowBand(worksheet.answerRow, 1, lineHeight)
+    : { top: working.top + working.height, height: 0 };
 
   // Green or red on the answer box itself, so the result is where the student
   // is looking rather than only in a panel off to the side.
@@ -88,7 +91,7 @@ export default function WorksheetOverlay({
         top: 0,
         left: 0,
         width,
-        height: answer.top + answer.height + lineHeight,
+        height: answer.top + answer.height + (hasAnswer ? lineHeight : 0),
         pointerEvents: "none",
         zIndex: 1,
       }}
@@ -96,6 +99,13 @@ export default function WorksheetOverlay({
       {worksheet.prompts.map((prompt) => {
         const band = rowBand(prompt.row, 1, lineHeight);
         const filled = Boolean(String(values[prompt.key] ?? "").trim());
+        // The heading sits on the first row, so that box starts past it. A
+        // box for a whole written line then runs to the right margin, so a
+        // long equation and its caption both fit.
+        const boxLeft = prompt.row === 0 ? left + titleWidth(worksheet.title) : left;
+        const boxWidthHere = prompt.wide
+          ? Math.max(160, left + boxWidth - boxLeft)
+          : Math.max(140, Math.min(promptWidth, left + promptWidth - boxLeft));
         return (
           <div key={prompt.key}>
             {/* "Molar mass:" once, against the first box, so the page says
@@ -119,24 +129,15 @@ export default function WorksheetOverlay({
             )}
             <Box
               top={band.top + 6}
-              left={prompt.row === 0 ? left + titleWidth(worksheet.title) : left}
-              width={
-                prompt.row === 0
-                  ? Math.max(140, promptWidth - titleWidth(worksheet.title))
-                  : promptWidth
-              }
+              left={boxLeft}
+              width={boxWidthHere}
               height={band.height - 10}
               filled={filled}
             />
-            <Caption
-              top={band.top + 9}
-              left={
-                (prompt.row === 0 ? left + titleWidth(worksheet.title) : left) + 8
-              }
-            >
-              {/* Before it is filled the caption has to say what to write
-                  and, where it is not obvious, what it is for. "Write the
-                  amounts here" does not tell anyone which amounts. */}
+            {/* Before it is filled the caption says what to write and, where
+                it is not obvious, what it is for. "Write the amounts here"
+                does not tell anyone which amounts. */}
+            <Caption top={band.top + 9} left={boxLeft + 8}>
               {filled ? prompt.label : prompt.prompt}
             </Caption>
             {prompt.unit && (
@@ -144,14 +145,7 @@ export default function WorksheetOverlay({
                 style={{
                   position: "absolute",
                   top: band.top + band.height - 26,
-                  left:
-                    (prompt.row === 0
-                      ? left + titleWidth(worksheet.title)
-                      : left) +
-                    (prompt.row === 0
-                      ? Math.max(140, promptWidth - titleWidth(worksheet.title))
-                      : promptWidth) +
-                    10,
+                  left: boxLeft + boxWidthHere + 10,
                   fontSize: 13,
                   fontWeight: 600,
                   color: PAPER.muted,
@@ -174,27 +168,31 @@ export default function WorksheetOverlay({
         height={working.height - 8}
         filled={false}
       />
-      {/* Says "work however you like" and not "not checked". Both are true,
-          but the second reads as a broken feature and invites the student to
-          skip the working, which is the part they are meant to be doing. */}
-      <Caption top={working.top + 8}>Your working, laid out however you like</Caption>
+      {/* Never says "not checked". It reads as a broken feature and invites
+          skipping the working, which is the part they are meant to be
+          doing, and on a steps page it is not even true. */}
+      <Caption top={working.top + 8}>{worksheet.workingLabel}</Caption>
 
-      <Box
-        top={answer.top + 4}
-        left={left}
-        width={Math.min(300, boxWidth)}
-        height={answer.height - 8}
-        filled={Boolean(answerText.trim())}
-        tone={answerTone}
-      />
-      <Caption
-        top={answer.top + 8}
-        left={left + 8}
-        color={answerTone ?? accent}
-      >
-        Answer
-      </Caption>
-      {worksheet.answerUnit && (
+      {hasAnswer && (
+        <>
+          <Box
+            top={answer.top + 4}
+            left={left}
+            width={Math.min(300, boxWidth)}
+            height={answer.height - 8}
+            filled={Boolean(answerText.trim())}
+            tone={answerTone}
+          />
+          <Caption
+            top={answer.top + 8}
+            left={left + 8}
+            color={answerTone ?? accent}
+          >
+            Answer
+          </Caption>
+        </>
+      )}
+      {hasAnswer && worksheet.answerUnit && (
         <div
           style={{
             position: "absolute",

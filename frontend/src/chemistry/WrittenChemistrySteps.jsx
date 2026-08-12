@@ -10,7 +10,7 @@ function verdictStatus(verdict) {
 // sentence whether a check was seconds away or could never run at all, which
 // is how two rows sat at "Waiting" forever with nothing on screen explaining
 // that the question field was empty.
-function statusForLine(line, verdict, blocked, ready, worksheet) {
+function statusForLine(line, verdict, blocked, ready, answerOnly) {
   const styleFor = (key, label, detail) => ({
     label,
     detail,
@@ -52,18 +52,18 @@ function statusForLine(line, verdict, blocked, ready, worksheet) {
     // are the student's own working and were never read.
     return styleFor(
       "valid",
-      worksheet ? "Correct" : "Correct step",
-      worksheet ? "That is the answer." : "Follows from the row above."
+      answerOnly ? "Correct" : "Correct step",
+      answerOnly ? "That is the answer." : "Follows from the row above."
     );
   }
   if (status === "invalid") {
     return styleFor(
       "invalid",
-      worksheet ? "Not the answer" : "Review this step",
+      answerOnly ? "Not the answer" : "Review this step",
       // The judge's own detail is more specific than a category name, and on
       // a worksheet it is the difference between "you stopped one step
       // early" and "that number is not in this problem at all".
-      (worksheet && verdict.detail) ||
+      (answerOnly && verdict.detail) ||
         (verdict.error_type
           ? `Possible ${verdict.error_type.replaceAll("_", " ")}.`
           : "Does not follow from the row above.")
@@ -98,14 +98,19 @@ export default function WrittenChemistrySteps({
   // Several written rows can make up one question, so all of them are
   // excluded from the working and the first is shown as the question.
   //
-  // A worksheet has exactly one step, the answer box. Its question fields
-  // are already editable above as the correction surface, and the working is
-  // deliberately never read, so listing either here would be showing the
-  // student rows that nothing will ever say anything about.
+  // A worksheet with an answer box has exactly one step, that box. A
+  // worksheet without one (balancing, net ionic, half-reactions) still has a
+  // step per working row, judged against the row above, which is the
+  // behaviour those topics have always had. Either way the question boxes
+  // are already editable above as the correction surface, so they are never
+  // listed here as steps.
   const asked = new Set(questionRows ?? []);
-  const stepLines = worksheet
+  const answerOnly = worksheet?.answerRow !== null && worksheet;
+  const stepLines = !worksheet
+    ? lines.filter((line) => !asked.has(line.row))
+    : answerOnly
     ? lines.filter((line) => line.row === worksheet.answerRow)
-    : lines.filter((line) => !asked.has(line.row));
+    : lines.filter((line) => line.row >= worksheet.workingStart);
   const questionLine = worksheet
     ? null
     : lines.find((line) => asked.has(line.row)) ?? null;
@@ -196,7 +201,7 @@ export default function WrittenChemistrySteps({
           verdictsByLine.get(line.row),
           blocked,
           ready,
-          worksheet
+          answerOnly
         );
         return (
           <div
@@ -235,7 +240,7 @@ export default function WrittenChemistrySteps({
                   }}
                 >
                   <div style={{ color: COLORS.text, fontWeight: 700, fontSize: 14 }}>
-                    {worksheet ? "Your answer" : `Step ${index + 1}`}
+                    {answerOnly ? "Your answer" : `Step ${index + 1}`}
                   </div>
                   <div style={{ color: status.color, fontSize: 12, fontWeight: 700 }}>
                     {status.label}

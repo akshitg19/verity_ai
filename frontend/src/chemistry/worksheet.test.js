@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { TOPICS } from "./topics";
 import {
+  KINDS,
   MIN_WORKING_ROWS,
   ZONES,
   buildWorksheet,
   growWorkingRows,
-  hasWorksheet,
+  isDrawingRow,
   isReadableRow,
   promptAtRow,
   promptsComplete,
@@ -20,14 +21,54 @@ const percentYield = stoichiometry.types.find(
 );
 const structure = TOPICS.find((topic) => topic.id === "structure");
 
-describe("which topics get a worksheet", () => {
-  it("covers the numeric topics", () => {
-    expect(hasWorksheet(stoichiometry, molarMass)).toBe(true);
+describe("three shapes of page, one per shape of question", () => {
+  it("gives a numeric topic an answer box", () => {
+    const sheet = buildWorksheet(stoichiometry, molarMass);
+    expect(sheet.kind).toBe(KINDS.ANSWER);
+    expect(sheet.answerRow).not.toBeNull();
   });
 
-  it("leaves drawing topics on the row-by-row path", () => {
-    expect(hasWorksheet(structure, structure.types[0])).toBe(false);
-    expect(buildWorksheet(structure, structure.types[0])).toBeNull();
+  it("gives balancing judged working and no answer box", () => {
+    // Every working row on a steps page is a step judged against the row
+    // above. That is the behaviour balancing already had and the one whose
+    // hints work, so it must survive this layout unchanged.
+    const balancing = TOPICS.find((topic) => topic.id === "balancing");
+    const sheet = buildWorksheet(balancing, balancing.types[0]);
+    expect(sheet.kind).toBe(KINDS.STEPS);
+    expect(sheet.answerRow).toBeNull();
+    expect(isReadableRow(sheet, sheet.workingStart)).toBe(true);
+  });
+
+  it("gives a drawing topic a space to draw and reads no rows in it", () => {
+    const sheet = buildWorksheet(structure, structure.types[0]);
+    expect(sheet.kind).toBe(KINDS.DRAW);
+    expect(sheet.answerRow).toBeNull();
+    expect(isReadableRow(sheet, sheet.workingStart)).toBe(false);
+    expect(isDrawingRow(sheet, sheet.workingStart)).toBe(true);
+  });
+
+  it("never asks a student to write a SMILES", () => {
+    // A SMILES is ours, not theirs. It has no `ink`, so it must never
+    // become a box on the page, on any type in any topic.
+    for (const topic of TOPICS) {
+      for (const type of topic.types) {
+        const sheet = buildWorksheet(topic, type);
+        const keys = sheet.prompts.map((prompt) => prompt.key);
+        for (const key of keys) {
+          expect(key).not.toMatch(/smiles/i);
+        }
+      }
+    }
+  });
+
+  it("keeps the question boxes out of a drawing", () => {
+    const formulaStructure = structure.types.find(
+      (type) => type.id === "formula_structure"
+    );
+    const sheet = buildWorksheet(structure, formulaStructure);
+    expect(sheet.prompts.map((p) => p.key)).toEqual(["target_formula"]);
+    expect(isDrawingRow(sheet, 0)).toBe(false);
+    expect(isDrawingRow(sheet, sheet.workingStart)).toBe(true);
   });
 });
 
