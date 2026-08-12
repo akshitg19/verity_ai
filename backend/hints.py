@@ -845,8 +845,14 @@ _STRUCTURE_CONTRACT = (
 
 _CHEMISTRY_CHECK_CONTRACTS = {
     "balancing": (
+        "If your problem is to balance an equation:\n"
         '"check": {"unbalanced": "<your equation, coefficients omitted>", '
-        '"balanced": "<the same equation, fully balanced>"}'
+        '"balanced": "<the same equation, fully balanced>"}\n'
+        "If your problem is to write a net ionic equation:\n"
+        '"check": {"molecular": "<your full molecular equation>", '
+        '"net_ionic": "<the net ionic form of it>"}\n'
+        "Use the shape that matches the question you invented, and make the "
+        "last step of your working state the same equation the check does."
     ),
     "stoichiometry": _numeric_contract(
         _STOICHIOMETRY_TASKS,
@@ -1163,8 +1169,45 @@ def _reject(why: str, *args) -> bool:
     return False
 
 
+def _verify_net_ionic(check: dict, steps: list[str]) -> bool:
+    """A net ionic example ends at the net ionic equation, not the molecular one.
+
+    Both problem types live under the balancing topic, so both were being
+    handed to `_verify_balancing`, which demands the last steps restate the
+    balanced *molecular* equation. A correct net ionic example ends at
+    "3Ag^+ + PO4^3- -> Ag3PO4" and was thrown away every time. The check
+    contract only had the balancing shape too, so the model filled
+    `unbalanced` and `balanced` with whatever it had, sometimes the
+    student's own equation.
+    """
+    from judge.net_ionic import net_ionic_equation
+
+    molecular = str(check.get("molecular", "")).strip()
+    claimed = str(check.get("net_ionic", "")).strip()
+    if not molecular or not claimed:
+        return _reject("the check gave no molecular or no net ionic equation")
+
+    result = net_ionic_equation(molecular)
+    if result.no_reaction:
+        return _reject("%r has no net ionic equation, everything cancels", molecular)
+    if not _same_equation(claimed, result.net_ionic):
+        return _reject(
+            "the example calls %r the net ionic form of %r, we get %r",
+            claimed,
+            molecular,
+            result.net_ionic,
+        )
+    if not any(_same_equation(step, result.net_ionic) for step in steps[-3:]):
+        return _reject("the last steps never arrive at %r", result.net_ionic)
+    return True
+
+
 def _verify_balancing(check: dict, steps: list[str]) -> bool:
     from judge.chemistry_equations import balance_coefficients, is_balanced, parse_equation
+
+    # Net ionic problems share this topic and are a different question.
+    if check.get("net_ionic") or check.get("molecular"):
+        return _verify_net_ionic(check, steps)
 
     unbalanced = str(check.get("unbalanced", "")).strip()
     balanced = str(check.get("balanced", "")).strip()

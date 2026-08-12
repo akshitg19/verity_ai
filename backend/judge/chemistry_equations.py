@@ -53,17 +53,55 @@ def _strip_state_symbols(text: str) -> str:
 
 
 def _split_charge(text: str) -> tuple[str, int]:
-    """Split a trailing charge such as "^3+" or "2-" off a formula."""
+    """Split a trailing charge such as "^3+" or "2-" off a formula.
+
+    With a caret there is nothing to decide: "Cr2O7^2-" says which digits
+    are the charge. Without one the digits are shared between the last
+    subscript and the charge, and reading all of them as the charge is
+    wrong in the common case. "MnO4-" was parsed as MnO with a charge of
+    minus four, which made the oxidation state of Mn come out at -2 instead
+    of +7, silently, with no error. Every ion a student writes the ordinary
+    way was affected: SO42- gave -40 for sulfur and NH4+ gave +3 for
+    nitrogen.
+
+    Two rules resolve it, and between them they cover how ions are actually
+    written:
+
+    * A body that is one element symbol takes the whole run as its charge.
+      Fe3+ is iron three plus, not three irons carrying one charge.
+    * Otherwise the last digit is the charge and the rest is the subscript
+      it was written next to. SO42- is sulfate, MnO4- is permanganate.
+
+    Neither rule fires when a caret is present, so nothing that was already
+    unambiguous changes.
+    """
     match = CHARGE_SUFFIX_RE.search(text)
     if not match:
         return text, 0
 
     digits, sign = match.groups()
+    body = text[: match.start()]
+
+    if digits and "^" not in text and not _is_single_element(body):
+        if len(digits) == 1:
+            # One digit after a multi-element body is that element's
+            # subscript, and the charge is a single unit: MnO4-, NO3-, NH4+.
+            body, digits = body + digits, ""
+        else:
+            # Two or more: the last is the charge, the rest is the
+            # subscript it was written next to. SO42-, Cr2O72-, PO43-.
+            body, digits = body + digits[:-1], digits[-1]
+
     magnitude = int(digits) if digits else 1
     if magnitude > MAX_SUBSCRIPT:
         raise EquationParseError(f"charge is too large in {text!r}")
     charge = magnitude if sign == "+" else -magnitude
-    return text[: match.start()], charge
+    return body, charge
+
+
+def _is_single_element(body: str) -> bool:
+    """Whether the body is one element symbol and nothing else."""
+    return body in ELEMENT_SYMBOLS
 
 
 def _parse_atoms(text: str) -> dict[str, int]:
