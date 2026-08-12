@@ -152,7 +152,6 @@ function lineStatus(line, isProblem, verdict, blocked) {
 
 export default function MathFeedbackPanel({ workflow }) {
   const {
-    topic,
     topicId,
     handleTopicChange,
     problem,

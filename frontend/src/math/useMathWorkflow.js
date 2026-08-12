@@ -182,7 +182,7 @@ export default function useMathWorkflow({ pageId = null } = {}) {
         if (checkAbortRef.current === abortController) checkAbortRef.current = null;
       }
     },
-    [clearHints]
+    [clearHints, topicId]
   );
 
   const processRow = useCallback(
