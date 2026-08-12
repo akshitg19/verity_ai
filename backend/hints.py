@@ -173,6 +173,39 @@ _LEVEL_2_FALLBACK = (
     "Re-derive this line from the previous one, one operation at a time."
 )
 
+# The chemistry level 1 floor. Says what the checker proved and where to
+# look, without numbering a row: the student laid the page out themselves.
+# Anything not listed here falls through to the level 2 templates, which are
+# already keyed by error type and already avoid row numbers.
+_CHEMISTRY_LEVEL_1_FLOOR = {
+    "wrong_value": (
+        "The number in your answer isn't one this working produces. Go back "
+        "through what you multiplied and what you divided, and check each "
+        "quantity against where it came from."
+    ),
+    "wrong_unit": (
+        "That value does appear in the working, but not with that unit. "
+        "Write the units next to the numbers and cancel them through."
+    ),
+    "unbalanced_atoms": (
+        "One element still has a different count on each side. Take them one "
+        "element at a time and find the one that doesn't match."
+    ),
+    "unbalanced_charge": (
+        "Every atom is accounted for, but the two sides don't carry the same "
+        "total charge. Add up the charges on each side and compare them."
+    ),
+    "wrong_oxidation_state": (
+        "Check the elements whose oxidation states are fixed by a rule "
+        "first, and check what the whole species has to add up to."
+    ),
+    "structure_mismatch": (
+        "This isn't the structure the question asks for. Go through your "
+        "drawing atom by atom: which atoms are joined to which, and by what "
+        "kind of bond."
+    ),
+}
+
 # Level 3: a general conceptual explanation, not tied to this problem's
 # specific numbers -- safe by construction, same reasoning as level 2.
 _LEVEL_3_TEMPLATES = {
@@ -338,6 +371,16 @@ MAX_GENERATION_ATTEMPTS = 2
 
 def _template_hint(req: HintRequest) -> str:
     if req.level == 1:
+        if req.subject == "chemistry":
+            # Math is written one line under the last and our count is the
+            # student's count, so naming the row there is the most useful
+            # thing the floor can say. On a chemistry worksheet the working
+            # is laid out however they like, in a region we do not read, and
+            # "line 3" sends them counting rows that are not ours to count.
+            # Better to name the mistake, which the checker already proved.
+            return _CHEMISTRY_LEVEL_1_FLOOR.get(
+                req.error_type, _LEVEL_2_TEMPLATES.get(req.error_type, _LEVEL_2_FALLBACK)
+            )
         return _LEVEL_1_TEMPLATE.format(line_number=req.line_number)
     if req.level == 2:
         return _LEVEL_2_TEMPLATES.get(req.error_type, _LEVEL_2_FALLBACK)

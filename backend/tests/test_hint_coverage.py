@@ -597,3 +597,58 @@ def test_the_structure_contract_shows_what_a_smiles_is_not():
         assert "CC(Cl)CCl" in contract
         assert "never CH3CH2OH" in contract
         assert "never shown to the student" in contract
+
+
+# ---------------------------------------------------------------------------
+# The floor is not allowed to point by row number either
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "topic,problem_type,body,line,error_type",
+    CASES,
+    ids=[f"{topic}:{ptype}" for topic, ptype, _, _, _ in CASES],
+)
+def test_the_chemistry_floor_never_numbers_a_row(
+    monkeypatch, topic, problem_type, body, line, error_type
+):
+    """The static level 1 template said "Look closely at line 3".
+
+    That is right for math, where the working is one line under the last and
+    our count is the student's count. On a worksheet the working is laid out
+    however they like, in a region we deliberately do not read, so the row we
+    would be naming is not the row they see. Found live: every chemistry
+    question that fell back to the floor at level 1 pointed at a row number.
+    """
+    monkeypatch.setattr(hints, "is_configured", lambda: False)
+    session_id = open_session(topic, body)
+
+    response = client.post(
+        "/hint",
+        json={
+            "line_number": 3,
+            "error_type": error_type,
+            "level": 1,
+            "subject": "chemistry",
+            "topic": topic,
+            "problem_type": problem_type,
+            "session_id": session_id,
+            "problem": f"a {topic} problem",
+            "student_line": line,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    hint = response.json()["hint"]
+    assert not hints._points_by_position(hint), hint
+
+
+def test_math_still_names_the_line_on_the_floor():
+    """The change is chemistry only. Math is line by line and always was."""
+    from schemas import HintRequest
+
+    text = hints._template_hint(
+        HintRequest(line_number=3, error_type="sign", level=1, subject="math")
+    )
+
+    assert "line 3" in text
