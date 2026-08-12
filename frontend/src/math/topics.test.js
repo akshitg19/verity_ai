@@ -18,13 +18,16 @@ describe("math topics", () => {
     ]);
   });
 
-  it("marks algebra as implemented", () => {
+  it("marks implemented topics as ready", () => {
+    expect(MATH_TOPIC_BY_ID.pre_algebra.implemented).toBe(true);
     expect(MATH_TOPIC_BY_ID.algebra.implemented).toBe(true);
   });
 
   it("does not falsely mark unimplemented topics as ready", () => {
+    const implementedTopics = new Set(["pre_algebra", "algebra"]);
+
     for (const topic of MATH_TOPICS) {
-      if (topic.id === "algebra") continue;
+      if (implementedTopics.has(topic.id)) continue;
       expect(topic.implemented).toBe(false);
     }
   });

@@ -4,7 +4,7 @@ export const MATH_TOPICS = [
     label: "Pre-Algebra",
     glyph: "±",
     blurb: "Arithmetic, fractions, ratios, percents, exponents, roots, and basic expressions.",
-    implemented: false,
+    implemented: true,
   },
   {
     id: "algebra",

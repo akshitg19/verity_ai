@@ -137,7 +137,7 @@ export default function useMathWorkflow({ pageId = null } = {}) {
       }
 
       try {
-        const data = await checkSteps(effectiveProblem, stepList, {
+        const data = await checkSteps(topicId, effectiveProblem, stepList, {
           signal: abortController.signal,
         });
         if (requestId !== checkRequestId.current || requestPageId !== pageScopeRef.current) return;

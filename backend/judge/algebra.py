@@ -11,7 +11,14 @@ from sympy import (
     Rational,
     Symbol,
     simplify,
+    sqrt,
+    GreaterThan,
+    LessThan,
+    StrictGreaterThan,
+    StrictLessThan,
 )
+
+from sympy.core.relational import Relational
 from sympy.parsing.sympy_parser import (
     convert_xor,
     implicit_multiplication_application,
@@ -34,7 +41,10 @@ MAX_NUMBER_DIGITS = 12
 ALLOWED_MATH_RE = re.compile(r"^[0-9a-z+\-*/^=().\s]+$")
 IDENTIFIER_RE = re.compile(r"[a-z]+")
 NUMBER_RE = re.compile(r"\d+")
-TOKEN_RE = re.compile(r"(?:\d+(?:\.\d*)?|\.\d+|[a-z]|[+\-*/^=()])")
+TOKEN_RE = re.compile(
+    r"(?:sqrt|\d+(?:\.\d*)?|\.\d+|[a-z]|[+\-*/^=()])"
+)
+RELATION_RE = re.compile(r"<=|>=|=|<|>")
 SCIENTIFIC_NOTATION_RE = re.compile(
     r"(?:\d+(?:\.\d*)?|\.\d+)e[+\-]?\d+"
 )
@@ -47,6 +57,7 @@ SAFE_GLOBALS = {
     "Add": Add,
     "Mul": Mul,
     "Pow": Pow,
+    "sqrt": sqrt,
 }
 
 
@@ -65,6 +76,8 @@ def _validate_tokens(text: str) -> None:
         token_type = (
             "number"
             if token[0].isdigit() or token.startswith(".")
+            else "function"
+            if token == "sqrt"
             else "variable"
             if token.isalpha()
             else token
@@ -110,18 +123,43 @@ def _validated_local_dict(text: str) -> dict[str, Symbol]:
         raise ValueError("math input has unbalanced parentheses")
 
     identifiers = IDENTIFIER_RE.findall(text)
-    if any(len(name) != 1 for name in identifiers):
-        raise UnsupportedMathError("only single-letter variables are supported")
+
+    if any(
+        len(name) != 1 and name != "sqrt"
+        for name in identifiers
+    ):
+        raise UnsupportedMathError(
+            "only single-letter variables and sqrt are supported"
+        )
     if any(len(number) > MAX_NUMBER_DIGITS for number in NUMBER_RE.findall(text)):
         raise ValueError("numeric literal is too large")
 
-    return {name: Symbol(name) for name in set(identifiers)}
+    return {
+        name: Symbol(name)
+        for name in set(identifiers)
+        if name != "sqrt"
+    }
+
+
+PERCENT_RE = re.compile(
+    r"(?P<number>(?:\d+(?:\.\d*)?|\.\d+))\s*%"
+)
+
+
+def _normalize_percentages(text: str) -> str:
+    return PERCENT_RE.sub(
+        lambda match: f"({match.group('number')}/100)",
+        text,
+    )
 
 
 def _parse_expression(text: str, *, evaluate: bool = True):
-    local_dict = _validated_local_dict(text)
+    normalized = _normalize_percentages(text)
+
+    local_dict = _validated_local_dict(normalized)
+
     return parse_expr(
-        text,
+        normalized,
         local_dict=local_dict,
         global_dict=SAFE_GLOBALS.copy(),
         transformations=TRANSFORMS,
@@ -130,31 +168,63 @@ def _parse_expression(text: str, *, evaluate: bool = True):
 
 
 def _parse_equation(text: str):
-    """Parse 'lhs = rhs' into a SymPy Eq. Raises on failure."""
-    if "=" not in text:
-        # bare expression (arithmetic like "7 + 5" or a final value "12")
+    """Parse an equation, inequality, or bare expression."""
+    relation = _split_relation(text)
+
+    if relation is None:
         return _parse_expression(text)
-    lhs, rhs = text.split("=", 1)
-    return Eq(
-        _parse_expression(lhs.strip()),
-        _parse_expression(rhs.strip()),
+
+    lhs_text, operator, rhs_text = relation
+
+    return RELATION_TYPES[operator](
+        _parse_expression(lhs_text),
+        _parse_expression(rhs_text),
         evaluate=False,
     )
 
 
+RELATION_TYPES = {
+    "=": Eq,
+    "<": StrictLessThan,
+    "<=": LessThan,
+    ">": StrictGreaterThan,
+    ">=": GreaterThan,
+}
+
+
+def _split_relation(text: str):
+    matches = list(RELATION_RE.finditer(text))
+
+    if not matches:
+        return None
+
+    if len(matches) != 1:
+        raise ValueError("math input must contain exactly one relation")
+
+    match = matches[0]
+
+    lhs = text[:match.start()].strip()
+    rhs = text[match.end():].strip()
+
+    if not lhs or not rhs:
+        raise ValueError("relation must have both a left and right side")
+
+    return lhs, match.group(0), rhs
+
+
 def _parse_structural(text: str):
-    """Like _parse_equation but with evaluate=False, preserving written
-    structure. SymPy auto-distributes numeric coefficients on normal parse
-    (3(x-4) becomes 3x-12 immediately), which erases exactly the
-    parenthesized shape the distribution-error check needs to see.
-    Returns None if the text can't be parsed this way."""
+    """Parse while preserving the written structure."""
     try:
-        if "=" not in text:
+        relation = _split_relation(text)
+
+        if relation is None:
             return _parse_expression(text, evaluate=False)
-        lhs, rhs = text.split("=", 1)
-        return Eq(
-            _parse_expression(lhs.strip(), evaluate=False),
-            _parse_expression(rhs.strip(), evaluate=False),
+
+        lhs_text, operator, rhs_text = relation
+
+        return RELATION_TYPES[operator](
+            _parse_expression(lhs_text, evaluate=False),
+            _parse_expression(rhs_text, evaluate=False),
             evaluate=False,
         )
     except Exception:
@@ -162,14 +232,19 @@ def _parse_structural(text: str):
 
 
 def _written_symbols(structural) -> set[Symbol]:
-    if isinstance(structural, Eq):
+    if isinstance(structural, Relational):
         return structural.lhs.free_symbols | structural.rhs.free_symbols
     if structural is not None and hasattr(structural, "free_symbols"):
         return structural.free_symbols
     return set()
 
 
-def _support_reason(parsed, structural, allowed_symbols=None) -> str | None:
+def _support_reason(
+    parsed,
+    structural,
+    allowed_symbols=None,
+    allow_symbolic_expression: bool = False,
+) -> str | None:
     """Return why an expression is outside the one-variable linear MVP."""
     symbols = _written_symbols(structural)
     if len(symbols) > 1:
@@ -180,7 +255,7 @@ def _support_reason(parsed, structural, allowed_symbols=None) -> str | None:
 
     structural_parts = (
         (structural.lhs, structural.rhs)
-        if isinstance(structural, Eq)
+        if isinstance(structural, Relational)
         else (structural,)
     )
     for expression in structural_parts:
@@ -201,8 +276,16 @@ def _support_reason(parsed, structural, allowed_symbols=None) -> str | None:
             if power.base.free_symbols and power.exp != 1:
                 return "variable powers and variable denominators are not supported"
 
-    parts = (parsed.lhs, parsed.rhs) if isinstance(parsed, Eq) else (parsed,)
-    if not isinstance(parsed, Eq) and symbols:
+    parts = (
+        (parsed.lhs, parsed.rhs)
+        if isinstance(parsed, Relational)
+        else (parsed,)
+    )
+    if (
+        not isinstance(parsed, Relational)
+        and symbols
+        and not allow_symbolic_expression
+    ):
         return "symbolic bare expressions are not supported"
 
     symbol = next(iter(symbols), None)
@@ -237,6 +320,19 @@ def _equations_equivalent(eq1, eq2) -> bool:
 
     ratio = simplify(diff1 / diff2)
     return ratio.is_constant() and ratio != 0
+
+
+def _inequalities_equivalent(first, second) -> bool:
+    """Return True when two one-variable inequalities have the same solution set."""
+    symbols = first.free_symbols | second.free_symbols
+
+    if len(symbols) != 1:
+        return False
+
+    try:
+        return first.as_set() == second.as_set()
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -470,15 +566,31 @@ class AlgebraJudge(Judge[str, Step, LineVerdict]):
                 continue
 
             try:
-                # Case 1: both are equations -> check equivalence
-                if isinstance(reference, Eq) and isinstance(current, Eq):
+                if (
+                    isinstance(reference, Relational)
+                    and isinstance(current, Relational)
+                    and not isinstance(reference, Eq)
+                    and not isinstance(current, Eq)
+                ):
+                    ok = _inequalities_equivalent(reference, current)
+                    error_type, detail = (
+                        (None, None)
+                        if ok
+                        else (
+                            "algebraic",
+                            "Inequality does not preserve the same solution set",
+                        )
+                    )
+
+                # Case 2: both are equations -> check equivalence
+                elif isinstance(reference, Eq) and isinstance(current, Eq):
                     ok = _equations_equivalent(reference, current)
                     error_type, detail = (
                         (None, None)
                         if ok
                         else _classify(reference, current, reference_structural)
                     )
-                # Case 2: both bare expressions (pure arithmetic) -> compare values
+                # Case 3: both bare expressions (pure arithmetic) -> compare values
                 elif not isinstance(reference, Eq) and not isinstance(current, Eq):
                     ok = simplify(reference - current) == 0
                     error_type, detail = (

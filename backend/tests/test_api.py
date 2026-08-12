@@ -76,6 +76,29 @@ def test_check_accepts_equivalent_steps() -> None:
     assert all(item["valid"] for item in response.json()["verdicts"])
 
 
+def test_check_routes_pre_algebra_topic() -> None:
+    response = client.post(
+        "/check",
+        json={
+            "topic": "pre_algebra",
+            "problem": "3/4 + 1/8",
+            "steps": [
+                {"line_number": 1, "latex": "6/8 + 1/8"},
+                {"line_number": 2, "latex": "7/8"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["first_wrong_line"] is None
+    assert body["problem_error"] is None
+    assert len(body["verdicts"]) == 2
+    assert all(item["valid"] for item in body["verdicts"])
+
+    
 def test_check_reports_first_wrong_line() -> None:
     response = client.post(
         "/check",

@@ -61,6 +61,7 @@ class Step(BaseModel):
 
 
 class CheckRequest(BaseModel):
+    topic: MathTopic = "algebra"
     problem: MathText
     steps: Annotated[list[Step], Field(min_length=1, max_length=50)]
 

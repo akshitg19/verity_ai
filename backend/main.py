@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from answer_vault import VaultConstructionError, build_vault, build_math_vault
 from chem_model import ReactionJudge
 from hints import generate_hint
-from judge import AlgebraJudge, BalanceJudge, ChemistryJudge, FunctionalGroupJudge
+from judge import BalanceJudge, ChemistryJudge, FunctionalGroupJudge, MathJudgeDispatcher
 from judge.chemistry import (
     ChemistryParseError,
     FormulaStructureJudge,
@@ -109,7 +109,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-judge = AlgebraJudge()
+math_judge = MathJudgeDispatcher()
 chemistry_judge = ChemistryJudge()
 functional_group_judge = FunctionalGroupJudge()
 balance_judge = BalanceJudge()
@@ -197,7 +197,7 @@ def chemistry_topics():
 
 @app.post("/check", response_model=CheckResponse)
 def check_steps(req: CheckRequest):
-    verdicts = judge.check(req.problem, req.steps)
+    verdicts = math_judge.check(req.topic, req.problem, req.steps)
     if verdicts and verdicts[0].line_number == 0:
         return CheckResponse(
             verdicts=[],
