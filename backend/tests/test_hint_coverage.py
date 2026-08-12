@@ -64,6 +64,98 @@ CASES = [
         "120", "wrong_value",
     ),
     (
+        "stoichiometry", "mass_from_moles",
+        {"stoichiometry": {"task": "mass_from_moles", "formula": "NaCl",
+                           "moles": 0.25,
+                           "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "0.25", "wrong_value",
+    ),
+    (
+        "stoichiometry", "empirical_formula",
+        {"stoichiometry": {"task": "empirical_formula",
+                           "composition": {"C": 40.0, "H": 6.7, "O": 53.3},
+                           "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "CH2O2", "wrong_formula",
+    ),
+    (
+        "stoichiometry", "molecular_formula",
+        {"stoichiometry": {"task": "molecular_formula",
+                           "composition": {"C": 40.0, "H": 6.7, "O": 53.3},
+                           "target_molar_mass": 180.0,
+                           "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "CH2O", "wrong_formula",
+    ),
+    (
+        "stoichiometry", "limiting_reagent",
+        {"stoichiometry": {"task": "limiting_reagent", "equation": "N2 + H2 -> NH3",
+                           "amounts": {"N2": 28.0, "H2": 6.0},
+                           "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "N2", "wrong_species",
+    ),
+    (
+        "stoichiometry", "theoretical_yield",
+        {"stoichiometry": {"task": "theoretical_yield", "equation": "N2 + H2 -> NH3",
+                           "amounts": {"N2": 28.0, "H2": 6.0}, "product": "NH3",
+                           "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "99.9", "wrong_value",
+    ),
+    (
+        "solutions", "molarity",
+        {"solutions": {"task": "molarity", "formula": "NaCl", "mass_g": 5.85,
+                       "volume_l": 1.0, "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "5.85", "wrong_value",
+    ),
+    (
+        "solutions", "dilution",
+        {"solutions": {"task": "dilution", "initial_concentration_m": 2.0,
+                       "initial_volume_l": 0.05, "final_volume_l": 0.5,
+                       "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "20.0", "wrong_value",
+    ),
+    (
+        "solutions", "strong_base_ph",
+        {"solutions": {"task": "strong_base_ph", "concentration_m": 0.01,
+                       "hydroxides": 1, "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "2.00", "wrong_value",
+    ),
+    (
+        "solutions", "weak_acid_ph",
+        {"solutions": {"task": "weak_acid_ph", "concentration_m": 0.1,
+                       "ka": 1.8e-5, "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "1.00", "wrong_value",
+    ),
+    (
+        "solutions", "weak_base_ph",
+        {"solutions": {"task": "weak_base_ph", "concentration_m": 0.1,
+                       "kb": 1.8e-5, "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "2.87", "wrong_value",
+    ),
+    (
+        "solutions", "titration_concentration",
+        {"solutions": {"task": "titration_concentration",
+                       "titrant_concentration_m": 0.1, "titrant_volume_l": 0.025,
+                       "analyte_volume_l": 0.02,
+                       "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "0.100", "wrong_value",
+    ),
+    (
+        "solutions", "percent_by_mass",
+        {"solutions": {"task": "percent_by_mass", "solute_mass_g": 5.0,
+                       "solution_mass_g": 100.0,
+                       "steps": [{"line_number": 1, "smiles": "0"}]}},
+        "0.05", "wrong_value",
+    ),
+    (
+        "structure", "match_structure",
+        {"target_smiles": "CC(=O)OC"},
+        "CCOC", "structure_mismatch",
+    ),
+    (
+        "organic", "draw_from_name",
+        {"target_smiles": "CC(O)C"},
+        "CCCO", "structure_mismatch",
+    ),
+    (
         "solutions", "strong_acid_ph",
         {"solutions": {"task": "strong_acid_ph", "concentration_m": 0.01,
                        "protons": 1, "steps": [{"line_number": 1, "smiles": "0"}]}},
@@ -215,6 +307,17 @@ def test_every_problem_type_has_its_own_coaching(
     assert CONCEPTS[problem_type].label.split()[0].lower() in coaching.lower()
 
 
+def test_every_concept_has_a_worked_case():
+    """No concept ships without at least one question exercised end to end.
+
+    This is the assertion that keeps the coverage above honest as problem
+    types are added: writing rules for a new concept without also adding a
+    case here fails, rather than quietly leaving it untested.
+    """
+    missing = sorted(set(CONCEPTS) - {case[1] for case in CASES})
+    assert not missing, f"no test question for: {', '.join(missing)}"
+
+
 def test_no_two_concepts_share_their_coaching():
     seen: dict[str, str] = {}
     for name in CONCEPTS:
@@ -254,3 +357,159 @@ def test_an_empty_working_block_adds_nothing():
 
     req = HintRequest(line_number=1, error_type=None, level=1)
     assert hints._working_block(req) == ""
+
+
+# ---------------------------------------------------------------------------
+# The animations, proven to have something to animate.
+#
+# The rendering is tested on the frontend. What is tested here is that the
+# payload it renders actually arrives: an atom tally needs `equations`, a
+# quantity trail needs `quantities`, and a drawn molecule needs `structure`.
+# Level 2 is the rung that carries all three, and it only returns anything
+# at all once the generated example has passed our own verification, so
+# these also prove verification accepts a correct example rather than only
+# rejecting wrong ones.
+# ---------------------------------------------------------------------------
+
+
+def generation_of(payload):
+    """A model that returns one fixed example, whatever it is asked."""
+
+    def fake_generate_json(messages, **kwargs):
+        return payload, 120
+
+    return fake_generate_json
+
+
+def level_2_example(monkeypatch, topic, session_body, payload, problem_type):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(hints, "generate_json", generation_of(payload))
+    session_id = open_session(topic, session_body)
+    response = client.post(
+        "/hint",
+        json={
+            "line_number": 1,
+            "error_type": "wrong_value",
+            "level": 2,
+            "subject": "chemistry",
+            "topic": topic,
+            "problem_type": problem_type,
+            "session_id": session_id,
+            "problem": f"a {topic} problem",
+            "student_line": "0",
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_balancing_level_2_carries_the_atom_tally(monkeypatch):
+    """The equations the tally counts come from our parser, not the prose."""
+    payload = {
+        "problem": "Balance Fe + O2 -> Fe2O3",
+        "technique": "Balance oxygen first, then the metal",
+        "steps": [
+            "Start with the unbalanced equation: Fe + O2 -> Fe2O3",
+            "Balance oxygen: Fe + 3O2 -> 2Fe2O3",
+            "Balance iron: 4Fe + 3O2 -> 2Fe2O3",
+        ],
+        "check": {
+            "unbalanced": "Fe + O2 -> Fe2O3",
+            "balanced": "4Fe + 3O2 -> 2Fe2O3",
+        },
+    }
+    data = level_2_example(
+        monkeypatch, "balancing",
+        {"reference_equation": "C3H8 + O2 -> CO2 + H2O"},
+        payload, "balance",
+    )
+    example = data["worked_example"]
+    assert example is not None, data["hint"]
+    assert example["verified"] is True
+    assert len(example["equations"]) == len(example["steps"])
+    # The last step is the balanced one, and the client counts atoms off it.
+    assert example["equations"][-1] is not None
+    assert "4Fe" in example["equations"][-1]
+
+
+def test_numeric_level_2_carries_a_quantity_per_step(monkeypatch):
+    """The quantity trail needs one entry per step, aligned by index."""
+    payload = {
+        "problem": "Find the molar mass of KNO3",
+        "technique": "Add each element's contribution",
+        "steps": [
+            "Mass of K: 39.098 g/mol",
+            "Mass of N: 14.007 g/mol",
+            "Mass of O: 47.997 g/mol",
+            "Molar mass of KNO3: 101.102 g/mol",
+        ],
+        "check": {
+            "task": "molar_mass",
+            "params": {"formula": "KNO3"},
+            "answer": 101.102,
+        },
+    }
+    data = level_2_example(
+        monkeypatch, "stoichiometry",
+        {"stoichiometry": {"task": "molar_mass", "formula": "Al2(SO4)3",
+                           "steps": [{"line_number": 1, "smiles": "0"}]}},
+        payload, "molar_mass",
+    )
+    example = data["worked_example"]
+    assert example is not None, data["hint"]
+    assert len(example["quantities"]) == len(example["steps"])
+    assert all(entry is not None for entry in example["quantities"])
+    assert example["quantities"][-1]["unit"] == "g/mol"
+    # Rendered by the server so the client cannot disagree about rounding.
+    assert example["quantities"][0]["text"]
+
+
+def test_structure_level_2_carries_the_molecule_to_draw(monkeypatch):
+    payload = {
+        "problem": "Draw a structure with the formula C3H8O",
+        "technique": "Three carbons in a chain, then place the oxygen",
+        "steps": [
+            "Count the carbons: three in a row",
+            "Add the oxygen as an alcohol on the end carbon",
+            "The structure is propan-1-ol",
+        ],
+        "check": {"smiles": "CCCO", "group": "alcohol"},
+    }
+    data = level_2_example(
+        monkeypatch, "structure", {"target_formula": "C2H6O"},
+        payload, "formula_structure",
+    )
+    example = data["worked_example"]
+    assert example is not None, data["hint"]
+    assert example["structure"] == "CCCO"
+
+
+def test_a_wrong_worked_example_is_still_thrown_away(monkeypatch):
+    """The safeguard has to survive everything above it.
+
+    Adding animation payloads must not weaken verification: an example whose
+    arithmetic does not check out is rejected whole, animation data and all.
+    """
+    payload = {
+        "problem": "Find the molar mass of KNO3",
+        "technique": "Add each element's contribution",
+        "steps": [
+            "Mass of K: 39.098 g/mol",
+            "Mass of N: 14.007 g/mol",
+            "Molar mass of KNO3: 7.000 g/mol",
+        ],
+        "check": {
+            "task": "molar_mass",
+            "params": {"formula": "KNO3"},
+            "answer": 7.0,
+        },
+    }
+    data = level_2_example(
+        monkeypatch, "stoichiometry",
+        {"stoichiometry": {"task": "molar_mass", "formula": "Al2(SO4)3",
+                           "steps": [{"line_number": 1, "smiles": "0"}]}},
+        payload, "molar_mass",
+    )
+    assert data["worked_example"] is None
+    assert data["source"] == "fallback"
+    assert data["hint"].strip()
