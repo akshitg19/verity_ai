@@ -2655,3 +2655,104 @@ Still open:
       structure asks "is this the right molecule", organic asks "does it have
       this group" or "is this the right product". Worth saying so in the blurbs,
       because from the outside they look like the same topic twice.
+
+---
+
+# Walkthrough, session 4 (Aug 12): the worksheet
+
+Written the night before the demo, from a session on the tablet. **This
+section supersedes section 15's "labelled write-in slots on the page", which
+it implements, and it reverses line-by-line judging on numeric topics.**
+
+## 16. The slots were never wired in
+
+`ProblemSlotOverlay.jsx` and `problemSlots.js` shipped in PR #26 with their
+tests, and **nothing imported the overlay**. The commit message said the
+problem was filled in on the page; the page had no boxes on it. Worth
+recording because the tests all passed and the module was correct: a pure
+module with a full test file and no call site reads exactly like a finished
+feature from the inside, and nothing in CI can tell the difference.
+
+## 17. Chemistry is not math, and line-by-line judging was the wrong shape
+
+**What happened.** *"Is there any calculation involved in this? We have to
+multiply and divide. This is not like math where you just have a working and
+you can check line by line. In chemistry, especially for a question like
+molar mass, you can't do that."*
+
+Correct, and the two failures fall straight out of it:
+
+1. **A row with two numbers in it is a `parse_error`.** `2(26.98) + 96.20 +
+   191.99` is what molar-mass working looks like, and `parse_quantity`
+   refuses it by design, because guessing which number is the claim is the
+   confident-wrong behaviour the product must not have.
+2. **An intermediate written as the final answer was `valid`.** The standing
+   finding in this file -- "the numeric judges mark a line valid when it
+   matches *any* quantity in the correct working ... nothing marks a line as
+   the final answer" -- with molar mass named as one of its cases.
+
+Both are the same mistake: treating a numeric chemistry page as a chain of
+steps that each follow from the one above. It is not one. It is a lookup,
+some arithmetic laid out however the student likes, and one answer.
+
+## 18. The worksheet, and what it decides
+
+Numeric topics now render as a worksheet on the page, not a panel to type
+into. Top to bottom: labelled question boxes, one per field; a working area;
+one answer box with the unit printed outside it.
+
+| Zone | Read? | Judged? |
+|---|---|---|
+| Question boxes | yes, and each fills its own field | no |
+| Working | **no, never sent** | **no** |
+| Answer box | yes | yes, and it is the only thing judged |
+
+**The working is deliberately not read.** Not a shortcut and not a cost
+saving. Everybody arranges arithmetic differently, that arrangement is
+exactly what recognition is worst at, and a confident wrong verdict on
+correct scribble is the fatal row in this file's own failure taxonomy. The
+student's own words: *"every person does multiplication and addition
+separately, so there's no point in checking that."*
+
+**Knowing which line is the answer closes the fatal hole.** `answers_only`
+on `StoichiometryRequest` narrows the comparison to the answer steps, so
+`53.96` in the answer box on `Al2(SO4)3` is now "that is a quantity from the
+working, not the final answer" instead of a green tick. The flag defaults
+false, so every existing caller keeps the step-chain behaviour, where an
+intermediate is exactly what a student should be writing.
+
+**The unit is printed outside the box.** Which closes the third standing
+finding, "units are optional and ignored in every numeric topic", from the
+front rather than by tightening a parser against handwriting.
+
+### Built
+
+- `frontend/src/chemistry/worksheet.js` — zones, layout, the growing working
+  box, all pure, 15 tests
+- `frontend/src/chemistry/WorksheetOverlay.jsx` — the boxes, drawn under the
+  ink so writing in one is writing on the page
+- `useChemistry` — working rows are never queued for recognition, a question
+  box fills its own field with no popover to tap, the answer box is the only
+  step sent, and the verdict colours the box on the page
+- `judge/numeric.py`, `judge/stoichiometry.py`, `schemas.py`, `main.py` —
+  the `answers_only` mode, 7 tests
+- The working box grows under the pen and freezes once the answer box has
+  ink in it, because moving a box a student is writing in is worse than a
+  box that is a row short
+
+### Still open
+
+- [ ] **Solutions, acids and bases** gets the same worksheet for free (it is
+      the other `input: "numeric"` topic and already renders one), but its
+      fourteen tasks have not been walked through by hand. `answers_only` is
+      **not** wired to `/chemistry/solutions` yet, so the pH-versus-pOH
+      family is still judged against every quantity
+- [ ] **The multi-field types are untested on a tablet.** Percent yield
+      lays out four question boxes; only molar mass has been driven end to
+      end
+- [ ] **Balancing and structure keep the row-by-row path**, which is right
+      for them -- a balancing line really is a step -- but it means two
+      interaction models exist and a student meets both
+- [ ] **Hint level 1 no longer sees the working**, because we no longer read
+      it. It diagnoses from the answer alone. Sending the working as hint
+      context without judging it is the obvious next move and was not built

@@ -235,3 +235,71 @@ def test_every_verdict_is_labelled_deterministic():
     problem = StoichiometryProblem(task="molar_mass", formula="H2O")
 
     assert all(v.judged_by == "deterministic" for v in check(problem, "18.02 g/mol"))
+
+
+# The worksheet layout: the working is not judged, one answer box is.
+#
+# This is the mode that closes the standing finding in `final_tasks.md` --
+# "the numeric judges mark a line valid when it matches *any* quantity in the
+# correct working ... nothing marks a line as the final answer". On a
+# worksheet the answer box *is* the marker, so the tests below are the
+# rejection path that could not exist before.
+
+
+def check_answer(problem: StoichiometryProblem, line: str):
+    return judge.check(
+        problem, [ChemistryStep(line_number=1, smiles=line)], answers_only=True
+    )[0]
+
+
+ALUMINIUM_SULFATE = StoichiometryProblem(task="molar_mass", formula="Al2(SO4)3")
+
+
+def test_the_answer_is_accepted_in_the_answer_box():
+    assert check_answer(ALUMINIUM_SULFATE, "342.15 g/mol").valid
+    assert check_answer(ALUMINIUM_SULFATE, "342.15").valid
+
+
+def test_an_intermediate_in_the_answer_box_is_wrong():
+    # 53.96 is the mass of the aluminium, a real quantity in the working and
+    # a valid middle line. In the answer box it is a stop-too-early, and the
+    # old behaviour of accepting it is the fatal category in this repo's own
+    # failure taxonomy.
+    verdict = check_answer(ALUMINIUM_SULFATE, "53.96 g/mol")
+    assert not verdict.valid
+    assert verdict.error_type == "wrong_value"
+    assert "not the final answer" in verdict.detail
+
+
+def test_a_labelled_intermediate_in_the_answer_box_is_wrong_too():
+    verdict = check_answer(ALUMINIUM_SULFATE, "Al = 53.96")
+    assert not verdict.valid
+    assert verdict.error_type == "wrong_value"
+
+
+def test_an_intermediate_with_the_right_unit_is_not_called_a_unit_error():
+    # The value collides with a step in the working, so a unit check scoped
+    # to every step would report `wrong_unit` on a line whose unit is right.
+    assert check_answer(ALUMINIUM_SULFATE, "53.96 g/mol").error_type == "wrong_value"
+
+
+def test_a_number_from_nowhere_says_so_rather_than_blaming_the_working():
+    verdict = check_answer(ALUMINIUM_SULFATE, "149.04 g/mol")
+    assert not verdict.valid
+    assert "not the final answer" not in verdict.detail
+
+
+def test_a_genuine_unit_error_still_reads_as_one():
+    verdict = check_answer(ALUMINIUM_SULFATE, "342.15 g")
+    assert not verdict.valid
+    assert verdict.error_type == "wrong_unit"
+
+
+def test_answers_only_is_off_by_default_so_working_still_passes():
+    # Every existing caller judges a chain of steps, where an intermediate is
+    # exactly what a student should be writing.
+    assert statuses(check(ALUMINIUM_SULFATE, "53.96", "96.20", "342.15")) == [
+        "valid",
+        "valid",
+        "valid",
+    ]

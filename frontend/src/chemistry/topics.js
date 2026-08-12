@@ -200,7 +200,11 @@ export const TOPICS = [
       };
     },
     check(type, values, steps, options) {
-      return checkStoichiometry(this.buildPayload(type, values, steps), options);
+      const payload = this.buildPayload(type, values, steps);
+      // The worksheet judges one answer box, so an intermediate written
+      // there is the wrong answer rather than an honest middle line.
+      if (options?.answersOnly) payload.answers_only = true;
+      return checkStoichiometry(payload, options);
     },
     session(type, values, problem) {
       return {

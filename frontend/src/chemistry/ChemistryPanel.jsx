@@ -177,6 +177,7 @@ export default function ChemistryPanel({
     cancelHint,
     captureNote,
     setCaptureNote,
+    worksheet,
   } = chemistry;
 
   const answerRef = useRef(null);
@@ -291,10 +292,12 @@ export default function ChemistryPanel({
               {topic.glyph}
             </div>
             <div style={{ marginBottom: 4, color: COLORS.text, fontSize: 14, fontWeight: 700 }}>
-              Write one row at a time
+              {worksheet ? "Work on the page" : "Write one row at a time"}
             </div>
             <div style={{ maxWidth: 220, color: COLORS.muted, fontSize: 12, lineHeight: 1.5 }}>
-              Each row is read and checked on its own.
+              {worksheet
+                ? "Fill in the boxes, work however you like, and write your answer in the answer box."
+                : "Each row is read and checked on its own."}
             </div>
           </div>
         ) : (
@@ -305,6 +308,7 @@ export default function ChemistryPanel({
             ready={ready}
             checking={checking}
             questionRows={questionRows}
+            worksheet={worksheet}
             onEdit={editLine}
             onCheck={checkAnswer}
             onReleaseQuestion={releaseQuestionRow}

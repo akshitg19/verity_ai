@@ -110,8 +110,15 @@ class WorkedSolution:
         self.steps.append(step)
         return step
 
-    def match(self, written: Quantity) -> SolvedStep | None:
+    def match(self, written: Quantity, *, answers_only: bool = False) -> SolvedStep | None:
         """The step this written quantity states, if any.
+
+        `answers_only` narrows the comparison to the final answer. It exists
+        for the worksheet layout, where the student writes their working in a
+        region we deliberately do not judge and then states one number in an
+        answer box. There, an intermediate is not a legitimate middle line, it
+        is the wrong answer, and accepting it would be the confident-valid
+        failure this file's own comment warns about two paragraphs down.
 
         An unrecognised label never rejects. A student who writes "n = 0.125"
         when 0.125 is the molarity has still written a number the working
@@ -127,13 +134,14 @@ class WorkedSolution:
         wrong line. Naming a quantity we computed and giving it a different
         value is now a mismatch, full stop.
         """
+        candidates = self.answer_steps if answers_only else self.steps
         labelled = [
             step
-            for step in self.steps
+            for step in candidates
             if written.name
             and (written.name == step.name.lower() or written.name in step.aliases)
         ]
-        for step in labelled or self.steps:
+        for step in labelled or candidates:
             if quantities_match(step.quantity, written):
                 return step
         return None
@@ -173,8 +181,15 @@ def judge_quantity_steps(
     steps: list[ChemistryStep],
     *,
     text_of=lambda step: step.smiles,
+    answers_only: bool = False,
 ) -> list[ChemistryLineVerdict]:
-    """Compare each written line against the solved quantities."""
+    """Compare each written line against the solved quantities.
+
+    With `answers_only`, only the final answer counts as a match. A line that
+    states an intermediate is told *which* mistake it made, because "you
+    stopped one step early" and "that number appears nowhere in this problem"
+    are different problems and deserve different hints.
+    """
     verdicts: list[ChemistryLineVerdict] = []
     for step in steps:
         raw = text_of(step)
@@ -192,7 +207,7 @@ def judge_quantity_steps(
             )
             continue
 
-        matched = solution.match(written)
+        matched = solution.match(written, answers_only=answers_only)
         if matched is not None:
             verdicts.append(
                 ChemistryLineVerdict(
@@ -205,7 +220,10 @@ def judge_quantity_steps(
             continue
 
         # Right number, wrong dimension is a different mistake from a wrong
-        # number, and a student deserves to be told which one it was.
+        # number, and a student deserves to be told which one it was. Scoped
+        # to the same steps the match was: otherwise an intermediate written
+        # with the correct unit is reported as a unit error, because some
+        # other step happens to share its value.
         wrong_unit = any(
             quantities_match(
                 Quantity(
@@ -215,18 +233,28 @@ def judge_quantity_steps(
                 ),
                 written,
             )
-            for candidate in solution.steps
+            for candidate in (
+                solution.answer_steps if answers_only else solution.steps
+            )
         )
+        # An intermediate written in the answer box is a stop-too-early, not a
+        # number out of nowhere, and saying so is the whole value of knowing
+        # which line is the answer.
+        stopped_early = (
+            answers_only and solution.match(written, answers_only=False) is not None
+        )
+        if wrong_unit:
+            detail = "Value matches a quantity in the working but the unit does not"
+        elif stopped_early:
+            detail = "That is a quantity from the working, not the final answer"
+        else:
+            detail = "No quantity in the correct working has this value"
         verdicts.append(
             ChemistryLineVerdict(
                 line_number=step.line_number,
                 valid=False,
                 error_type="wrong_unit" if wrong_unit else "wrong_value",
-                detail=(
-                    "Value matches a quantity in the working but the unit does not"
-                    if wrong_unit
-                    else "No quantity in the correct working has this value"
-                ),
+                detail=detail,
                 judged_by="deterministic",
             )
         )

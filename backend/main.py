@@ -333,7 +333,11 @@ def check_stoichiometry_steps(req: StoichiometryRequest):
         composition=dict(req.composition),
         target_molar_mass=req.target_molar_mass,
     )
-    return _chemistry_response(stoichiometry_judge.check(problem, req.steps))
+    return _chemistry_response(
+        stoichiometry_judge.check(
+            problem, req.steps, answers_only=req.answers_only
+        )
+    )
 
 
 @app.post("/chemistry/solutions", response_model=ChemistryCheckResponse)
@@ -430,8 +434,11 @@ def open_chemistry_session(req: ChemistrySessionRequest):
     """
     stoichiometry = None
     if req.stoichiometry is not None:
+        # `answers_only` is a judging mode, not part of the problem, so it is
+        # dropped here rather than handed to a dataclass that has no field
+        # for it.
         stoichiometry = StoichiometryProblem(
-            **req.stoichiometry.model_dump(exclude={"steps"})
+            **req.stoichiometry.model_dump(exclude={"steps", "answers_only"})
         )
     solutions = None
     if req.solutions is not None:

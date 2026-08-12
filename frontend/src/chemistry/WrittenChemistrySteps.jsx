@@ -10,7 +10,7 @@ function verdictStatus(verdict) {
 // sentence whether a check was seconds away or could never run at all, which
 // is how two rows sat at "Waiting" forever with nothing on screen explaining
 // that the question field was empty.
-function statusForLine(line, verdict, blocked, ready) {
+function statusForLine(line, verdict, blocked, ready, worksheet) {
   const styleFor = (key, label, detail) => ({
     label,
     detail,
@@ -48,19 +48,25 @@ function statusForLine(line, verdict, blocked, ready) {
         );
   }
   if (status === "valid") {
+    // On a worksheet nothing "follows from the row above": the rows above
+    // are the student's own working and were never read.
     return styleFor(
       "valid",
-      "Correct step",
-      "Follows from the row above."
+      worksheet ? "Correct" : "Correct step",
+      worksheet ? "That is the answer." : "Follows from the row above."
     );
   }
   if (status === "invalid") {
     return styleFor(
       "invalid",
-      "Review this step",
-      verdict.error_type
-        ? `Possible ${verdict.error_type.replaceAll("_", " ")}.`
-        : "Does not follow from the row above."
+      worksheet ? "Not the answer" : "Review this step",
+      // The judge's own detail is more specific than a category name, and on
+      // a worksheet it is the difference between "you stopped one step
+      // early" and "that number is not in this problem at all".
+      (worksheet && verdict.detail) ||
+        (verdict.error_type
+          ? `Possible ${verdict.error_type.replaceAll("_", " ")}.`
+          : "Does not follow from the row above.")
     );
   }
   return status === "parse_error"
@@ -83,6 +89,7 @@ export default function WrittenChemistrySteps({
   ready,
   checking,
   questionRows = [],
+  worksheet = null,
   onEdit,
   onCheck,
   onReleaseQuestion,
@@ -90,9 +97,18 @@ export default function WrittenChemistrySteps({
   // The question is not a step, so it is neither numbered nor checked.
   // Several written rows can make up one question, so all of them are
   // excluded from the working and the first is shown as the question.
+  //
+  // A worksheet has exactly one step, the answer box. Its question fields
+  // are already editable above as the correction surface, and the working is
+  // deliberately never read, so listing either here would be showing the
+  // student rows that nothing will ever say anything about.
   const asked = new Set(questionRows ?? []);
-  const stepLines = lines.filter((line) => !asked.has(line.row));
-  const questionLine = lines.find((line) => asked.has(line.row)) ?? null;
+  const stepLines = worksheet
+    ? lines.filter((line) => line.row === worksheet.answerRow)
+    : lines.filter((line) => !asked.has(line.row));
+  const questionLine = worksheet
+    ? null
+    : lines.find((line) => asked.has(line.row)) ?? null;
   const canCheck =
     ready && !checking && readableChemistryLines(stepLines).length > 0;
 
@@ -179,7 +195,8 @@ export default function WrittenChemistrySteps({
           line,
           verdictsByLine.get(line.row),
           blocked,
-          ready
+          ready,
+          worksheet
         );
         return (
           <div
@@ -218,7 +235,7 @@ export default function WrittenChemistrySteps({
                   }}
                 >
                   <div style={{ color: COLORS.text, fontWeight: 700, fontSize: 14 }}>
-                    Step {index + 1}
+                    {worksheet ? "Your answer" : `Step ${index + 1}`}
                   </div>
                   <div style={{ color: status.color, fontSize: 12, fontWeight: 700 }}>
                     {status.label}

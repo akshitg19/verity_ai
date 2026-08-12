@@ -341,6 +341,11 @@ class StoichiometryRequest(BaseModel):
     ] = Field(default_factory=dict, max_length=12)
     target_molar_mass: Annotated[float, Field(gt=0, le=1e6)] | None = None
     steps: Annotated[list[ChemistryStep], Field(min_length=1, max_length=50)]
+    # The worksheet layout judges one answer box rather than a chain of
+    # working lines, so an intermediate quantity is the wrong answer there
+    # rather than a legitimate middle step. Defaults false, which is exactly
+    # the behaviour every existing caller already gets.
+    answers_only: bool = False
 
     @model_validator(mode="after")
     def steps_are_unique_and_ordered(self):

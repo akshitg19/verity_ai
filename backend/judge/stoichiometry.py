@@ -513,6 +513,8 @@ class StoichiometryJudge(
         self,
         problem: StoichiometryProblem,
         steps: list[ChemistryStep],
+        *,
+        answers_only: bool = False,
     ) -> list[ChemistryLineVerdict]:
         try:
             solution = solve_stoichiometry(problem)
@@ -547,17 +549,19 @@ class StoichiometryJudge(
                 )
             ]
 
-        return judge_solution_steps(solution, steps)
+        return judge_solution_steps(solution, steps, answers_only=answers_only)
 
 
 def judge_solution_steps(
     solution: WorkedSolution,
     steps: list[ChemistryStep],
+    *,
+    answers_only: bool = False,
 ) -> list[ChemistryLineVerdict]:
     """Judge lines against a solved problem, symbols first, then numbers."""
     symbolic_answer = solution.formula_answer or solution.species_answer
     if symbolic_answer is None:
-        return judge_quantity_steps(solution, steps)
+        return judge_quantity_steps(solution, steps, answers_only=answers_only)
 
     verdicts: list[ChemistryLineVerdict] = []
     for step in steps:
@@ -608,7 +612,9 @@ def judge_solution_steps(
             )
             continue
 
-        verdicts.extend(judge_quantity_steps(solution, [step]))
+        verdicts.extend(
+            judge_quantity_steps(solution, [step], answers_only=answers_only)
+        )
     return verdicts
 
 

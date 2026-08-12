@@ -4,6 +4,7 @@ import { renderLineToPng } from "./canvas/render";
 import useCanvas from "./canvas/useCanvas";
 import useChemistry from "./chemistry/useChemistry";
 import QuestionPrompt from "./chemistry/QuestionPrompt";
+import WorksheetOverlay from "./chemistry/WorksheetOverlay";
 import CanvasSurface from "./components/CanvasSurface";
 import useKeyboardShortcuts from "./useKeyboardShortcuts";
 import FeedbackPanel from "./components/FeedbackPanel";
@@ -176,7 +177,20 @@ export default function App({ theme: themeFromRoute, subject }) {
         subject={mode}
         onSubjectChange={workspace.handleModeChange}
       />
-      <CanvasSurface canvas={canvas} mode={mode}>
+      <CanvasSurface
+        canvas={canvas}
+        mode={mode}
+        hideEmptyHint={mode === "chemistry" && Boolean(chemistry.worksheet)}
+      >
+        {mode === "chemistry" && chemistry.worksheet && (
+          <WorksheetOverlay
+            worksheet={chemistry.worksheet}
+            values={chemistry.values}
+            answerText={chemistry.answerText}
+            answerVerdict={chemistry.answerVerdict}
+            width={canvas.canvasWidth}
+          />
+        )}
         {mode === "chemistry" && chemistry.questionCandidateRow !== null && (
           <QuestionPrompt
             bounds={canvas.getRowBounds(chemistry.questionCandidateRow)}

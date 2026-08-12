@@ -135,6 +135,10 @@ export default function useCanvas({
   // whole character. Samsung Notes offers both, so this does too.
   const [eraseMode, setEraseMode] = useState("pixel");
   const [activeLineNumber, setActiveLineNumber] = useState(null);
+  // The page width as a value rather than only as a ref, so anything drawn
+  // over the page in the DOM -- the worksheet boxes -- re-lays out when the
+  // window does. `canvasSizeRef` cannot do that; it never triggers a render.
+  const [canvasWidth, setCanvasWidth] = useState(0);
 
   // Undo is a stack of whole-page snapshots rather than "drop the last
   // stroke". A pixel eraser can split one stroke into two, or clear six at
@@ -738,6 +742,7 @@ export default function useCanvas({
       height: safeHeight,
       pixelRatio: backingSize.pixelRatio,
     };
+    setCanvasWidth(safeWidth);
     for (const canvas of [staticCanvasRef.current, overlayCanvasRef.current, canvasRef.current]) {
       if (!canvas) continue;
       canvas.width = backingSize.width;
@@ -965,6 +970,7 @@ export default function useCanvas({
     eraseMode,
     setEraseMode,
     activeLineNumber,
+    canvasWidth,
     handlePointerDown,
     handlePointerMove,
     handlePointerUp,
