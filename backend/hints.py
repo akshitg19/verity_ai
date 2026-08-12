@@ -705,7 +705,12 @@ def _numeric_contract(tasks, problem_class, answer_note: str) -> str:
         '"check": {"task": "<one of: ' + ", ".join(tasks) + '>", '
         '"params": {<the inputs your problem gives, using only these field '
         "names: " + ", ".join(names) + ">}, "
-        '"answer": <' + answer_note + ">}"
+        '"answer": <' + answer_note + ">}\n"
+        "Every value in `params` is a plain JSON number with no unit and no "
+        "quotes, except formula, element, equation and product, which are "
+        "strings. `amounts` and `composition` map a formula to a plain "
+        "number: {\"N2\": 28.0, \"H2\": 6.0}, never to an object and never "
+        "to a string. Volumes are in litres and masses in grams."
     )
 
 
@@ -1188,13 +1193,74 @@ def _verify_structure(check: dict, steps: list[str]) -> bool:
     return True
 
 
+def _as_number(value):
+    """A number out of whatever shape the model wrote it in, or None.
+
+    Accepts "28.0", "28.0 g", and {"mass_g": 28.0}, because all three mean
+    twenty eight grams and none of them are worth throwing a worked example
+    away over. Found live, and it was invisible: the verifier crashed on
+    `'<' not supported between instances of 'dict' and 'dict'` and on
+    `unsupported operand type(s) for /: 'str' and 'float'`, both of which
+    were caught as "verification failed" and served the student the floor.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        match = re.search(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", value)
+        return float(match.group(0)) if match else None
+    if isinstance(value, dict):
+        for candidate in value.values():
+            number = _as_number(candidate)
+            if number is not None:
+                return number
+    return None
+
+
+# Fields whose value is a mapping of species to an amount, rather than one
+# number. The values inside need the same coercion as everything else.
+_MAPPING_FIELDS = ("amounts", "composition")
+
+
 def _filtered(params: dict, model_class) -> dict:
+    """Keep the fields the dataclass has, in the types it can actually use.
+
+    Forgiving on purpose. The check object describes the *example's* own
+    problem, so a number written as a string is a JSON style difference and
+    nothing more; being strict about it costs a student their hint and
+    protects nobody.
+    """
     allowed = {
         field
         for field in model_class.__dataclass_fields__  # type: ignore[attr-defined]
         if field != "task"
     }
-    return {key: value for key, value in params.items() if key in allowed}
+    cleaned: dict = {}
+    for key, value in params.items():
+        if key not in allowed:
+            continue
+        if key in _MAPPING_FIELDS:
+            if not isinstance(value, dict):
+                continue
+            mapped = {
+                str(species): _as_number(amount)
+                for species, amount in value.items()
+            }
+            cleaned[key] = {
+                species: amount
+                for species, amount in mapped.items()
+                if amount is not None
+            }
+            continue
+        if isinstance(value, str) and key not in ("formula", "element",
+                                                  "equation", "product"):
+            number = _as_number(value)
+            if number is not None:
+                cleaned[key] = number
+                continue
+        cleaned[key] = value
+    return cleaned
 
 
 def _generate_level_2(

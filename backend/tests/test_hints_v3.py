@@ -981,3 +981,81 @@ def test_levels_1_and_2_are_still_redacted_when_withholding_is_off(monkeypatch):
 
     assert response.source == "fallback"
     assert "3H2" not in response.hint
+
+
+# ---------------------------------------------------------------------------
+# The check object, in whatever shape the model wrote it
+# ---------------------------------------------------------------------------
+
+
+def test_a_number_written_as_a_string_is_still_a_number():
+    """Live, the verifier crashed on `unsupported operand type(s) for /:
+    'str' and 'float'`, which was caught as "verification failed" and served
+    the student the static floor. A number in quotes is a JSON style
+    difference in a description of the example's own problem."""
+    from hints import _filtered
+    from judge.solutions import SolutionsProblem
+
+    cleaned = _filtered(
+        {"concentration_m": "0.10", "ka": "1.8e-5", "volume_l": "0.250 L"},
+        SolutionsProblem,
+    )
+
+    assert cleaned == {"concentration_m": 0.1, "ka": 1.8e-5, "volume_l": 0.25}
+
+
+def test_an_amount_written_as_an_object_is_still_an_amount():
+    """The other live crash: `'<' not supported between instances of 'dict'
+    and 'dict'`, from an amounts map whose values were objects."""
+    from hints import _filtered
+    from judge.stoichiometry import StoichiometryProblem
+
+    cleaned = _filtered(
+        {
+            "equation": "N2 + H2 -> NH3",
+            "amounts": {"N2": {"mass_g": 28.0}, "H2": "6.0 g"},
+        },
+        StoichiometryProblem,
+    )
+
+    assert cleaned["amounts"] == {"N2": 28.0, "H2": 6.0}
+    assert cleaned["equation"] == "N2 + H2 -> NH3"
+
+
+def test_the_fields_that_are_meant_to_be_text_stay_text():
+    """Coercing "H2O" to nothing, or "C6H12O6" to 6, would be worse than the
+    bug it fixes."""
+    from hints import _filtered
+    from judge.stoichiometry import StoichiometryProblem
+
+    cleaned = _filtered(
+        {"formula": "C6H12O6", "element": "C", "product": "NH3"},
+        StoichiometryProblem,
+    )
+
+    assert cleaned == {"formula": "C6H12O6", "element": "C", "product": "NH3"}
+
+
+def test_an_amount_with_no_number_in_it_is_dropped_not_guessed():
+    from hints import _filtered
+    from judge.stoichiometry import StoichiometryProblem
+
+    cleaned = _filtered({"amounts": {"N2": "excess"}}, StoichiometryProblem)
+
+    assert cleaned["amounts"] == {}
+
+
+def test_unknown_fields_are_still_dropped():
+    from hints import _filtered
+    from judge.solutions import SolutionsProblem
+
+    assert _filtered({"nonsense": 1, "ka": 2.0}, SolutionsProblem) == {"ka": 2.0}
+
+
+def test_the_contract_says_what_type_each_value_has():
+    from hints import _CHEMISTRY_CHECK_CONTRACTS
+
+    contract = _CHEMISTRY_CHECK_CONTRACTS["stoichiometry"]
+
+    assert "plain JSON number" in contract
+    assert "never to an object" in contract
