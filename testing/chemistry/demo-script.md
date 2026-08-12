@@ -17,7 +17,7 @@ Three zones, drawn as boxes on the notes:
 ```
 Molar mass:  [ write the formula here ]
 
-YOUR WORKING - NOT CHECKED, WORK HOWEVER YOU LIKE
+Your working, laid out however you like
 [                                               ]
 [   grows as you write                          ]
 [                                               ]
@@ -54,18 +54,35 @@ Answer box goes green, panel says **Correct / That is the answer.**
 
 **1. Stopping one step early.** Answer box: `53.96`
 
-> **Not the answer** — "That is a quantity from the working, not the final answer"
+> **Not the answer.** "That is a quantity from the working, not the final answer"
 
 This is the one worth pausing on. That number is real, it is the mass of the
 aluminium, and **until today the app marked it correct**, because the judge
 accepted any quantity from the working. It knows which line is the answer now,
-so it catches it. Same class of bug as the pH-versus-pOH one in
-`final_tasks.md`, and this is the top row of our own failure taxonomy: being
-told you are right when you are not.
+so it catches it. This is the top row of our own failure taxonomy: being told
+you are right when you are not.
+
+The same bug had a twin in the pH topic, found the same day by running every
+concept against the live model: 0.010 M HCl has a pH of 2.00 and a pOH of
+12.00, and the answer box accepted either. Both are fixed, both have tests,
+and section 25 of `final_tasks.md` has the numbers. Worth having ready if
+someone asks how we know the judge is right.
+
+### If asked "does it work on every topic?"
+
+Yes, and it has been measured rather than asserted. Thirty concepts, two
+questions each, all three hint levels, against the real model:
+
+- every correct answer accepted and every wrong one caught, 60 out of 60
+- level 3 generated on all 60
+- level 1 on 55
+
+The remaining gaps are level 2 falling back to a static hint on some
+questions, which is a worse hint and never a wrong one.
 
 **2. The dropped bracket.** Answer box: `149.04`
 
-> **Not the answer** — "No quantity in the correct working has this value"
+> **Not the answer.** "No quantity in the correct working has this value"
 
 That is `Al2(SO4)3` read as two Al plus one S plus four O. Note the message is
 *different* from the first one, on purpose: stopping early and inventing a
