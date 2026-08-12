@@ -3002,17 +3002,38 @@ ladder left no trace at all. With the logs turned up, the rest were two
 crashes inside the verifier, both from the model writing `"28.0"` or
 `{"mass_g": 28.0}` where the dataclass wanted `28.0`.
 
-### Run 2: after the judging and redaction fixes
+### Three runs
 
-| | run 1 | run 2 |
-|---|---|---|
-| level 1 generated | 43/60 (72%) | **55/60 (92%)** |
-| level 2 generated | 40/60 (67%) | 37/60 (62%) |
-| level 3 generated | 59/60 (98%) | **60/60 (100%)** |
-| judging failures | 6 | **0** |
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| level 1 generated | 43/60 (72%) | 55/60 (92%) | 54/60 (90%) |
+| level 2 generated | 40/60 (67%) | 37/60 (62%) | **51/60 (85%)** |
+| level 3 generated | 59/60 (98%) | 60/60 (100%) | **60/60 (100%)** |
+| judging failures | 6 | **0** | **0** |
+| questions with findings | 40/60 | 36/60 | **22/60** |
 
-Every correct answer accepted and every wrong one caught, on all sixty.
-Level 2 was unchanged because run 2 predates the contract fix.
+Run 2 measures the judging and redaction fixes; level 2 is unchanged there
+because run 2 predates the contract fix, which run 3 measures.
+
+Every correct answer accepted and every wrong one caught, on all sixty, in
+both runs since the pOH fix.
+
+### The rule the hints were breaking on the structure topics
+
+Run 3 turned up one more, and it is one of the standing rules rather than a
+subtlety. On both formula structure questions and on an isomer one, the hint
+said:
+
+> You drew CCCCC, which is five carbons.
+
+They drew a chain of five carbons. `CCCCC` is what our recogniser wrote
+down. **SMILES is the internal representation and the right hand panel,
+never the page**, and four hints in the run put it on the page.
+
+Both structure prompts say so now, and it is checked on the generated text
+before it is sent, against the student's own line rather than by pattern: a
+general SMILES detector fires on H2SO4 and on [OH-], which are chemistry a
+student reads every day.
 
 ### What the hints read like
 
@@ -3041,6 +3062,11 @@ says nothing at all.
 
 ### Still open
 
+- [ ] Nine level 2 questions still fall back, spread thinly: one net ionic
+      where the model wrote `2Ag+ + CO3^2-` and our equation parser reads the
+      bare `+` as a term separator, one molecular formula, and single
+      structure and organic ones. A worse hint, never a wrong one, and each
+      is now a named case rather than a silent floor.
 - [ ] The audit's own leak check is looser than the backend's on purpose,
       and both now allow a hint to repeat a number the student wrote in
       their working. That is right when they wrote the answer and converted

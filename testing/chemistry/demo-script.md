@@ -75,9 +75,9 @@ questions each, all three hint levels, against the real model:
 
 - every correct answer accepted and every wrong one caught, 60 out of 60
 - level 3 generated on all 60
-- level 1 on 55
+- level 1 on 54, level 2 on 51
 
-The remaining gaps are level 2 falling back to a static hint on some
+The remaining gap is level 2 falling back to a static hint on nine
 questions, which is a worse hint and never a wrong one.
 
 **2. The dropped bracket.** Answer box: `149.04`
