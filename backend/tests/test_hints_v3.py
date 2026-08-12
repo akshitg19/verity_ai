@@ -217,7 +217,7 @@ def test_a_level_1_that_states_the_answer_is_asked_again(monkeypatch, ph_session
     monkeypatch.setattr(hints, "is_configured", lambda: True)
     attempts = []
 
-    def fake_level_1(req, session, *, retry=False):
+    def fake_level_1(req, session, *, retry=None):
         attempts.append(retry)
         if retry:
             return ("You took the log of the concentration you started with, "
@@ -227,7 +227,9 @@ def test_a_level_1_that_states_the_answer_is_asked_again(monkeypatch, ph_session
     monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
     response = hints.generate_hint(request_for(ph_session, 1))
 
-    assert attempts == [False, True], "exactly one retry, and it is flagged"
+    assert len(attempts) == 2, "exactly one retry"
+    assert attempts[0] is None
+    assert "thrown away" in attempts[1], "and it says what was wrong"
     assert response.source == "model"
     assert "2.87" not in response.hint
 
@@ -238,14 +240,14 @@ def test_the_retry_is_not_retried(monkeypatch, ph_session):
     monkeypatch.setattr(hints, "is_configured", lambda: True)
     attempts = []
 
-    def fake_level_1(req, session, *, retry=False):
+    def fake_level_1(req, session, *, retry=None):
         attempts.append(retry)
         return ("The answer is pH = 2.87.", 300)
 
     monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
     response = hints.generate_hint(request_for(ph_session, 1))
 
-    assert attempts == [False, True]
+    assert len(attempts) == 2
     assert response.source == "fallback"
     assert "2.87" not in response.hint
 
@@ -255,7 +257,7 @@ def test_a_failed_retry_still_answers(monkeypatch, ph_session):
     not an exception and not an empty hint."""
     monkeypatch.setattr(hints, "is_configured", lambda: True)
 
-    def fake_level_1(req, session, *, retry=False):
+    def fake_level_1(req, session, *, retry=None):
         return None if retry else ("pH = 2.87 is what you want.", 300)
 
     monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
@@ -282,6 +284,94 @@ def test_the_retry_tells_the_model_which_rule_it_broke(monkeypatch, ph_session):
     assert "thrown away" not in prompts[0]
     assert "thrown away" in prompts[1]
     assert "must already appear in the problem" in prompts[1]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "In line 3 you took the log of the wrong concentration.",
+        "Look at the third line again.",
+        "Your step 2 uses the initial concentration.",
+        "Check the first line of your working.",
+        "The last step compares the wrong two numbers.",
+    ],
+)
+def test_pointing_by_position_is_caught_before_it_is_sent(text):
+    """The prompt has said not to do this for a while and the model does it
+    anyway: five hints in sixty, live. A rule worth having is a rule that is
+    checked, so this one is checked with a regex rather than hoped for."""
+    assert hints._points_by_position(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Where you wrote 4 x 16.00, you counted four oxygens.",
+        "You lined up the 2 and the 3 the wrong way round.",
+        "Compare the moles of N2 with the moles of H2.",
+    ],
+)
+def test_quoting_the_work_is_not_pointing_by_position(text):
+    assert hints._points_by_position(text) is False
+
+
+def test_a_hint_that_points_by_position_is_asked_again(monkeypatch, ph_session):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=None):
+        attempts.append(retry)
+        if retry:
+            return ("Where you wrote the log, you used the concentration you "
+                    "started with rather than the x you solved for.", 300)
+        return ("On the third line you used the wrong concentration.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    response = hints.generate_hint(request_for(ph_session, 1))
+
+    assert len(attempts) == 2
+    assert "laid this page out themselves" in attempts[1]
+    assert "third line" not in response.hint
+    assert response.source == "model"
+
+
+def test_a_positional_hint_beats_no_hint_when_the_retry_is_no_better(
+    monkeypatch, ph_session
+):
+    """Falling back to the template here would trade a specific hint for a
+    generic one. 'On the third line you used the wrong concentration' still
+    tells them what they did; the floor tells them nothing."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints,
+        "_generate_level_1",
+        lambda req, session, *, retry=None: (
+            "On the third line you used the wrong concentration.", 300
+        ),
+    )
+    response = hints.generate_hint(request_for(ph_session, 1))
+
+    assert response.source == "model"
+    assert "concentration" in response.hint
+
+
+def test_level_3_gets_the_same_treatment(monkeypatch, ph_session):
+    """Level 3 pointed by position live too, on 'step 2' and 'first step'."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_3(req, session, *, retry=None):
+        attempts.append(retry)
+        if retry:
+            return ("Take the x you solved for and put that into the log, "
+                    "not the concentration you started with.", 700)
+        return ("Go back to step 2 and use x instead.", 700)
+
+    monkeypatch.setattr(hints, "_generate_level_3", fake_level_3)
+    response = hints.generate_hint(request_for(ph_session, 3))
+
+    assert len(attempts) == 2
+    assert "step 2" not in response.hint
 
 
 def test_level_1_is_told_not_to_do_the_arithmetic(monkeypatch, ph_session):

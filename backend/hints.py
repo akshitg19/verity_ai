@@ -28,6 +28,7 @@ import logging
 import os
 import re
 import time
+from collections.abc import Callable
 
 from hint_rules import analogue_for, coaching_for
 from model import ModelError, generate_json, is_configured
@@ -517,23 +518,65 @@ def _working_block(req: HintRequest) -> str:
     )
 
 
-# Appended on the one retry a redacted level 1 gets. It names the rule that
+# Appended on the one retry a rejected hint gets. Each names the rule that
 # was broken rather than repeating the whole prompt, because the first
-# attempt was fluent and on topic and only failed on this.
-_LEVEL_1_RETRY = (
+# attempt is usually fluent and on topic and fails on exactly one thing.
+_RETRY_LEAK = (
     "\n\nYour first attempt at this hint was thrown away because it stated a "
     "value the student is supposed to work out for themselves. Write it "
     "again without that. Every number in your hint must already appear in "
     "the problem or in their working above. Name which quantity is wrong "
     "and what to compare it against, and stop there."
 )
+_RETRY_POSITION = (
+    "\n\nYour first attempt pointed at a row by its position. Write it again "
+    "and point by quoting what is written there instead. The student laid "
+    "this page out themselves, so 'the first line' and 'step 2' are our "
+    "count and not theirs, and they have to go looking before they can even "
+    "start. Quote three or four words of what they actually wrote."
+)
+
+# Positional pointing, in the shapes a model reaches for. Deterministic, so
+# it can be checked before the hint is sent rather than hoped for in the
+# prompt: five hints in sixty said "step 2" or "the first line" with the
+# instruction not to sitting directly above them in the prompt.
+_POSITION_RE = re.compile(
+    r"\b(?:line|step|row)\s*(?:number\s*)?\d"
+    r"|\b(?:first|second|third|fourth|fifth|next|last|final)\s+(?:line|row|step)\b",
+    re.IGNORECASE,
+)
+
+
+def _points_by_position(text: str) -> bool:
+    return bool(_POSITION_RE.search(text or ""))
+
+
+def _without_positional_pointing(
+    generate: Callable[..., tuple[str, int] | None],
+    first: tuple[str, int],
+    level: int,
+) -> tuple[str, int]:
+    """One more ask when a hint points by position, then take what we get.
+
+    Deliberately not a fallback to the template: "in the first line you wrote
+    53.96" is worse than quoting the work and much better than a sentence
+    that would fit any problem. The retry is worth one call; giving up the
+    whole hint is not.
+    """
+    if not _points_by_position(first[0]):
+        return first
+    logger.info("level %d pointed by position, asking once more", level)
+    again = generate(retry=_RETRY_POSITION)
+    if again is not None and again[0] and not _points_by_position(again[0]):
+        return again
+    return first
 
 
 def _generate_level_1(
     req: HintRequest,
     session: ProblemSession,
     *,
-    retry: bool = False,
+    retry: str | None = None,
 ) -> tuple[str, int] | None:
     base_prompt = (
         _CHEMISTRY_LEVEL_1_PROMPT
@@ -543,7 +586,7 @@ def _generate_level_1(
 
     prompt = (
         base_prompt
-        + (_LEVEL_1_RETRY if retry else "")
+        + (retry or "")
         + coaching_for(req.problem_type, req.topic or session.topic)
         + f"\n\nTopic: {req.topic or session.topic}"
         + f"\nProblem: {req.problem or session.problem}"
@@ -1236,7 +1279,12 @@ _MATH_LEVEL_3_PROMPT_OPEN = (
 )
 
 
-def _generate_level_3(req: HintRequest, session: ProblemSession) -> tuple[str, int] | None:
+def _generate_level_3(
+    req: HintRequest,
+    session: ProblemSession,
+    *,
+    retry: str | None = None,
+) -> tuple[str, int] | None:
     if req.subject == "chemistry":
         base_prompt = (
             _CHEMISTRY_LEVEL_3_PROMPT
@@ -1252,6 +1300,7 @@ def _generate_level_3(req: HintRequest, session: ProblemSession) -> tuple[str, i
 
     prompt = (
         base_prompt
+        + (retry or "")
         + coaching_for(req.problem_type, req.topic or session.topic)
         + f"\n\nTopic: {req.topic or session.topic}"
         + f"\nProblem: {req.problem or session.problem}"
@@ -1310,7 +1359,11 @@ def generate_hint(req: HintRequest) -> HintResponse:
             return _finalise(
             req, _template_hint(req), session=session, resource=resource, trusted=True
         )
-        text, latency = generated
+        text, latency = _without_positional_pointing(
+            lambda retry: _generate_level_1(req, session, retry=retry),
+            generated,
+            level=1,
+        )
         answer = _finalise(
             req, text, session=session, source="model", latency_ms=latency
         )
@@ -1321,7 +1374,7 @@ def generate_hint(req: HintRequest) -> HintResponse:
         # now looking at the static floor for a reason that has nothing to do
         # with them. Level 2 already regenerates once when verification
         # fails; this is the same trade on the same grounds.
-        retried = _generate_level_1(req, session, retry=True)
+        retried = _generate_level_1(req, session, retry=_RETRY_LEAK)
         if retried is None:
             return answer
         text, latency = retried
@@ -1384,7 +1437,11 @@ def generate_hint(req: HintRequest) -> HintResponse:
         return _finalise(
             req, _template_hint(req), session=session, resource=resource, trusted=True
         )
-    text, latency = generated
+    text, latency = _without_positional_pointing(
+        lambda retry: _generate_level_3(req, session, retry=retry),
+        generated,
+        level=3,
+    )
     return _finalise(
         req,
         text,

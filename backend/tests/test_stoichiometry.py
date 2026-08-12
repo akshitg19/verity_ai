@@ -303,3 +303,52 @@ def test_answers_only_is_off_by_default_so_working_still_passes():
         "valid",
         "valid",
     ]
+
+
+# ---------------------------------------------------------------------------
+# A fractional subscript is the empirical formula mistake, not a parse failure
+# ---------------------------------------------------------------------------
+
+
+FE_OXIDE = StoichiometryProblem(
+    task="empirical_formula", composition={"Fe": 69.9, "O": 30.1}
+)
+
+
+def _empirical(written: str):
+    return StoichiometryJudge().check(
+        FE_OXIDE, [ChemistryStep(line_number=1, smiles=written)], answers_only=True
+    )[0]
+
+
+@pytest.mark.parametrize("written", ["FeO1.5", "Fe1O1.5", "FeO1.50"])
+def test_a_fractional_subscript_is_flagged_rather_than_shrugged_at(written):
+    """The mole ratio came out 1 to 1.5 and they wrote it down.
+
+    It was reporting parse_error, which the UI is forbidden to show as a
+    student mistake, so the one line they got wrong was the one line with no
+    mark on it. Found by running every concept live.
+    """
+    verdict = _empirical(written)
+
+    assert verdict.status == "invalid"
+    assert verdict.error_type == "wrong_formula"
+    assert "fractional subscript" in (verdict.detail or "")
+
+
+def test_the_detail_does_not_hand_over_the_multiplier():
+    """Naming the mistake is level 1's job. Saying 'double it' is level 3's."""
+    detail = (_empirical("FeO1.5").detail or "").lower()
+
+    assert "2" not in detail
+    assert "double" not in detail
+
+
+def test_genuinely_unreadable_text_is_still_a_parse_error():
+    """The relaxation is about one recognisable mistake, not about calling
+    everything we cannot read a wrong answer."""
+    assert _empirical("Fe??O").error_type == "parse_error"
+
+
+def test_the_right_answer_is_unaffected():
+    assert _empirical("Fe2O3").valid is True

@@ -14,6 +14,7 @@ set of correct quantities for free.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from rdkit import Chem
@@ -552,6 +553,10 @@ class StoichiometryJudge(
         return judge_solution_steps(solution, steps, answers_only=answers_only)
 
 
+# An element symbol followed by a decimal subscript: "FeO1.5", "CH2.5O".
+_FRACTIONAL_SUBSCRIPT_RE = re.compile(r"[A-Za-z]\)?\d*\.\d")
+
+
 def judge_solution_steps(
     solution: WorkedSolution,
     steps: list[ChemistryStep],
@@ -587,12 +592,27 @@ def judge_solution_steps(
             try:
                 parse_formula(candidate)
             except EquationParseError as exc:
+                # A fractional subscript is a mistake, not an unreadable
+                # line. It is *the* empirical formula mistake: the mole
+                # ratio came out at 1 to 1.5 and they wrote it down instead
+                # of scaling it up. Reporting "could not read 'FeO1.5'"
+                # tells them our parser failed, which is both untrue and the
+                # one category the UI is forbidden to flag, so the student
+                # sees nothing at all on the line they got wrong.
                 verdicts.append(
                     ChemistryLineVerdict(
                         line_number=step.line_number,
                         valid=False,
-                        error_type="parse_error",
-                        detail=str(exc),
+                        error_type=(
+                            "wrong_formula"
+                            if _FRACTIONAL_SUBSCRIPT_RE.search(candidate)
+                            else "parse_error"
+                        ),
+                        detail=(
+                            "A formula cannot have a fractional subscript"
+                            if _FRACTIONAL_SUBSCRIPT_RE.search(candidate)
+                            else str(exc)
+                        ),
                         judged_by="deterministic",
                     )
                 )

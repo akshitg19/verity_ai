@@ -558,7 +558,7 @@ QUESTIONS: list[Question] = [
         problem="Write the net ionic equation for BaCl2 + Na2SO4 -> BaSO4 + NaCl",
         session={"molecular_equation": "BaCl2 + Na2SO4 -> BaSO4 + NaCl"},
         correct="Ba^2+ + SO4^2- -> BaSO4",
-        wrong="Ba^2+ + SO4^- -> BaSO4", error_type="wrong_charge",
+        wrong="Ba^2+ + SO4^- -> BaSO4", error_type="unbalanced_charge",
         working=["BaCl2 gives Ba2+ and 2 Cl-",
                  "Na2SO4 gives 2 Na+ and SO4-",
                  "BaSO4 is insoluble"],
@@ -668,7 +668,7 @@ QUESTIONS: list[Question] = [
         correct="COC", wrong="CCO", error_type="structure_mismatch",
         working=["ethanol is C2H6O", "same atoms, different arrangement"],
         check_path="/chemistry/isomer",
-        check_body={"reference_smiles": "CCO", "isomer_type": "structural"},
+        check_body={"reference_smiles": "CCO", "isomer_type": "constitutional"},
         leak="COC",
     ),
     Question(
@@ -678,7 +678,7 @@ QUESTIONS: list[Question] = [
         correct="CC(C)C", wrong="CCCC", error_type="structure_mismatch",
         working=["butane is C4H10", "branch one carbon off"],
         check_path="/chemistry/isomer",
-        check_body={"reference_smiles": "CCCC", "isomer_type": "structural"},
+        check_body={"reference_smiles": "CCCC", "isomer_type": "constitutional"},
         leak="CC(C)C",
     ),
     Question(
