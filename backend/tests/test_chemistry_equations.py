@@ -322,3 +322,54 @@ def test_every_step_receives_its_own_verdict():
         "invalid",
         "parse_error",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Hydrates
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "formula,atoms",
+    [
+        ("CuSO4.5H2O", {"Cu": 1, "S": 1, "O": 9, "H": 10}),
+        ("CuSO4·5H2O", {"Cu": 1, "S": 1, "O": 9, "H": 10}),
+        ("CuSO4•5H2O", {"Cu": 1, "S": 1, "O": 9, "H": 10}),
+        ("Na2CO3.10H2O", {"Na": 2, "C": 1, "O": 13, "H": 20}),
+        ("MgSO4.7H2O", {"Mg": 1, "S": 1, "O": 11, "H": 14}),
+        ("CaSO4.2H2O", {"Ca": 1, "S": 1, "O": 6, "H": 4}),
+        # No multiplier means one of them.
+        ("CuSO4.H2O", {"Cu": 1, "S": 1, "O": 5, "H": 2}),
+    ],
+)
+def test_a_hydrate_adds_its_water(formula, atoms):
+    """The dot means "and this many of these too".
+
+    Copper sulfate pentahydrate is on every molar mass sheet and was a
+    parse error, so a student could not ask the question and a worked
+    example could not use it. The demo script carried "no hydrates" as a
+    thing to avoid on stage.
+    """
+    assert parse_formula(formula) == (atoms, 0)
+
+
+def test_a_hydrate_has_the_molar_mass_the_book_gives_it():
+    from judge.stoichiometry import StoichiometryProblem, solve_stoichiometry
+
+    solution = solve_stoichiometry(
+        StoichiometryProblem(task="molar_mass", formula="CuSO4.5H2O")
+    )
+
+    assert round(solution.answer.quantity.value, 2) == 249.68
+
+
+def test_an_ordinary_formula_is_unaffected():
+    assert parse_formula("Al2(SO4)3") == ({"Al": 2, "S": 3, "O": 12}, 0)
+    assert parse_formula("H2O") == ({"H": 2, "O": 1}, 0)
+
+
+def test_a_dot_with_nothing_after_it_is_still_an_error():
+    """The relaxation is about hydrates, not about accepting anything with a
+    dot in it."""
+    with pytest.raises(EquationParseError):
+        parse_formula("CuSO4.5")

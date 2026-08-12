@@ -106,13 +106,15 @@ error gives `40.08` (the calcium) or `95.99` (the oxygen).
 - `342.15 g` → **wrong unit.** Grams is a mass, not a molar mass
 - One number only. Working belongs in the working box
 
-### Two things to avoid on stage
+### One thing to avoid on stage
 
-- **No hydrates.** The formula parser has no support for the `·` in
-  `CuSO4·5H2O`. Nothing in this demo needs one.
 - **Don't write `gmol-1`** anywhere the judge reads. The `-1` parses as a
   second number. Not an issue if you leave the answer box unitless, which is
   what the printed `g/mol` is there for.
+
+Hydrates used to be on this list and are not any more. `CuSO4·5H2O` parses,
+with the dot written as a middle dot, a bullet, or a full stop, and gives
+249.68 g/mol. A good extra question if someone asks for a harder one.
 
 ### If recognition misreads the formula
 

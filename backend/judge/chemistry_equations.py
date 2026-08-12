@@ -29,6 +29,9 @@ COEFFICIENT_RE = re.compile(r"^(\d*)(.*)$", re.DOTALL)
 # A "+" is a charge sign rather than a term separator exactly when the text
 # before it is the caret charge marker, e.g. the first "+" in "Fe^3+ + e-".
 CHARGE_SIGN_CONTEXT_RE = re.compile(r"\^\d*$")
+# The dot in a hydrate, however the keyboard produced it.
+_HYDRATE_SPLIT_RE = re.compile(r"[·⋅•∙.*]")
+MAX_HYDRATE_PARTS = 6
 
 ELEMENT_SYMBOLS = frozenset(
     """
@@ -180,7 +183,38 @@ def parse_formula(formula: str) -> tuple[dict[str, int], int]:
     if body in ELECTRON_TOKENS:
         return {}, charge
 
-    return _parse_atoms(body), charge
+    return _parse_hydrate(body), charge
+
+
+def _parse_hydrate(body: str) -> dict[str, int]:
+    """Expand a hydrate, where a dot means "and this many of these too".
+
+    CuSO4.5H2O is copper sulfate pentahydrate and is one of the standard
+    molar mass questions on any sheet. It was a parse error, which meant a
+    student could not ask it and a worked example could not use it, and the
+    demo script carried "no hydrates" as a thing to avoid on stage.
+
+    The separator is written as a middle dot, a bullet, or a full stop
+    depending on the keyboard, and the part after it usually carries a
+    multiplier: 5H2O is five waters.
+    """
+    parts = [part for part in _HYDRATE_SPLIT_RE.split(body) if part]
+    if len(parts) == 1:
+        return _parse_atoms(body)
+    if len(parts) > MAX_HYDRATE_PARTS:
+        raise EquationParseError(f"formula {body!r} has too many parts")
+
+    total: dict[str, int] = {}
+    for part in parts:
+        digits, remainder = COEFFICIENT_RE.match(part).groups()
+        multiplier = int(digits) if digits else 1
+        if multiplier > MAX_SUBSCRIPT:
+            raise EquationParseError(f"subscript is too large in {body!r}")
+        if not remainder:
+            raise EquationParseError(f"could not read {body!r} as a formula")
+        for symbol, count in _parse_atoms(remainder).items():
+            total[symbol] = total.get(symbol, 0) + count * multiplier
+    return total
 
 
 def _split_terms(side: str) -> list[str]:

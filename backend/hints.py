@@ -1350,9 +1350,16 @@ def _verify_stoichiometry(check: dict, steps: list[str]) -> bool:
         StoichiometryProblem(task=task, **_filtered(params, StoichiometryProblem))
     )
     if solution.formula_answer or solution.species_answer:
+        from judge.stoichiometry import _formula_matches
+
         expected = str(check.get("answer", "")).strip()
         symbolic = solution.formula_answer or solution.species_answer
-        if not expected or expected.replace(" ", "") != symbolic:
+        # By element counts, the way the student's own answer is compared.
+        # A string compare rejected an example answering S2O3 because our
+        # solver writes O3S2, which is the same compound spelled the other
+        # way round. The student was never held to that and neither should
+        # a worked example be.
+        if not expected or not _formula_matches(expected, symbolic):
             return _reject(
                 "the example answers %r, our solver gets %r", expected, symbolic
             )
