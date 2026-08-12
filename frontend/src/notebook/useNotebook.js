@@ -371,8 +371,21 @@ export default function useNotebook() {
       if (index === -1) return Promise.resolve();
       const removed = current.notes[index];
       const remaining = current.notes.filter((note) => note.id !== noteId);
-      const replacement = remaining.length ? null : createBlankNote("math", "Math 1");
-      const nextNotes = replacement ? [replacement] : remaining;
+
+      const hasSameSubject = remaining.some(
+        (note) => note.subject === removed.subject
+      );
+
+      const replacement = hasSameSubject
+        ? null
+        : createBlankNote(
+            removed.subject,
+            removed.subject === "chemistry" ? "Chemistry 1" : "Math 1"
+          );
+
+      const nextNotes = replacement
+        ? [replacement, ...remaining]
+        : remaining;
       const nextState = {
         ...current,
         notes: nextNotes,

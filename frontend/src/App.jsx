@@ -66,9 +66,17 @@ export default function App({ theme: themeFromRoute, subject }) {
     if (!notebook.hydrated) return;
     if (routedSubjectRef.current === subject) return;
     const subjectNote = notebook.folders[subject]?.[0];
-    if (!subjectNote) return;
+
     routedSubjectRef.current = subject;
-    if (notebook.activeNote.subject !== subject) void notebook.openNote(subjectNote.id);
+
+    if (!subjectNote) {
+      void notebook.createNote(subject);
+      return;
+    }
+
+    if (notebook.activeNote.subject !== subject) {
+      void notebook.openNote(subjectNote.id);
+    }
   }, [notebook, notebook.activeNote.subject, notebook.folders, notebook.hydrated, notebook.openNote, subject]);
 
   const transcribing = mode === "chemistry" ? chemistry.reading : math.transcribing;
