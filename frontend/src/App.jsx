@@ -3,8 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { renderLineToPng } from "./canvas/render";
 import useCanvas from "./canvas/useCanvas";
 import useChemistry from "./chemistry/useChemistry";
-import QuestionPrompt from "./chemistry/QuestionPrompt";
-import WorksheetOverlay from "./chemistry/WorksheetOverlay";
+import ChemistryPageOverlays from "./chemistry/ChemistryPageOverlays";
 import CanvasSurface from "./components/CanvasSurface";
 import useKeyboardShortcuts from "./useKeyboardShortcuts";
 import FeedbackPanel from "./components/FeedbackPanel";
@@ -182,31 +181,8 @@ export default function App({ theme: themeFromRoute, subject }) {
         mode={mode}
         hideEmptyHint={mode === "chemistry" && Boolean(chemistry.worksheet)}
       >
-        {mode === "chemistry" && chemistry.worksheet && (
-          <WorksheetOverlay
-            worksheet={chemistry.worksheet}
-            values={chemistry.values}
-            answerText={chemistry.answerText}
-            answerVerdict={chemistry.answerVerdict}
-            width={canvas.canvasWidth}
-          />
-        )}
-        {mode === "chemistry" && chemistry.questionCandidateRow !== null && (
-          <QuestionPrompt
-            bounds={canvas.getRowBounds(chemistry.questionCandidateRow)}
-            text={
-              chemistry.lines.find(
-                (line) => line.row === chemistry.questionCandidateRow
-              )?.text
-            }
-            verb={chemistry.questionVerb}
-            onUseAsQuestion={() =>
-              chemistry.useRowAsQuestion(chemistry.questionCandidateRow)
-            }
-            onDismiss={() =>
-              chemistry.dismissQuestionCandidate(chemistry.questionCandidateRow)
-            }
-          />
+        {mode === "chemistry" && (
+          <ChemistryPageOverlays chemistry={chemistry} canvas={canvas} />
         )}
       </CanvasSurface>
       <WorkspaceToolbar
