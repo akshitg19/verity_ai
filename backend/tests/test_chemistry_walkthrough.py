@@ -377,13 +377,15 @@ def test_o7_amide_is_not_an_amine():
     assert group("amide", "CC(=O)N", "CCN") == ["valid", "invalid"]
 
 
-def test_o8_the_group_name_takes_an_underscore():
-    # "carboxylic acid" raises rather than quietly checking nothing, which is
-    # right, but it means the UI must send the id and never the label.
+def test_o8_the_group_name_may_be_written_either_way():
+    # It used to raise on the label and accept only the id, so the UI had to
+    # know which was which. The label is a spelling of the same group and is
+    # accepted now; a name with no pattern behind it still raises.
     assert group("carboxylic_acid", "CC(=O)O", "CCO") == ["valid", "invalid"]
+    assert group("carboxylic acid", "CC(=O)O", "CCO") == ["valid", "invalid"]
 
     with pytest.raises(ValueError):
-        groups.check("carboxylic acid", steps("CC(=O)O"))
+        groups.check("flubber", steps("CC(=O)O"))
 
 
 # ---------------------------------------------------------------------------

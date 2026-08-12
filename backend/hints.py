@@ -1393,9 +1393,9 @@ def _verify_redox(check: dict, steps: list[str]) -> bool:
 
 def _verify_structure(check: dict, steps: list[str]) -> bool:
     from judge.chemistry import (
-        _FUNCTIONAL_GROUP_PATTERNS,
         _parse_smiles,
         _support_reason,
+        group_pattern,
     )
 
     smiles = str(check.get("smiles", "")).strip()
@@ -1407,7 +1407,7 @@ def _verify_structure(check: dict, steps: list[str]) -> bool:
         return _reject("we cannot read %r as a structure: %s", smiles, reason)
     group = check.get("group")
     if group:
-        pattern = _FUNCTIONAL_GROUP_PATTERNS.get(str(group))
+        pattern = group_pattern(str(group))
         if pattern is None:
             return _reject("we have no pattern for the group %r", group)
         if not molecule.HasSubstructMatch(pattern):
