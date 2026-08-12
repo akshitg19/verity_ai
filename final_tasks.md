@@ -2917,3 +2917,139 @@ gcloud auth application-default login
 - [ ] Re-check the three strong-acid and strong-base questions that fell
       back in both runs on Aug 10. They now have concept rules naming the
       pOH-for-pH trap directly, which is the most likely cause
+
+## 25. Every concept, run against the live model, and what it found
+
+Aug 12. `backend/scripts/live_hint_audit.py` and `live_questions.py`: thirty
+concepts, two real questions each, all three levels, against Gemini through
+the actual API. 180 live hints per run. Each one is graded on the rules this
+file and CLAUDE.md already state, so a run either passes or names the rule
+it broke.
+
+It is not part of pytest and it costs money. That is the point: the mocked
+suite proves our code and cannot prove hint quality, and hint quality was
+the untested claim.
+
+### What it graded
+
+- a correct answer judged valid, and a wrong one judged invalid
+- the answer to the student's own problem in a level 1 or 2 hint
+- a SMILES reaching a student, on any level, on any topic
+- an unverified worked example rendering
+- the static floor served with the model available, which means a bug in
+  our code rather than a design decision
+- an em dash, a row number, an empty hint
+- the animation payload arriving for the right family
+
+### Run 1: the state it was actually in
+
+| | |
+|---|---|
+| level 1 generated | 43/60 (72%) |
+| level 2 generated | 40/60 (67%) |
+| level 3 generated | 59/60 (98%) |
+| judging failures | 6 |
+| questions with findings | 40/60 |
+
+Six judging failures, four of them the same bug and the worst kind:
+
+**A wrong answer judged correct.** pH, pOH, [H+] and [OH-] are one answer
+group, so that a hint cannot hand over one while withholding another. The
+answer box was matching a bare number against the whole group. 0.010 M HCl
+has a pH of 2.00 and a pOH of 12.00, so a student writing the 12.00 that the
+classic mix-up produces was told they were right. On the most common mistake
+in the topic.
+
+The group stays. An unlabelled number in the answer box is now held to the
+quantity the question named, and labelling it reopens the family, because
+"pOH = 12.00" is chemistry and not a mistake.
+
+The other two: `FeO1.5` was `parse_error`, which the UI is forbidden to
+render as a student mistake, so the one line they got wrong was the one line
+with no mark on it. And `pH: 2.00` and `pH 2.00` did not parse at all,
+because only an equals sign separated a label from its value.
+
+### Why hints fell back, which was three separate bugs
+
+**Redaction was blocking the question.** Seventeen level 1 fallbacks, all
+the same shape. "H2" is the answer to a limiting reagent question and one of
+the two species the question names, so "compare the moles of N2 with the
+moles of H2" was thrown away. "C2H6O" is the answer to "draw a structure
+with the formula C2H6O". "ester" is the answer to "draw a molecule
+containing an ester group". The net ionic vault holds the complete ionic
+equation, the student had written the complete ionic equation, and quoting
+their own line back at them counted as stating the answer.
+
+Nothing printed on their page is a secret from them. The assignment shapes
+are untouched and a new one covers species and formulas, which have no
+number for the numeric check to find.
+
+**The hint job was truncating.** Thinking tokens come out of the same budget
+as the answer on Gemini 2.5, so a level 3 hint that reads a long working ran
+out mid-JSON. It surfaced as "model did not return valid JSON", which reads
+as "the model wrote prose" and means something else entirely.
+
+**The level 2 contract had drifted from the engine that verifies it.** The
+stoichiometry contract never mentioned `molecular_formula`; the solutions
+one had no words for `titrant_concentration_m`, `titrant_volume_l`,
+`analyte_volume_l`, `protons` or `hydroxides`. The model was asked to
+describe its own worked example in a vocabulary with no term for half of it.
+Derived from `TASKS` and the dataclass fields now, with a test per topic.
+
+And the reason none of this was visible: **every level 2 rejection logged at
+INFO**, below the level uvicorn configures. The most common failure in the
+ladder left no trace at all. With the logs turned up, the rest were two
+crashes inside the verifier, both from the model writing `"28.0"` or
+`{"mass_g": 28.0}` where the dataclass wanted `28.0`.
+
+### Run 2: after the judging and redaction fixes
+
+| | run 1 | run 2 |
+|---|---|---|
+| level 1 generated | 43/60 (72%) | **55/60 (92%)** |
+| level 2 generated | 40/60 (67%) | 37/60 (62%) |
+| level 3 generated | 59/60 (98%) | **60/60 (100%)** |
+| judging failures | 6 | **0** |
+
+Every correct answer accepted and every wrong one caught, on all sixty.
+Level 2 was unchanged because run 2 predates the contract fix.
+
+### What the hints read like
+
+Not a metric, so here are four, verbatim, from the run:
+
+> Where you wrote O 4 x 16.00 = 64.00, you counted four oxygen atoms.
+> Remember to apply the subscript 3 outside the parenthesis to the oxygen
+> atoms in SO4.
+
+> Where you wrote 0.34 + (-0.76), you added the two potentials. You should
+> subtract the anode potential from the cathode potential.
+
+> Where you wrote pH = 14 - 2.00 = 12.00, you calculated the pOH. Compare
+> the value you found in the previous step with the pH.
+
+> You wrote 'each Cr goes from +6 to +3 so 3 electrons'. This correctly
+> identifies the change for one chromium atom. However, you have two
+> chromium atoms in Cr2O7^2- that are changing oxidation state.
+
+Every one of them says where by quoting the work. That rule had been in all
+four prompts for a while and five hints in sixty broke it anyway, so it is a
+regex now, checked before the hint is sent, with one more ask when it fires.
+If the second attempt is no better we send the first one: "on the third line
+you used the wrong concentration" still says what they did, and the floor
+says nothing at all.
+
+### Still open
+
+- [ ] The audit's own leak check is looser than the backend's on purpose,
+      and both now allow a hint to repeat a number the student wrote in
+      their working. That is right when they wrote the answer and converted
+      it one step too far, which is the common case. It is worth re-reading
+      if withholding is ever re-armed.
+- [ ] A level 2 worked example can still state, as an intermediate of its
+      own different problem, a number equal to the student's answer. Seen
+      once in sixty. With `WITHHOLD_ANSWER` off, examples are deliberately
+      not redacted; with it on, they are.
+- [ ] Naming a target molecule is caught by resolving the name back to a
+      structure, which needs Java for OPSIN. The container has none, so the
+      check does not fire in production.
