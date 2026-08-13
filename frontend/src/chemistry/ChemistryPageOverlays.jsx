@@ -20,6 +20,7 @@ export default function ChemistryPageOverlays({ chemistry, canvas }) {
           answerText={chemistry.answerText}
           answerVerdict={chemistry.answerVerdict}
           onAddRow={chemistry.addWorkingRow}
+          onAddAnswerRow={chemistry.addAnswerRow}
           width={canvas.canvasWidth}
         />
       )}

@@ -252,3 +252,36 @@ describe("asking for another line", () => {
     ).toBeGreaterThanOrEqual(grown);
   });
 });
+
+describe("an answer box big enough for the answer", () => {
+  const balancing = TOPICS.find((topic) => topic.id === "balancing");
+
+  it("is one row until somebody asks for another", () => {
+    const sheet = buildWorksheet(balancing, balancing.types[0]);
+
+    expect(sheet.answerRows).toBe(1);
+    expect(zoneAtRow(sheet, sheet.answerRow)).toBe(ZONES.ANSWER);
+    expect(zoneAtRow(sheet, sheet.answerRow + 1)).toBe(null);
+  });
+
+  it("takes a second row on request", () => {
+    // `2Al + 3CuSO4 -> Al2(SO4)3 + 3Cu` can run off the end of a line even
+    // with the box the full width of the page.
+    const sheet = buildWorksheet(balancing, balancing.types[0], {
+      answerRows: 2,
+    });
+
+    expect(sheet.answerRows).toBe(2);
+    expect(zoneAtRow(sheet, sheet.answerRow + 1)).toBe(ZONES.ANSWER);
+    expect(isReadableRow(sheet, sheet.answerRow + 1)).toBe(true);
+  });
+
+  it("gives a drawing page no answer rows at all", () => {
+    const sheet = buildWorksheet(structure, structure.types[0], {
+      answerRows: 3,
+    });
+
+    expect(sheet.answerRow).toBeNull();
+    expect(sheet.answerRows).toBe(0);
+  });
+});

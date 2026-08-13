@@ -136,7 +136,7 @@ function promptFor(field, row) {
 export function buildWorksheet(
   topic,
   problemType,
-  { workingRows = MIN_WORKING_ROWS, inputMode } = {}
+  { workingRows = MIN_WORKING_ROWS, answerRows = 1, inputMode } = {}
 ) {
   if (!hasWorksheet(topic, problemType)) return null;
 
@@ -186,6 +186,13 @@ export function buildWorksheet(
     //
     // A drawing page still has none. There the answer is the picture.
     answerRow: kind === KINDS.DRAW ? null : workingStart + rows,
+    // How tall the answer box is. One row is right for a number and was
+    // never right for `2Al + 3CuSO4 -> Al2(SO4)3 + 3Cu`, which is why the
+    // box also runs the full width of the page now. A second row is added
+    // only on request, because an answer that needs two lines is a wrapped
+    // line rather than two answers, and the rows are rejoined before
+    // anything judges them.
+    answerRows: kind === KINDS.DRAW ? 0 : Math.max(1, Math.round(answerRows) || 1),
     // Equations are not measured in anything, so a steps page prints no
     // unit rather than printing a wrong one.
     answerUnit: kind === KINDS.ANSWER ? problemType.answerUnit ?? null : null,
@@ -208,7 +215,7 @@ export function zoneAtRow(worksheet, row) {
   // must never hit a wall.
   if (worksheet.answerRow === null) return ZONES.WORKING;
   if (row < worksheet.answerRow) return ZONES.WORKING;
-  if (row === worksheet.answerRow) return ZONES.ANSWER;
+  if (row < worksheet.answerRow + (worksheet.answerRows ?? 1)) return ZONES.ANSWER;
   return null;
 }
 

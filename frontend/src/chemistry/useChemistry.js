@@ -55,6 +55,29 @@ import {
 // recognition calls.
 const MAX_WORKING_LINES = 12;
 
+/**
+ * The answer box as one line, however many rows it took.
+ *
+ * The box runs the full width of the page and can be given a second row,
+ * because `2Al + 3CuSO4 -> Al2(SO4)3 + 3Cu` does not fit on one and a
+ * balancing answer that wrapped had nowhere to go. Two rows are one wrapped
+ * answer and never two answers: judged separately they would come back as
+ * two broken equations, which is a verdict about our layout rather than
+ * about the student.
+ *
+ * Reported at the first answer row, so the verdict lands on the box the
+ * student is looking at.
+ */
+function joinAnswerRows(worksheet, lines) {
+  if (!worksheet || worksheet.answerRow === null) return [];
+  const written = orderedChemistryLines(lines)
+    .filter((line) => zoneAtRow(worksheet, line.row) === ZONES.ANSWER)
+    .map((line) => (line.text ?? "").trim())
+    .filter(Boolean);
+  if (!written.length) return [];
+  return [{ row: worksheet.answerRow, text: written.join(" ") }];
+}
+
 function addReadingRow(current, row) {
   const next = new Set(current);
   next.add(row);
@@ -152,6 +175,12 @@ export default function useChemistry({
   const [addedRows, setAddedRows] = useState(0);
   const addWorkingRow = useCallback(() => setAddedRows((n) => n + 1), []);
 
+  // A second line for the answer, on request. A balanced equation can run
+  // past the end of a line even with the box the full width of the page,
+  // and the rows are rejoined into one answer before anything judges them.
+  const [addedAnswerRows, setAddedAnswerRows] = useState(0);
+  const addAnswerRow = useCallback(() => setAddedAnswerRows((n) => n + 1), []);
+
   const inputMode = inputModeFor(topic, problemType);
   const isDrawing = isWholePageChemistryInput(inputMode);
 
@@ -162,6 +191,7 @@ export default function useChemistry({
   const worksheet = baseWorksheet
     ? buildWorksheet(topic, problemType, {
         inputMode,
+        answerRows: 1 + addedAnswerRows,
         workingRows: growWorkingRows(baseWorksheet, {
           inkRows: [...inkRows],
           addedRows,
@@ -209,10 +239,17 @@ export default function useChemistry({
     return () => controller.abort();
   }, [targetSmiles]);
 
-  const answerLine = worksheet
-    ? lines.find((line) => line.row === worksheet.answerRow) ?? null
-    : null;
-  const answerText = answerLine?.text ?? "";
+  // Every row of the answer box, rejoined. Two rows are one wrapped answer,
+  // never two answers: a balanced equation that runs past the end of a line
+  // is still one equation, and judging its halves separately would report
+  // two broken ones.
+  const answerText = worksheet
+    ? orderedChemistryLines(lines)
+        .filter((line) => zoneAtRow(worksheet, line.row) === ZONES.ANSWER)
+        .map((line) => (line.text ?? "").trim())
+        .filter(Boolean)
+        .join(" ")
+    : "";
 
   const ready = isProblemReady(problemType, values);
   const problemText = describeProblem(topic, problemType, values);
@@ -692,16 +729,16 @@ export default function useChemistry({
           (line) => !questionRowsRef.current.includes(line.row)
         )
       : active.kind === KINDS.ANSWER
-      ? linesRef.current.filter(
-          (line) => line.row === active.answerRow && line.text.trim()
-        )
+      ? joinAnswerRows(active, linesRef.current)
       : // A steps page judges its working row by row, and now the answer
         // box under it as well: the last line of the working used to be the
         // answer by convention and nothing on the page said so.
-        orderedChemistryLines(linesRef.current).filter((line) => {
-          const zone = zoneAtRow(active, line.row);
-          return zone === ZONES.WORKING || zone === ZONES.ANSWER;
-        });
+        [
+          ...orderedChemistryLines(linesRef.current).filter(
+            (line) => zoneAtRow(active, line.row) === ZONES.WORKING
+          ),
+          ...joinAnswerRows(active, linesRef.current),
+        ];
     const steps = isDrawing
       ? written
         ? [{ line_number: 1, smiles: written }]
@@ -864,13 +901,15 @@ export default function useChemistry({
     const stepLines = !sheet
       ? chemistryStepLines(linesRef.current, questionRowsRef.current)
       : sheet.kind === KINDS.ANSWER
-      ? linesRef.current.filter((line) => line.row === sheet.answerRow)
+      ? joinAnswerRows(sheet, linesRef.current)
       : // Same list `checkAnswer` sent, in the same order, or the line
         // number the hint layer is given points at the wrong row.
-        orderedChemistryLines(linesRef.current).filter((line) => {
-          const zone = zoneAtRow(sheet, line.row);
-          return zone === ZONES.WORKING || zone === ZONES.ANSWER;
-        });
+        [
+          ...orderedChemistryLines(linesRef.current).filter(
+            (line) => zoneAtRow(sheet, line.row) === ZONES.WORKING
+          ),
+          ...joinAnswerRows(sheet, linesRef.current),
+        ];
     const lineIndex = stepLines.findIndex((line) => line.row === firstWrongRow);
     const activeVerdict = isDrawing
       ? verdict
@@ -1072,6 +1111,7 @@ export default function useChemistry({
     questionVerb,
     worksheet,
     addWorkingRow,
+    addAnswerRow,
     targetPicture,
     answerText,
     answerVerdict:

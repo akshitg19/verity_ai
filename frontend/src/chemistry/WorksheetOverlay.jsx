@@ -163,6 +163,7 @@ export default function WorksheetOverlay({
   answerText = "",
   answerVerdict = null,
   onAddRow = null,
+  onAddAnswerRow = null,
   width,
   lineHeight = DEFAULT_LINE_HEIGHT,
 }) {
@@ -173,8 +174,9 @@ export default function WorksheetOverlay({
   const promptWidth = Math.min(360, boxWidth);
   const working = rowBand(worksheet.workingStart, worksheet.workingRows, lineHeight);
   const hasAnswer = worksheet.answerRow !== null;
+  const answerRows = worksheet.answerRows ?? 1;
   const answer = hasAnswer
-    ? rowBand(worksheet.answerRow, 1, lineHeight)
+    ? rowBand(worksheet.answerRow, answerRows, lineHeight)
     : { top: working.top + working.height, height: 0 };
 
   // Green or red on the answer box itself, so the result is where the student
@@ -187,43 +189,59 @@ export default function WorksheetOverlay({
   // would swallow the strokes it was drawn over.
   const canAddRow = Boolean(onAddRow) && worksheet.kind !== "draw";
 
+  const addButton = (top, onPress, label) => (
+    <button
+      type="button"
+      aria-label={label}
+      onPointerDown={(event) => {
+        // The canvas is listening for pointers underneath. Without this the
+        // press both adds a row and leaves a dot on the page.
+        event.stopPropagation();
+        event.preventDefault();
+      }}
+      onClick={onPress}
+      style={{
+        position: "absolute",
+        top,
+        left: 8,
+        width: 26,
+        height: 20,
+        display: "grid",
+        placeItems: "center",
+        padding: 0,
+        fontSize: 14,
+        fontWeight: 700,
+        lineHeight: 1,
+        color: PAPER.muted,
+        background: "transparent",
+        border: `1px dashed ${PAPER.line}`,
+        borderRadius: 4,
+        cursor: "pointer",
+        touchAction: "manipulation",
+        zIndex: 2,
+      }}
+    >
+      +
+    </button>
+  );
+
   return (
     <>
-    {canAddRow && (
-      <button
-        type="button"
-        aria-label="Add another line of working"
-        onPointerDown={(event) => {
-          // The canvas is listening for pointers underneath. Without this the
-          // press both adds a row and leaves a dot on the page.
-          event.stopPropagation();
-          event.preventDefault();
-        }}
-        onClick={onAddRow}
-        style={{
-          position: "absolute",
-          top: working.top + working.height - 24,
-          left: 8,
-          width: 26,
-          height: 20,
-          display: "grid",
-          placeItems: "center",
-          padding: 0,
-          fontSize: 14,
-          fontWeight: 700,
-          lineHeight: 1,
-          color: PAPER.muted,
-          background: "transparent",
-          border: `1px dashed ${PAPER.line}`,
-          borderRadius: 4,
-          cursor: "pointer",
-          touchAction: "manipulation",
-          zIndex: 2,
-        }}
-      >
-        +
-      </button>
-    )}
+    {canAddRow &&
+      addButton(
+        working.top + working.height - 24,
+        onAddRow,
+        "Add another line of working"
+      )}
+    {/* The answer box is one line by design, because an answer is one line.
+        This is here for the case that made the box full width in the first
+        place: a balanced equation long enough to run off the end of it. */}
+    {hasAnswer && onAddAnswerRow &&
+      addButton(
+        answer.top + answer.height + 2,
+        onAddAnswerRow,
+        "Give the answer another line"
+      )}
     <div
       aria-hidden="true"
       style={{
@@ -347,10 +365,13 @@ export default function WorksheetOverlay({
 
       {hasAnswer && (
         <>
+          {/* The full width of the page, like the working box above it.
+              It was capped at 300px, which is fine for a molar mass and was
+              never enough for `2Al + 3CuSO4 -> Al2(SO4)3 + 3Cu`. */}
           <Box
             top={answer.top + 4}
             left={left}
-            width={Math.min(300, boxWidth)}
+            width={boxWidth}
             height={answer.height - 8}
             filled={Boolean(answerText.trim())}
             tone={answerTone}
@@ -364,12 +385,14 @@ export default function WorksheetOverlay({
           </Caption>
         </>
       )}
+      {/* Inside the right edge now that the box runs the full width, rather
+          than beside it where it would sit off the page. */}
       {hasAnswer && worksheet.answerUnit && (
         <div
           style={{
             position: "absolute",
             top: answer.top + answer.height - 30,
-            left: left + Math.min(300, boxWidth) + 12,
+            left: left + boxWidth - 56,
             fontSize: 16,
             fontWeight: 600,
             color: PAPER.muted,
