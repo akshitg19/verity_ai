@@ -25,7 +25,7 @@ export const MATH_TOPICS = [
     label: "Trigonometry",
     glyph: "θ",
     blurb: "Unit circle, identities, equations, and triangle relationships.",
-    implemented: false,
+    implemented: true,
   },
   {
     id: "statistics",
@@ -39,7 +39,7 @@ export const MATH_TOPICS = [
     label: "Calculus",
     glyph: "∫",
     blurb: "Limits, derivatives, applications, and integrals.",
-    implemented: false,
+    implemented: true,
   },
 ];
 

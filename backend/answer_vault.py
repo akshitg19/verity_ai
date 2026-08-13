@@ -23,9 +23,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from sympy import Eq, solve
+from sympy import Eq, solve, simplify, trigsimp
 
 from judge.algebra import _parse_equation
+from judge.trigonometry import _parse_math
+from judge.calculus import X, _derivative_definition, _evaluate_calculus_statement
 
 from judge.chemistry import (
     ChemistryParseError,
@@ -88,6 +90,7 @@ class AnswerVault:
     # is true for "draw this molecule": there is no step before the answer.
     single_step: bool = False
     reference_equation: str | None = None
+    supports_terminal_detection: bool = True
 
     def __repr__(self) -> str:  # pragma: no cover - defensive
         return f"<AnswerVault topic={self.topic!r} forms={len(self.answer_forms)}>"
@@ -145,6 +148,8 @@ class AnswerVault:
         return self.solution.first_answer_index - furthest
 
     def is_terminal(self, student_lines: list[str]) -> bool:
+        if not self.supports_terminal_detection:
+            return False
         if self.single_step:
             return True
         if self.reference_equation is not None:
@@ -291,6 +296,102 @@ def vault_for_cell_potential(problem: str, cathode: str, anode: str) -> AnswerVa
     _add_forms(vault, solve_cell_potential(cathode, anode))
     return vault
 
+
+def _add_sympy_answer(vault: AnswerVault, answer) -> None:
+    """Add safe string/numeric forms for a symbolic math answer."""
+    text = str(answer)
+
+    if text:
+        vault.answer_forms.append(text)
+
+    if getattr(answer, "is_number", False) and getattr(answer, "is_real", False):
+        try:
+            vault.numeric_answers.append(float(answer))
+        except (TypeError, ValueError):
+            pass
+
+
+def vault_for_pre_algebra(problem: str) -> AnswerVault:
+    """Build a vault for a supported pre-algebra problem."""
+    try:
+        parsed = _parse_equation(problem)
+    except Exception as exc:
+        raise ValueError(f"could not parse pre-algebra problem: {exc}") from exc
+
+    # Equation-style pre-algebra already uses the algebra machinery.
+    if isinstance(parsed, Eq):
+        vault = vault_for_algebra(problem)
+        vault.topic = "pre_algebra"
+        return vault
+
+    # Arithmetic and symbolic-expression problems have a deterministic
+    # simplified result, so protect that result just like trig/calculus do.
+    answer = simplify(parsed)
+
+    vault = AnswerVault(
+        topic="pre_algebra",
+        problem=problem,
+        supports_terminal_detection=False,
+    )
+
+    _add_sympy_answer(vault, answer)
+    return vault
+
+
+def vault_for_trigonometry(problem: str) -> AnswerVault:
+    """Build a vault for a deterministic trig-expression problem."""
+    try:
+        parsed = _parse_math(problem)
+    except Exception as exc:
+        raise ValueError(f"could not parse trigonometry problem: {exc}") from exc
+
+    # Our judge can compare trig equations, but we do not yet have a
+    # complete interval-aware trig equation solver. Do not manufacture
+    # an answer vault for something we cannot solve exactly.
+    if isinstance(parsed, Eq):
+        raise ValueError(
+            "trigonometry equation sessions are not supported yet"
+        )
+
+    answer = trigsimp(simplify(parsed))
+
+    vault = AnswerVault(
+        topic="trigonometry",
+        problem=problem,
+        supports_terminal_detection=False,
+    )
+
+    _add_sympy_answer(vault, answer)
+    return vault
+
+
+def vault_for_calculus(problem: str) -> AnswerVault:
+    """Build a vault from the same deterministic interpretation as CalculusJudge."""
+    try:
+        derivative_definition = _derivative_definition(problem)
+
+        if derivative_definition is not None:
+            _, source_expression = derivative_definition
+            answer = source_expression.diff(X)
+        else:
+            answer = _evaluate_calculus_statement(problem)
+
+    except Exception as exc:
+        raise ValueError(f"could not evaluate calculus problem: {exc}") from exc
+
+    if isinstance(answer, Eq):
+        raise ValueError("calculus equation sessions are not supported yet")
+
+    vault = AnswerVault(
+        topic="calculus",
+        problem=problem,
+        supports_terminal_detection=False,
+    )
+
+    _add_sympy_answer(vault, simplify(answer))
+    return vault
+
+
 def vault_for_algebra(problem: str) -> AnswerVault:
     """Build a protected answer vault for a supported one-variable equation."""
     try:
@@ -416,11 +517,48 @@ def build_vault(
     raise VaultConstructionError(f"no vault can be built for topic {topic!r}")
 
 
+def vault_for_pre_algebra(problem: str) -> AnswerVault:
+    """Build a protected vault for a supported pre-algebra problem."""
+    try:
+        parsed = _parse_equation(problem)
+    except Exception as exc:
+        raise ValueError(f"could not parse pre-algebra problem: {exc}") from exc
+
+    # Equation-style pre-algebra already uses the algebra machinery.
+    if isinstance(parsed, Eq):
+        vault = vault_for_algebra(problem)
+        vault.topic = "pre_algebra"
+        return vault
+
+    # Arithmetic or symbolic-expression pre-algebra can be reduced
+    # deterministically to an equivalent simplified expression.
+    answer = simplify(parsed)
+
+    vault = AnswerVault(
+        topic="pre_algebra",
+        problem=problem,
+        supports_terminal_detection=False,
+    )
+
+    _add_sympy_answer(vault, answer)
+    return vault
+
+
 def build_math_vault(*, topic: str, problem: str) -> AnswerVault:
     """Construct a protected answer vault for a supported math problem."""
     try:
+        if topic == "pre_algebra":
+            return vault_for_pre_algebra(problem)
+
         if topic == "algebra":
             return vault_for_algebra(problem)
+
+        if topic == "trigonometry":
+            return vault_for_trigonometry(problem)
+
+        if topic == "calculus":
+            return vault_for_calculus(problem)
+
     except ValueError as exc:
         raise VaultConstructionError(str(exc)) from exc
 
@@ -444,5 +582,8 @@ __all__ = [
     "vault_for_stoichiometry",
     "vault_for_structure",
     "build_math_vault",
+    "vault_for_pre_algebra",
     "vault_for_algebra",
+    "vault_for_trigonometry",
+    "vault_for_calculus",
 ]

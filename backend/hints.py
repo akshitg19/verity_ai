@@ -79,10 +79,83 @@ _LEVEL_2_TEMPLATES = {
         "This line isn't written as valid math -- check that every "
         "operator, variable, and the equals sign are all clearly there."
     ),
+    "order_of_operations": (
+        "Check the order in which you evaluated the operations. Multiplication "
+        "and division are handled before addition and subtraction unless "
+        "parentheses change the order."
+    ),
+    "fraction": (
+        "Check the fraction operation on this line. Make sure the denominators "
+        "and numerators were handled according to the operation you are doing."
+    ),
+    "exponent": (
+        "Check how you evaluated the exponent on this line. An exponent tells "
+        "you how many times the base is used as a factor."
+    ),
     "algebraic": (
         "This step isn't equivalent to the line before it. Whatever "
         "operation you performed, make sure it was applied to the whole "
         "of both sides, not just part of one."
+    ),
+    "trig_sign": (
+        "Check the positive and negative signs in this trig step. One term "
+        "has the correct trig form but the wrong sign."
+    ),
+    "trig_value": (
+        "Recheck the exact value of the trig function at this angle. Use the "
+        "unit circle or a known special-angle value rather than a decimal approximation."
+    ),
+    "trig_reciprocal": (
+        "Check the reciprocal identity you used. Sine, cosine, and tangent "
+        "each pair with a specific reciprocal trig function."
+    ),
+    "trig_quotient": (
+        "Check the quotient identity on this line. Pay close attention to "
+        "which trig function belongs in the numerator and which belongs in the denominator."
+    ),
+    "trig_identity": (
+        "The identity used on this line does not preserve the expression. "
+        "Start from a known trig identity and check each substitution before simplifying."
+    ),
+    "trig_algebraic": (
+        "This trig step is not equivalent to the previous valid line, but "
+        "the checker cannot prove a narrower cause. Rework the transformation one operation at a time."
+    ),
+    "derivative_power_rule": (
+        "Recheck the power rule. When differentiating a power of x, both "
+        "the coefficient and the exponent need to change in the prescribed way."
+    ),
+    "derivative_product_rule": (
+        "This expression involves a product. Check that you differentiated "
+        "both factors and included both product-rule terms."
+    ),
+    "derivative_chain_rule": (
+        "The outer derivative is present, but check the expression inside it. "
+        "A composition also requires the derivative of the inner function."
+    ),
+    "derivative_sum_rule": (
+        "Check every term in the sum separately. One term may have been "
+        "left unchanged or omitted when the derivative was taken."
+    ),
+    "derivative_trig_rule": (
+        "Recheck the derivative rule for the trig function on this line, "
+        "including its sign."
+    ),
+    "derivative_rule": (
+        "The derivative on this line is not correct, but the checker cannot "
+        "prove a more specific rule mistake. Identify the form of the original function and choose its derivative rule again."
+    ),
+    "integral_rule": (
+        "Differentiate your proposed antiderivative as a check. If it does "
+        "not return the original integrand, revisit the integration rule you used."
+    ),
+    "limit_evaluation": (
+        "Recheck what happens to the expression as x approaches the target "
+        "value. Simplify first if direct substitution gives an indeterminate form."
+    ),
+    "calculus_algebraic": (
+        "The calculus operation was already handled, but this new line is "
+        "not equivalent to the previous valid result. Recheck the algebraic simplification after the calculus step."
     ),
     "arithmetic": (
         "The setup of this step looks right, but a calculation inside it "
@@ -214,11 +287,101 @@ _LEVEL_3_TEMPLATES = {
         "every term needs an operator connecting it to the next, and an "
         "equation needs exactly one equals sign separating two sides."
     ),
+    "order_of_operations": (
+        "Work through the expression one operation at a time. Evaluate anything "
+        "inside parentheses first, then exponents, then multiplication or division, "
+        "and finally addition or subtraction."
+    ),
+    "fraction": (
+        "Handle the fraction operation one piece at a time. For addition or "
+        "subtraction, first express the fractions with a common denominator. "
+        "For multiplication or division, apply the appropriate fraction rule "
+        "before simplifying."
+    ),
+    "exponent": (
+        "Read the exponent as repeated multiplication of the base. Evaluate that "
+        "power first, then continue simplifying the rest of the expression."
+    ),
     "algebraic": (
         "An equation stays true only if you do the exact same thing to "
         "both sides -- add, subtract, multiply, or divide both sides by "
         "the same amount. Skipping a term or applying it to only one "
         "side breaks the equality."
+    ),
+    "trig_sign": (
+        "Signs in trigonometry come from both algebra and the trig functions "
+        "themselves. For example, some identities introduce a negative sign, "
+        "and quadrant information can also determine whether a trig value is positive or negative."
+    ),
+    "trig_value": (
+        "Exact trig values come from standard angles on the unit circle. "
+        "For those angles, keep values in exact form using fractions and "
+        "square roots rather than replacing them with rounded decimals."
+    ),
+    "trig_reciprocal": (
+        "The reciprocal identities pair sin with csc, cos with sec, and tan "
+        "with cot. Replacing a trig function by its reciprocal means taking "
+        "one divided by the original function."
+    ),
+    "trig_quotient": (
+        "The quotient identities are tan(x) = sin(x)/cos(x) and "
+        "cot(x) = cos(x)/sin(x). The order of sine and cosine matters."
+    ),
+    "trig_identity": (
+        "A trigonometric identity is an equality that holds wherever both "
+        "sides are defined. A valid identity substitution must preserve the "
+        "value of the entire expression, not just resemble a familiar formula."
+    ),
+    "trig_algebraic": (
+        "After applying a trig identity, ordinary equivalence still has to "
+        "be preserved. Expand, factor, cancel, or rearrange only in ways that "
+        "leave the value of the expression unchanged."
+    ),
+    "derivative_power_rule": (
+        "For a power x^n, differentiation brings the exponent down as a "
+        "coefficient and then reduces the exponent by one. Both changes are "
+        "parts of the same rule."
+    ),
+    "derivative_product_rule": (
+        "When two changing functions are multiplied, differentiating only "
+        "one factor misses part of the change. The product rule therefore "
+        "contains one term for differentiating the first factor and another "
+        "for differentiating the second."
+    ),
+    "derivative_chain_rule": (
+        "A composition has an outer function and an inner function. The chain "
+        "rule differentiates the outer function while leaving the inside in "
+        "place, then multiplies by the derivative of that inside function."
+    ),
+    "derivative_sum_rule": (
+        "Differentiation distributes across addition and subtraction. Each "
+        "term in a sum can be differentiated independently, and the resulting "
+        "derivatives are then combined with the same plus or minus signs."
+    ),
+    "derivative_trig_rule": (
+        "Sine, cosine, and tangent each have their own derivative rule. "
+        "Their derivatives can also introduce a different trig function or "
+        "a negative sign, so both pieces need to be checked."
+    ),
+    "derivative_rule": (
+        "Different function structures require different derivative rules. "
+        "Before differentiating, identify whether the expression is a power, "
+        "product, composition, trig function, exponential, logarithm, or combination of these."
+    ),
+    "integral_rule": (
+        "Indefinite integration asks for a family of functions whose "
+        "derivative is the integrand. Differentiating an antiderivative is "
+        "therefore a direct way to verify whether the integration was correct."
+    ),
+    "limit_evaluation": (
+        "A limit describes the value an expression approaches, not simply "
+        "what direct substitution initially produces. When substitution gives "
+        "an indeterminate form, the expression often has to be simplified or transformed first."
+    ),
+    "calculus_algebraic": (
+        "After a derivative, integral, or limit has been evaluated, the "
+        "remaining simplification still follows ordinary algebraic equivalence. "
+        "A correct calculus result can become incorrect during a later algebra step."
     ),
     "arithmetic": (
         "Even when the algebraic move you're making is the right one, "
@@ -820,22 +983,150 @@ _CHEMISTRY_LEVEL_2_PROMPT = (
 
 
 _MATH_LEVEL_2_PROMPT = (
-    "You are a math tutor at a whiteboard. A student is stuck on an algebra "
-    "problem. Create a DIFFERENT one-variable algebra problem that uses the "
-    "same technique and contains the same kind of mistake, but uses different "
-    "numbers from the student's problem.\n"
-    "Then work the new problem correctly.\n"
-    "Rules:\n"
-    "- The new problem must be a one-variable algebra equation supported by "
-    "a basic algebra checker.\n"
-    "- Do not reuse the student's numbers.\n"
-    "- `problem` must contain only the mathematical equation.\n"
-    "- Every item in `steps` must contain only a complete mathematical "
-    "equation, with no explanatory prose.\n"
-    "- Every step must be mathematically equivalent to the step before it.\n"
-    "- The last step should solve the new problem.\n"
-    "- `technique` should name the general technique in one short sentence.\n"
-    "Reply with one JSON object and nothing else."
+    "You are generating a worked example for a math tutoring application.\n"
+    "Your output will be checked by a strict deterministic math engine before "
+    "the student can see it.\n"
+    "A mathematically correct example is NOT sufficient if its notation cannot "
+    "be parsed by the deterministic checker.\n"
+    "Follow every machine-readable rule below exactly.\n\n"
+
+    "GOAL:\n"
+    "- Create a DIFFERENT problem that practices the same topic, technique, and "
+    "kind of mistake as the student's problem.\n"
+    "- Do not reuse the student's exact problem.\n"
+    "- Change the numbers, coefficients, constants, or angles when possible.\n"
+    "- Solve your generated problem correctly from beginning to end.\n"
+    "- Keep the example simple. Prefer 2 to 4 steps.\n"
+    "- Prefer the simplest valid notation over a more sophisticated equivalent notation.\n\n"
+
+    "GLOBAL MACHINE-READABLE RULES:\n"
+    '- The "problem" field must contain ONLY mathematical content.\n'
+    '- Never put instructions such as "Solve:", "Simplify:", "Evaluate:", '
+    '"Differentiate:", "Find:", or other prose inside the problem field.\n'
+    '- Every string in "steps" must contain ONLY one complete mathematical '
+    "expression or equation.\n"
+    '- Never begin a step with "=".\n'
+    "- Never include explanations, labels, arrows, markdown, bullet points, "
+    "or commentary inside a step.\n"
+    "- Use plain ASCII math notation.\n"
+    "- Use ^ for powers.\n"
+    "- Use / for division.\n"
+    "- Use parentheses when grouping could be ambiguous.\n"
+    "- Use * for multiplication when it improves parser clarity, such as 3*x.\n"
+    "- Do not introduce unnecessary variables.\n"
+    "- Do not change variables partway through an example.\n"
+    "- Do not invent alternate notation merely because it is mathematically valid.\n"
+    "- Every step must represent a mathematically valid state that the deterministic "
+    "checker can independently verify.\n"
+    "- Do not include pedagogical setup lines that are not themselves valid "
+    "mathematical states according to the checker.\n\n"
+
+    "PRE-ALGEBRA RULES:\n"
+    "- Prefer simple arithmetic expressions involving integers, fractions, "
+    "parentheses, and positive integer powers.\n"
+    "- Use small numbers.\n"
+    "- Avoid unnecessary symbolic variables.\n"
+    "- Fractions should use /, such as 3/4.\n"
+    "- Do not use unsupported functions or unusual notation.\n\n"
+
+    "ALGEBRA RULES:\n"
+    "- Use x as the variable in generated examples.\n"
+    "- Prefer one-variable equations with one unique solution.\n"
+    "- Keep equations simple enough for symbolic verification.\n"
+    "- Every equation step must include both sides of the equation.\n"
+    "- Example of valid formatting: `2*x + 6 = 14`.\n"
+    "- Do not write fragments such as `subtract 6`, `divide by 2`, or `= 8`.\n"
+    "- Preserve equivalence correctly from one equation to the next.\n\n"
+
+    "TRIGONOMETRY RULES:\n"
+    "- Use x as the symbolic variable in generated identity problems.\n"
+    "- Standard exact angles such as pi/6, pi/4, pi/3, and pi/2 are allowed.\n"
+    "- Write functions as sin(x), cos(x), and tan(x).\n"
+    "- Write trig powers as sin(x)^2 or cos(x)^2.\n"
+    "- Do NOT write sin^2(x) or cos^2(x).\n"
+    "- Write quotient identities explicitly, such as sin(x)/cos(x).\n"
+    "- Use only trig functions supported by the checker.\n"
+    "- Keep identity transformations short and canonical.\n"
+    "- Do not include prose such as `Simplify the expression:` in the problem.\n"
+    "- Do not prefix transformed expressions with `=`.\n\n"
+
+    "CALCULUS GENERAL RULES:\n"
+    "- Generated calculus examples MUST use x as the independent variable.\n"
+    "- This rule applies only to the generated worked example, regardless of "
+    "what variable the student's original problem uses.\n"
+    "- Use d/dx for differentiation.\n"
+    "- Use dx for integration.\n"
+    "- Use `lim x to VALUE EXPRESSION` for limits.\n"
+    "- Never generate calculus examples using d/dy, d/dz, d/dt, dy, dz, dt, "
+    "or another differentiation/integration variable.\n"
+    "- Use only simple expressions involving x, constants, powers, sin(x), "
+    "cos(x), tan(x), sqrt(x), log(x), ln(x), exp(x), and pi.\n"
+    "- Prefer canonical notation that the checker can parse over alternative "
+    "but equivalent calculus notation.\n\n"
+
+    "DERIVATIVE RULES:\n"
+    "- Preferred generated problem forms include `d/dx x^3`, "
+    "`d/dx sin(x)`, `y = x^3`, or `f(x) = x^3`.\n"
+    "- If the generated problem uses `y = ...`, use dy/dx consistently for "
+    "derivative-result steps.\n"
+    "- If the generated problem uses `f(x) = ...`, use f'(x) consistently for "
+    "derivative-result steps.\n"
+    "- Do not switch between y notation, f notation, and bare derivative notation "
+    "inside the same generated example.\n"
+    "- Prefer already-evaluated derivative expressions.\n"
+    "- Avoid carrying an unevaluated derivative operator inside a larger expression "
+    "when a simpler equivalent step can be written.\n"
+    "- Avoid forms such as `-d/dx(sin(x))`, `3*d/dx(cos(x))`, or "
+    "`dy/dx = 3*d/dx(cos(x))`.\n"
+    "- Prefer a directly verifiable result such as `dy/dx = -3*sin(x)`.\n"
+    "- Every derivative step should evaluate to the correct derivative of the "
+    "generated problem.\n\n"
+
+    "INTEGRAL RULES:\n"
+    "- Generated integrals MUST use x and dx.\n"
+    "- Preferred form: `int 3*x^2 dx`.\n"
+    "- Never generate dy, dz, dt, or another differential.\n"
+    "- For indefinite integrals, every returned solution step should itself be "
+    "a valid antiderivative of the original integrand.\n"
+    "- Do NOT generate intermediate setup lines such as `3 * int x^2 dx`.\n"
+    "- Do NOT generate power-rule setup expressions such as "
+    "`3 * (x^(2+1)/(2+1)) + C`.\n"
+    "- Instead, move directly to a valid antiderivative expression.\n"
+    "- Example: for `int 3*x^2 dx`, a valid step is `x^3 + C`.\n"
+    "- Final indefinite-integral answers must include + C.\n"
+    "- For definite integrals, use simple numeric bounds and x only.\n\n"
+
+    "LIMIT RULES:\n"
+    "- Generated limits MUST use x.\n"
+    "- Use exactly the form `lim x to VALUE EXPRESSION`.\n"
+    "- If an intermediate step is still a limit, repeat the entire "
+    "`lim x to VALUE` prefix.\n"
+    "- Do not remove the limit notation until the final evaluated value.\n"
+    "- Keep factoring, cancellation, and simplification steps simple.\n"
+    "- Every intermediate limit expression must evaluate to the same limit as "
+    "the generated problem.\n\n"
+
+    "FINAL SELF-CHECK BEFORE RESPONDING:\n"
+    "- Is the problem only math, with no prose?\n"
+    "- Is every step only math, with no prose?\n"
+    "- Does every step parse as a complete expression or equation?\n"
+    "- Did you avoid leading equals signs?\n"
+    "- Did you stay inside the notation rules for the requested topic?\n"
+    "- For calculus, did you use x everywhere?\n"
+    "- For indefinite integrals, is every solution step already a valid "
+    "antiderivative rather than an unevaluated integration procedure?\n"
+    "- Is every step mathematically correct?\n"
+    "- If any answer is no, fix the example before responding.\n\n"
+
+    "Reply with exactly ONE JSON object and no text before or after it:\n"
+    "{\n"
+    '  "problem": "<machine-readable generated problem>",\n'
+    '  "technique": "<one short student-friendly sentence describing the technique>",\n'
+    '  "steps": [\n'
+    '    "<machine-readable math step 1>",\n'
+    '    "<machine-readable math step 2>"\n'
+    "  ]\n"
+    "}"
 )
 
 
@@ -1038,14 +1329,7 @@ def _verify_example(subject: str,topic: str, payload: dict, student_problem: str
         return None
 
     if subject == "math":
-        if topic != "algebra":
-            logger.warning(
-                "level 2 rejected: no deterministic math verifier for topic %s",
-                topic,
-            )
-            return None
-
-        if not _verify_math_example(problem, steps):
+        if not _verify_math_example(topic, problem, steps):
             return None
 
     else:
@@ -1188,16 +1472,18 @@ def _split_on_term_plus(side: str) -> list[str]:
     return terms
 
 
-def _verify_math_example(problem: str, steps: list[str]) -> bool:
-    """Verify a generated math example with the same judge used on students."""
-    from judge.algebra import AlgebraJudge
+def _verify_math_example(
+    topic: str,
+    problem: str,
+    steps: list[str],
+) -> bool:
+    """Verify a generated math example with the same topic judge used on students."""
+    from judge.math_dispatcher import MathJudgeDispatcher
     from schemas import Step
 
     if not problem or not steps:
         logger.warning("level 2 rejected: the example has no problem or no steps")
         return False
-
-    judge = AlgebraJudge()
 
     check_steps = [
         Step(
@@ -1207,28 +1493,41 @@ def _verify_math_example(problem: str, steps: list[str]) -> bool:
         for index, text in enumerate(steps)
     ]
 
-    verdicts = judge.check(problem, check_steps)
+    verdicts = MathJudgeDispatcher().check(
+        topic,
+        problem,
+        check_steps,
+    )
 
     if not verdicts:
-        logger.warning("level 2 rejected: the algebra judge returned nothing")
+        logger.warning(
+            "level 2 math verification returned no verdicts: topic=%s problem=%r steps=%r",
+            topic,
+            problem,
+            steps,
+        )
         return False
 
-    # line 0 means the generated problem itself could not be safely judged.
     if verdicts[0].line_number == 0:
         logger.warning(
-            "level 2 rejected: the generated problem itself is %s",
-            verdicts[0].error_type,
+            "level 2 math problem rejected: topic=%s problem=%r steps=%r verdicts=%r",
+            topic,
+            problem,
+            steps,
+            verdicts,
         )
         return False
 
-    wrong = [verdict for verdict in verdicts if not verdict.valid]
-    if wrong:
+    if not all(verdict.valid for verdict in verdicts):
         logger.warning(
-            "level 2 rejected: line %d of the worked example is %s",
-            wrong[0].line_number,
-            wrong[0].error_type,
+            "level 2 math example rejected: topic=%s problem=%r steps=%r verdicts=%r",
+            topic,
+            problem,
+            steps,
+            verdicts,
         )
         return False
+
     return True
 
 
@@ -1655,10 +1954,15 @@ def _generate_level_2(
                         req.problem_type,
                     )
                 ],
+                job="worked_example",
             )
         except ModelError as exc:
-            logger.warning("level 2 generation failed: %s", exc)
-            return None
+            logger.warning(
+                "level 2 generation failed on attempt %d: %s",
+                attempt + 1,
+                exc,
+            )
+            continue
         total_latency += latency
         example = _verify_example(
             req.subject,
