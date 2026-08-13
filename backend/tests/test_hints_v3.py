@@ -1418,3 +1418,74 @@ def test_the_same_equation_written_differently_still_matches(written, reference)
 def test_a_different_equation_does_not_match(written, reference):
     """Comparing by composition must not become comparing by nothing."""
     assert hints._same_equation(written, reference) is False
+
+
+# ---------------------------------------------------------------------------
+# The drawing topics: a picture said out loud
+#
+# Nothing is transcribed on a drawing page, so the hint layer had one thing
+# to go on, the SMILES the recogniser produced, and it is forbidden to write
+# that at a student. Level 1 was left pointing at a line it could not quote.
+# ---------------------------------------------------------------------------
+
+
+def test_a_drawing_reaches_the_prompt_in_words(monkeypatch):
+    seen = {}
+
+    def capture(messages, **kwargs):
+        seen["prompt"] = messages[0]
+        return ({"hint": "You drew a two carbon chain."}, 30)
+
+    vault = vault_for_structure("Draw a ketone", "CC(=O)C")
+    session = SESSIONS.create("organic", vault.problem, vault)
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(hints, "generate_json", capture)
+    hints.generate_hint(
+        request_for(
+            session, 1, topic="organic", problem_type="functional_group",
+            student_line="CC=O",
+        )
+    )
+
+    prompt = seen["prompt"]
+    assert "aldehyde" in prompt
+    assert "2 carbon atoms" in prompt
+
+
+def test_a_numeric_topic_gets_no_drawing_block(monkeypatch):
+    """It would be describing a number as though it were a molecule."""
+    seen = {}
+
+    def capture(messages, **kwargs):
+        seen["prompt"] = messages[0]
+        return ({"hint": "Compare the two concentrations."}, 30)
+
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(hints, "generate_json", capture)
+    vault = vault_for_solutions(
+        "What is the pH of 0.100 M acetic acid? Ka = 1.8 x 10^-5",
+        SolutionsProblem(task="weak_acid_ph", concentration_m=0.1, ka=1.8e-5),
+    )
+    session = SESSIONS.create("solutions", vault.problem, vault)
+    hints.generate_hint(request_for(session, 1))
+
+    assert "read back from the picture" not in seen["prompt"]
+
+
+def test_an_unreadable_drawing_adds_nothing_rather_than_failing(monkeypatch):
+    seen = {}
+
+    def capture(messages, **kwargs):
+        seen["prompt"] = messages[0]
+        return ({"hint": "Look at where the oxygen sits."}, 30)
+
+    vault = vault_for_structure("Draw a ketone", "CC(=O)C")
+    session = SESSIONS.create("organic", vault.problem, vault)
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(hints, "generate_json", capture)
+    response = hints.generate_hint(
+        request_for(session, 1, topic="organic", student_line="not a molecule(")
+    )
+
+    assert "read back from the picture" not in seen["prompt"]
+    assert response.hint

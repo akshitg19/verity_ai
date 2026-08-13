@@ -28,15 +28,22 @@ describe("three shapes of page, one per shape of question", () => {
     expect(sheet.answerRow).not.toBeNull();
   });
 
-  it("gives balancing judged working and no answer box", () => {
-    // Every working row on a steps page is a step judged against the row
-    // above. That is the behaviour balancing already had and the one whose
-    // hints work, so it must survive this layout unchanged.
+  it("gives balancing judged working and an answer box under it", () => {
+    // Every working row on a steps page is still a step judged against the
+    // row above. That is the behaviour balancing already had and the one
+    // whose hints work, so it must survive this layout unchanged.
+    //
+    // The answer box below it is new. The last line of the working used to
+    // be the answer by convention, which said so nowhere: nothing on the
+    // page meant "this is my answer", so nothing could be marked as one.
     const balancing = TOPICS.find((topic) => topic.id === "balancing");
     const sheet = buildWorksheet(balancing, balancing.types[0]);
     expect(sheet.kind).toBe(KINDS.STEPS);
-    expect(sheet.answerRow).toBeNull();
+    expect(sheet.answerRow).toBe(sheet.workingStart + sheet.workingRows);
     expect(isReadableRow(sheet, sheet.workingStart)).toBe(true);
+    expect(isReadableRow(sheet, sheet.answerRow)).toBe(true);
+    // An equation is not measured in anything.
+    expect(sheet.answerUnit).toBeNull();
   });
 
   it("gives a drawing topic a space to draw and reads no rows in it", () => {
