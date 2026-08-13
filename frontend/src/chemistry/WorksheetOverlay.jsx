@@ -182,8 +182,50 @@ export default function WorksheetOverlay({
   const status = answerVerdict?.status ?? (answerVerdict?.valid ? "valid" : null);
   const answerTone = status ? VERDICT_STYLES[status]?.color : null;
 
+  // One more line, on request. Not on a drawing page: there the middle of
+  // the sheet is one figure rather than rows, and a control sitting in it
+  // would swallow the strokes it was drawn over.
+  const canAddRow = Boolean(onAddRow) && worksheet.kind !== "draw";
+
   return (
+    <>
+    {canAddRow && (
+      <button
+        type="button"
+        aria-label="Add another line of working"
+        onPointerDown={(event) => {
+          // The canvas is listening for pointers underneath. Without this the
+          // press both adds a row and leaves a dot on the page.
+          event.stopPropagation();
+          event.preventDefault();
+        }}
+        onClick={onAddRow}
+        style={{
+          position: "absolute",
+          top: working.top + working.height - 24,
+          left: 8,
+          width: 26,
+          height: 20,
+          display: "grid",
+          placeItems: "center",
+          padding: 0,
+          fontSize: 14,
+          fontWeight: 700,
+          lineHeight: 1,
+          color: PAPER.muted,
+          background: "transparent",
+          border: `1px dashed ${PAPER.line}`,
+          borderRadius: 4,
+          cursor: "pointer",
+          touchAction: "manipulation",
+          zIndex: 2,
+        }}
+      >
+        +
+      </button>
+    )}
     <div
+      aria-hidden="true"
       style={{
         position: "absolute",
         top: 0,
@@ -302,47 +344,6 @@ export default function WorksheetOverlay({
           doing, and on a steps page it is not even true. */}
       <Caption top={working.top + 8}>{worksheet.workingLabel}</Caption>
 
-      {/* One more line, on request.
-          The automatic growth freezes the moment the answer box has
-          something in it, which is exactly when a student who wants another
-          line of working finds the page will not give them one. This is the
-          one thing on the sheet that takes a pointer, so it is the one thing
-          with `pointerEvents` turned back on. */}
-      {onAddRow && (
-        <button
-          type="button"
-          aria-label="Add another line of working"
-          onPointerDown={(event) => {
-            // The canvas is listening for pointers underneath. Without this
-            // the press both adds a row and draws a dot on the page.
-            event.stopPropagation();
-            event.preventDefault();
-          }}
-          onClick={onAddRow}
-          style={{
-            position: "absolute",
-            top: working.top + working.height - 26,
-            left,
-            width: 26,
-            height: 22,
-            display: "grid",
-            placeItems: "center",
-            padding: 0,
-            fontSize: 15,
-            fontWeight: 700,
-            lineHeight: 1,
-            color: PAPER.muted,
-            background: "transparent",
-            border: `1px dashed ${PAPER.line}`,
-            borderRadius: RADIUS.sm ?? 4,
-            cursor: "pointer",
-            pointerEvents: "auto",
-            touchAction: "manipulation",
-          }}
-        >
-          +
-        </button>
-      )}
 
       {hasAnswer && (
         <>
@@ -381,6 +382,7 @@ export default function WorksheetOverlay({
         </div>
       )}
     </div>
+    </>
   );
 }
 

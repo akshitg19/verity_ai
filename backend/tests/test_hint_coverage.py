@@ -484,11 +484,14 @@ def test_structure_level_2_carries_the_molecule_to_draw(monkeypatch):
     assert example["structure"] == "CCCO"
 
 
-def test_a_wrong_worked_example_is_still_thrown_away(monkeypatch):
-    """The safeguard has to survive everything above it.
+def test_an_unverified_worked_example_is_labelled_rather_than_dropped(monkeypatch):
+    """The Aug 12 call, and what it did not change.
 
-    Adding animation payloads must not weaken verification: an example whose
-    arithmetic does not check out is rejected whole, animation data and all.
+    An example whose arithmetic our engines could not confirm used to be
+    dropped whole, which left a link to somebody else's website in its
+    place. It renders now, and `verified` stays false all the way to the
+    client so the UI can say which kind of example this is. Nothing may set
+    that flag except the verification loop.
     """
     payload = {
         "problem": "Find the molar mass of KNO3",
@@ -510,8 +513,8 @@ def test_a_wrong_worked_example_is_still_thrown_away(monkeypatch):
                            "steps": [{"line_number": 1, "smiles": "0"}]}},
         payload, "molar_mass",
     )
-    assert data["worked_example"] is None
-    assert data["source"] == "fallback"
+    assert data["worked_example"] is not None
+    assert data["worked_example"]["verified"] is False
     assert data["hint"].strip()
 
 
