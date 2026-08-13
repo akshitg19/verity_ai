@@ -167,6 +167,25 @@ def _numeric_tokens(text: str) -> list[float]:
     return values
 
 
+def standalone_numbers(text: str) -> list[float]:
+    """Every number written as a token of its own.
+
+    Whole tokens only, which is the difference that matters: scanning the
+    raw text for digits reads the 2 and the 4 out of "h2so4" and calls them
+    quantities, and a pH of 2.00 is then sayable because the acid has two
+    hydrogens.
+    """
+    values: list[float] = []
+    for token in tokenise(normalise(text)):
+        try:
+            value = float(token)
+        except ValueError:
+            continue
+        if math.isfinite(value):
+            values.append(value)
+    return values
+
+
 def _problem_surface(
     vault: AnswerVault, also_visible: str = ""
 ) -> tuple[set[str], str, list[float]]:
@@ -195,17 +214,7 @@ def _problem_surface(
     """
     normalised = normalise(f"{vault.problem or ''} {also_visible}")
     tokens = tokenise(normalised)
-    given: list[float] = []
-    for token in tokens:
-        # Whole tokens only. Scanning the raw text for digits would read the
-        # 2 and the 4 out of "h2so4" and call them given quantities, and a pH
-        # of 2.00 would then be sayable because the acid has two hydrogens.
-        try:
-            value = float(token)
-        except ValueError:
-            continue
-        if math.isfinite(value):
-            given.append(value)
+    given = standalone_numbers(f"{vault.problem or ''} {also_visible}")
     return set(tokens), normalised, given
 
 
@@ -378,6 +387,7 @@ __all__ = [
     "normalise",
     "numbers_differ",
     "redact_or_fallback",
+    "standalone_numbers",
     "tokenise",
     "values_within",
 ]

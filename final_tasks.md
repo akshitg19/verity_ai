@@ -3123,10 +3123,17 @@ is worth finding out which of the two is wrong.**
       their working. That is right when they wrote the answer and converted
       it one step too far, which is the common case. It is worth re-reading
       if withholding is ever re-armed.
-- [ ] A level 2 worked example can still state, as an intermediate of its
-      own different problem, a number equal to the student's answer. Seen
-      once in sixty. With `WITHHOLD_ANSWER` off, examples are deliberately
-      not redacted; with it on, they are.
+- [x] A level 2 worked example could state, as an intermediate of its own
+      different problem, a number equal to the student's answer. Seen once
+      in sixty. Aug 12: the generator now checks a verified example against
+      the vault before returning it and regenerates once if a number
+      collides, holding the first one and serving it if the second collides
+      too. A preference, not a gate: the example is a correct solution to a
+      different problem, so the collision is coincidence, and dropping to
+      the static floor over one would cost the student the whole worked
+      example. Small whole numbers are ignored, for the reason
+      `numbers_differ` ignores them. With `WITHHOLD_ANSWER` on, examples are
+      still redacted outright, which is the stricter path and unchanged.
 - [ ] Naming a target molecule is caught by resolving the name back to a
       structure, which needs Java for OPSIN. The container has none, so the
       check does not fire in production.
