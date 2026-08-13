@@ -1270,16 +1270,33 @@ def _candidate_equations(text: str):
 
 
 def _equation_tally(equation: str):
-    from judge.chemistry_equations import EquationParseError, parse_equation
+    """One equation reduced to what is on each side, chemically.
+
+    By composition and charge rather than by the string the formula was
+    written as. "Ba2+" and "Ba^2+" are the same ion, and comparing the text
+    threw away a correct net ionic worked example for writing the charge
+    the way a person writes it. Same reasoning as comparing S2O3 with O3S2
+    by element counts.
+    """
+    from judge.chemistry_equations import (
+        EquationParseError,
+        parse_equation,
+        parse_formula,
+    )
+
+    def side(terms):
+        tally: dict[tuple, int] = {}
+        for coefficient, formula in terms:
+            atoms, charge = parse_formula(formula)
+            key = (tuple(sorted(atoms.items())), charge)
+            tally[key] = tally.get(key, 0) + coefficient
+        return tuple(sorted(tally.items()))
 
     try:
         left, right = parse_equation(equation)
+        return side(left), side(right)
     except EquationParseError:
         return None
-    return (
-        tuple(sorted((f, c) for c, f in left)),
-        tuple(sorted((f, c) for c, f in right)),
-    )
 
 
 def _same_equation(text: str, reference: str) -> bool:

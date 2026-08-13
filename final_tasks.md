@@ -3060,13 +3060,64 @@ If the second attempt is no better we send the first one: "on the third line
 you used the wrong concentration" still says what they did, and the floor
 says nothing at all.
 
+### Why the nine remaining level 2 fallbacks remained
+
+The honest first answer was that we could not tell. Eleven rejection sites
+in the verification block, **two of them logged**. The audit could see the
+static floor being served on nine questions and the server had one line of
+explanation for one of them. Same failure as the INFO-level logging above,
+one layer down: a verifier that cannot explain itself can only be guessed
+at.
+
+Every rejection names itself now and carries the values that disagreed, and
+a test walks the source and fails if a bare `return False` comes back. With
+that in place the nine turned out to be seven distinct bugs, and **in every
+one of them the model was right and we were wrong**:
+
+1. **Net ionic was verified as a balancing problem.** Both live under the
+   balancing topic, so `_verify_balancing` demanded the worked steps end at
+   the balanced *molecular* equation. A net ionic example correctly ends at
+   `3Ag^+ + PO4^3- -> Ag3PO4`. Every correct one was thrown away.
+
+2. **A charge written without a caret broke the oxidation state solver.**
+   `MnO4-` parsed as MnO carrying a charge of minus four, so Mn came out at
+   -2 instead of +7. `SO42-` gave -40 for sulfur, `NH4+` gave +3 for
+   nitrogen. **This reached students**: the formula box takes whatever they
+   write, nobody writes the caret on paper, and the answer vault was built
+   from the same wrong number.
+
+3. **A charge written without a caret also broke term splitting.**
+   `Ag+ + Cl- -> AgCl` split into `Ag` and `(aq)` and came back as "has an
+   empty term". Also student-facing, and the same root cause one function
+   over.
+
+4. **The functional group table had eight groups and no alkene.** Nor
+   alkyne, arene, phenol, nitrile, thiol, alkyl halide or nitro. The lookup
+   was case and spacing sensitive too, so "Alcohol" was an unknown group
+   while "alcohol" was fine.
+
+5. **Hydrates were a parse error.** `CuSO4.5H2O` is on every molar mass
+   sheet. A student could not ask the question, and the demo script carried
+   "no hydrates" as a thing to avoid on stage.
+
+6. **Formulas were compared as strings.** An example answering `S2O3` was
+   rejected because our solver writes `O3S2`. The student's own answer was
+   never held to that: `_formula_matches` has compared element counts all
+   along.
+
+7. **The check contract offered every field for every task.** So the model
+   reached for `initial_concentration_m` on a weak acid question and the
+   solver said "this task needs an initial concentration". Each task now
+   lists what it takes, from a `TASK_INPUTS` table next to the solver, with
+   a test that solves every task from its own entry.
+
+Three of those seven were student-facing bugs, not level 2 bugs. That is
+the argument for the audit existing: **the level 2 verifier is a second
+opinion on our own engines, and when it disagrees with a competent model it
+is worth finding out which of the two is wrong.**
+
 ### Still open
 
-- [ ] Nine level 2 questions still fall back, spread thinly: one net ionic
-      where the model wrote `2Ag+ + CO3^2-` and our equation parser reads the
-      bare `+` as a term separator, one molecular formula, and single
-      structure and organic ones. A worse hint, never a wrong one, and each
-      is now a named case rather than a silent floor.
 - [ ] The audit's own leak check is looser than the backend's on purpose,
       and both now allow a hint to repeat a number the student wrote in
       their working. That is right when they wrote the answer and converted

@@ -1222,3 +1222,39 @@ def test_the_reject_helper_logs_and_returns_false(caplog):
 
     assert result is False
     assert "level 2 rejected: because reasons" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Comparing equations by chemistry rather than by spelling
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "written,reference",
+    [
+        # The charge written the way a person writes it, against the way our
+        # own solver writes it. Live, this threw away correct net ionic
+        # worked examples twice over: once on the parse and once, after that
+        # was fixed, on the comparison.
+        ("Ba2+(aq) + SO4^2-(aq) -> BaSO4(s)", "Ba^2+ + SO4^2- -> BaSO4"),
+        ("Pb2+(aq) + 2I-(aq) -> PbI2(s)", "Pb^2+ + 2I^- -> PbI2"),
+        ("3Ag+(aq) + PO4^3-(aq) -> Ag3PO4(s)", "3Ag^+ + PO4^3- -> Ag3PO4"),
+        # A step is a sentence with an equation in it, not a bare equation.
+        ("The answer is 4Fe + 3O2 -> 2Fe2O3", "4Fe + 3O2 -> 2Fe2O3"),
+    ],
+)
+def test_the_same_equation_written_differently_still_matches(written, reference):
+    assert hints._same_equation(written, reference) is True
+
+
+@pytest.mark.parametrize(
+    "written,reference",
+    [
+        ("Ag+ + Cl- -> AgCl", "Ag^+ + Br^- -> AgBr"),   # a different halide
+        ("2H2 + O2 -> 2H2O", "H2 + O2 -> H2O"),         # different coefficients
+        ("Ag+ + Cl- -> AgCl", "Ag^2+ + Cl^- -> AgCl"),  # a different charge
+    ],
+)
+def test_a_different_equation_does_not_match(written, reference):
+    """Comparing by composition must not become comparing by nothing."""
+    assert hints._same_equation(written, reference) is False

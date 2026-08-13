@@ -61,11 +61,18 @@ ROW_POINTER = re.compile(
 # Square brackets are not enough on their own. [H+], [OH-] and [A-] are how
 # concentration is written on every pH page in the world, and flagging them
 # reported four leaks in a run where the hints were correct.
+# [H+], [OH-] and [A-] are how concentration is written on every pH page in
+# the world, and CH3C(=O)OH is a condensed formula a student reads without
+# blinking. What is not readable is a bare skeleton: CCCCC, CC(=O)OC, or a
+# stereocentre. Flagging the first group reported six leaks in a run where
+# every hint was correct.
 SMILES_SHAPE = re.compile(
-    r"[A-Za-z][A-Za-z0-9]*\(=O\)"          # a carbonyl written the SMILES way
-    r"|\[[A-Za-z][a-z]?[Hh]\d?[+-]?\]"     # [NH4], [CH3], explicit hydrogens
-    r"|\[[A-Za-z][a-z]?@{1,2}"             # stereochemistry
-    r"|(?<![A-Za-z0-9])C{3,}(?![A-Za-z0-9])"  # a bare carbon chain
+    r"(?<![A-Za-z0-9])C{3,}(?![A-Za-z0-9])"          # a bare carbon chain
+    # A skeleton of bare atoms and bonds: CC(=O)OC, CC(C)C. The token has to
+    # start on a carbon with no hydrogen count after it, which is what keeps
+    # the condensed CH3C(=O)OCH3 out of it.
+    r"|(?<![A-Za-z0-9])C[C()=#O]{3,}(?![A-Za-z0-9])"
+    r"|\[[A-Za-z][a-z]?@{1,2}"                       # stereochemistry
 )
 
 EQUATION_CONCEPTS = {"balance", "net_ionic", "half_reaction"}
