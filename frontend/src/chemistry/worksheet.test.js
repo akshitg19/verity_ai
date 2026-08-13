@@ -202,3 +202,46 @@ describe("promptsComplete", () => {
     );
   });
 });
+
+describe("asking for another line", () => {
+  const sheet = () =>
+    buildWorksheet(
+      { id: "stoichiometry", input: "numeric" },
+      { label: "Molar mass", fields: [{ name: "formula", label: "Formula", ink: "formula" }] },
+      { inputMode: "numeric" }
+    );
+
+  it("adds a row when asked", () => {
+    const worksheet = sheet();
+
+    expect(growWorkingRows(worksheet, { addedRows: 1 })).toBe(
+      growWorkingRows(worksheet, {}) + 1
+    );
+  });
+
+  it("still adds a row after the answer box is filled", () => {
+    // The reason this exists. Automatic growth freezes on a filled answer
+    // box, which is exactly when somebody who wants one more line of working
+    // finds the page will not give them one.
+    const worksheet = sheet();
+    const frozen = growWorkingRows(worksheet, { answerFilled: true });
+
+    expect(growWorkingRows(worksheet, { answerFilled: true, addedRows: 3 })).toBe(
+      frozen + 3
+    );
+  });
+
+  it("never shrinks the box the ink is already in", () => {
+    const worksheet = sheet();
+    const grown = growWorkingRows(worksheet, {
+      inkRows: [worksheet.workingStart + 8],
+    });
+
+    expect(
+      growWorkingRows(worksheet, {
+        inkRows: [worksheet.workingStart + 8],
+        addedRows: 1,
+      })
+    ).toBeGreaterThanOrEqual(grown);
+  });
+});

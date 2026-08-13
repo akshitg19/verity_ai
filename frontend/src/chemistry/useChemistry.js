@@ -145,6 +145,13 @@ export default function useChemistry({
   // under the pen rather than a moment later, when a row settles.
   const [inkRows, setInkRows] = useState(() => new Set());
 
+  // Rows the student asked for with the + under the working box. Automatic
+  // growth stops once the answer box has something in it, which is exactly
+  // the moment somebody who wants one more line of working discovers they
+  // cannot have it.
+  const [addedRows, setAddedRows] = useState(0);
+  const addWorkingRow = useCallback(() => setAddedRows((n) => n + 1), []);
+
   const inputMode = inputModeFor(topic, problemType);
   const isDrawing = isWholePageChemistryInput(inputMode);
 
@@ -157,6 +164,7 @@ export default function useChemistry({
         inputMode,
         workingRows: growWorkingRows(baseWorksheet, {
           inkRows: [...inkRows],
+          addedRows,
           answerFilled: Boolean(
             lines
               .find((line) => line.row === baseWorksheet.answerRow)
@@ -800,7 +808,22 @@ export default function useChemistry({
   // with it, and far better than no hint at all.
   const readWorkingLines = useCallback(async () => {
     const sheet = worksheetRef.current;
-    if (!sheet || sheet.kind !== KINDS.ANSWER || !getStrokes) return [];
+    if (!sheet) return [];
+
+    // A steps page has already read every working row, because on those
+    // topics each row is a judged step. Those transcriptions are sitting in
+    // `lines` and were simply never handed to the hint layer, so balancing,
+    // net ionic and half-reaction hints were written without ever seeing the
+    // working. Reusing them costs nothing: no image, no second call.
+    if (sheet.kind === KINDS.STEPS) {
+      return orderedChemistryLines(linesRef.current)
+        .filter((line) => zoneAtRow(sheet, line.row) === ZONES.WORKING)
+        .map((line) => (line.text ?? "").trim())
+        .filter(Boolean)
+        .slice(0, MAX_WORKING_LINES);
+    }
+
+    if (sheet.kind !== KINDS.ANSWER || !getStrokes) return [];
 
     const byRow = new Map();
     for (const stroke of getStrokes() ?? []) {
@@ -1041,6 +1064,7 @@ export default function useChemistry({
     questionRows,
     questionVerb,
     worksheet,
+    addWorkingRow,
     targetPicture,
     answerText,
     answerVerdict:

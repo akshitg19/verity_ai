@@ -3176,3 +3176,69 @@ red.
 Still open from that session: whether level 1 falls back on the other
 structure types for the same missing-vault reason or a different one. It
 needs a live run to answer and has not had one.
+
+## 27. A problem we cannot solve now gets a real hint, Aug 12
+
+The second handwriting session, on the numeric topics and net ionic. Four
+findings, and the last one is a product call rather than a bug.
+
+**A number with its unit on it was dropped silently.** `Number("12.0 M")`
+is `NaN`, so the field never reached the payload, so a dilution with all
+four boxes written arrived at the solver with two of them missing and came
+back "a dilution problem needs exactly three of M1, V1, M2, V2". The page
+prints that as "outside what we can check yet", about a question the
+student had written perfectly. Every Ka on the site had it worse: nobody
+writes `1.8e-5` by hand, they write `1.8 x 10^-5`, and that was `NaN` too.
+The value reader now takes the first number and ignores a trailing unit,
+reads `x 10^-n`, and still refuses a box with two numbers in it, because
+guessing which one is meant is the confident-wrong behaviour this product
+does not have.
+
+Dilution needs no "find what" dropdown, incidentally. Leave the box you
+want solved empty and the solver already solves for whichever of the four
+is missing, in either direction.
+
+**The working never reached the hint layer on a steps page.**
+`readWorkingLines` returned early on anything that was not an answer-box
+worksheet, so balancing, net ionic and half-reaction hints were written
+having seen one line. Those pages transcribe every working row already,
+because each row is a judged step, so the lines were sitting in `lines`
+and simply were not passed. Reusing them costs nothing: no image, no
+second call.
+
+**Nothing marked the answer on a steps page.** Still true. Balancing and
+redox have working rows and no answer box, so the last line is the answer
+by convention and nothing says so.
+
+### The call: no vault no longer means the static floor
+
+Until now, a problem the deterministic engine could not solve ahead of time
+got the template on all three levels, plus a link out. On a net ionic
+equation our solubility rules cannot settle, that was the entire ladder,
+and it is what "the hint ladder is useless, everything is built in" was
+describing.
+
+The hint layer now generates for chemistry even with no vault. What is
+given up is real and is written down here rather than glossed: **on those
+problems only, the answer is not provably withheld.** The model is never
+told an answer, because there is no answer to tell it, but there is also no
+redaction reference, so mechanism 2 does not run. Everything else stands:
+math is untouched and still static, an unconfigured model is still the
+floor, and a level 2 worked example is still verified by our own engine
+before it renders or it does not render.
+
+Same reasoning as the Aug 10 withholding call, and it should be revisited
+the same way: a hint written from the question and their own work beats a
+sentence that would fit any problem in the topic.
+
+### Still not done, and asked for
+
+- [ ] Level 2 falls back to a link when the verifier rejects an example
+      twice. The ask is to show the model's example anyway. That is the one
+      rule `CLAUDE.md` calls non-negotiable, so it is not being changed
+      without a decision on the record.
+- [ ] An answer box on the steps pages, so balancing and redox have one
+      line that is the answer rather than a convention.
+- [ ] Level 3 on the numeric topics reads the working but does not lean on
+      it hard enough: gibberish working still gets a hint about the
+      compound rather than about what they wrote.

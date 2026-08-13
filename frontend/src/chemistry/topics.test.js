@@ -388,3 +388,58 @@ describe("a structure question a student can actually ask", () => {
     ).toBe("ethene");
   });
 });
+
+describe("a number as a student writes one", () => {
+  // This was silent and it cost whole problems. A dilution with all four
+  // boxes filled arrived at the solver with two of them missing, and the
+  // page said "outside what we can check yet" about a perfectly good
+  // question.
+  const dilution = TOPIC_BY_ID.solutions.types.find((t) => t.id === "dilution");
+  const payload = (values) =>
+    TOPIC_BY_ID.solutions.buildPayload(dilution, values, []);
+
+  it("reads a value with its unit written after it", () => {
+    const body = payload({
+      initial_concentration_m: "12.0 M",
+      initial_volume_l: "0.010 L",
+      final_concentration_m: "0.500 M",
+    });
+
+    expect(body.initial_concentration_m).toBe(12);
+    expect(body.initial_volume_l).toBe(0.01);
+    expect(body.final_concentration_m).toBe(0.5);
+  });
+
+  it("leaves the box being solved for out of the payload", () => {
+    const body = payload({
+      initial_concentration_m: "12.0 M",
+      initial_volume_l: "0.010 L",
+      final_concentration_m: "0.500 M",
+      final_volume_l: "",
+    });
+
+    expect("final_volume_l" in body).toBe(false);
+  });
+
+  it("reads a Ka the way it is written by hand", () => {
+    const weakAcid = TOPIC_BY_ID.solutions.types.find(
+      (t) => t.id === "weak_acid_ph"
+    );
+    const body = TOPIC_BY_ID.solutions.buildPayload(
+      weakAcid,
+      { concentration_m: "0.10 M", ka: "1.8 x 10^-5" },
+      []
+    );
+
+    expect(body.ka).toBeCloseTo(1.8e-5, 12);
+  });
+
+  it("refuses working written into a value box", () => {
+    // "44.01 / 22.00" is two numbers and a division. Guessing which one is
+    // meant is exactly the confident-wrong behaviour this product must not
+    // have, so it stays out of the payload.
+    const body = payload({ initial_concentration_m: "44.01 / 22.00" });
+
+    expect("initial_concentration_m" in body).toBe(false);
+  });
+});

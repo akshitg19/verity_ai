@@ -59,9 +59,46 @@ export function parsePairs(text) {
   return result;
 }
 
+// A number as a student writes one, which is not a number as `Number()`
+// reads one.
+//
+// This was silent and it cost whole problems. `Number("12.0 M")` is NaN, so
+// the field was dropped from the payload, so a dilution with all four boxes
+// filled arrived at the solver with two of them missing and came back
+// "a dilution problem needs exactly three of M1, V1, M2, V2" -- which the UI
+// prints as "outside what we can check yet". The student had written a
+// perfectly good question. Same for every Ka on the page: nobody writes
+// 1.8e-5 by hand, they write 1.8 x 10^-5, and that was NaN too.
+//
+// Deliberately narrow. It takes the first number in the box and ignores a
+// trailing unit; it does not try to read arithmetic. A box with two numbers
+// in it is not a value and still comes back null.
+const SCIENTIFIC_RE = /^([+-]?\d*\.?\d+)\s*(?:x|\*|×)\s*10\s*\^?\s*([+-]?\d+)/i;
+const LEADING_NUMBER_RE = /^[+-]?\d*\.?\d+(?:e[+-]?\d+)?/i;
+
 const number = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && value !== "" ? parsed : null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const text = String(value ?? "")
+    .trim()
+    // The reader writes a superscript minus as a unicode dash, and a student
+    // writing 10^-5 by hand often produces one.
+    .replace(/[−–—]/g, "-");
+  if (!text) return null;
+
+  const scientific = text.match(SCIENTIFIC_RE);
+  if (scientific) {
+    const parsed = Number(scientific[1]) * 10 ** Number(scientific[2]);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  const leading = text.match(LEADING_NUMBER_RE);
+  if (!leading) return null;
+  // Anything left over must be a unit, not a second number: "5.85 g" is a
+  // mass and "44.01 / 22.00" is working that belongs in the working box.
+  const rest = text.slice(leading[0].length);
+  if (/\d/.test(rest)) return null;
+  const parsed = Number(leading[0]);
+  return Number.isFinite(parsed) ? parsed : null;
 };
 
 const field = (name, label, extra = {}) => ({

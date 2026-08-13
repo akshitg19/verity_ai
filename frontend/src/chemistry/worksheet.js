@@ -253,18 +253,33 @@ export function isDrawingRow(worksheet, row) {
  */
 export function growWorkingRows(
   worksheet,
-  { inkRows = [], answerFilled = false } = {}
+  { inkRows = [], answerFilled = false, addedRows = 0 } = {}
 ) {
   if (!worksheet) return MIN_WORKING_ROWS;
-  if (worksheet.answerRow !== null && answerFilled) return worksheet.workingRows;
+
+  // Rows the student asked for by pressing +. They are a floor, never
+  // undone by the automatic growth and never frozen by the answer box: the
+  // automatic growth stops the moment the answer is written, which is
+  // exactly when somebody who wants to add another line of working finds
+  // that they cannot. Asking is always allowed.
+  const asked = Math.max(0, Math.round(addedRows));
+  const floor = Math.min(MIN_WORKING_ROWS + asked, MAX_WORKING_ROWS);
+
+  if (worksheet.answerRow !== null && answerFilled) {
+    return Math.max(worksheet.workingRows, floor);
+  }
 
   const used = inkRows
     .filter((row) => zoneAtRow(worksheet, row) === ZONES.WORKING)
     .reduce((deepest, row) => Math.max(deepest, row), -1);
-  if (used < 0) return MIN_WORKING_ROWS;
+  if (used < 0) return floor;
 
   return Math.min(
-    Math.max(used - worksheet.workingStart + 1 + HEADROOM_ROWS, MIN_WORKING_ROWS),
+    Math.max(
+      used - worksheet.workingStart + 1 + HEADROOM_ROWS,
+      MIN_WORKING_ROWS,
+      floor
+    ),
     MAX_WORKING_ROWS
   );
 }
