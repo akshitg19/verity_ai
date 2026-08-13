@@ -601,6 +601,89 @@ def test_verification_retries_before_giving_up(monkeypatch, ph_session):
     assert response.worked_example is not None
 
 
+# A different acid at a different concentration whose pH lands on the
+# student's own answer of 2.875. Nothing is wrong with it: it verifies, and
+# its numbers differ from theirs. It is the collision the audit saw once in
+# sixty, where the student reads their own answer inside an example about
+# something else.
+ECHOING_SOLUTIONS_EXAMPLE = {
+    "problem": "What is the pH of 0.0500 M propanoic acid? Ka = 3.6 x 10^-5",
+    "technique": "Set up an ICE table and solve for x, then take -log10(x)",
+    "steps": [
+        "Ka = x^2 / (0.05 - x)",
+        "x = 1.3238e-3",
+        "pH = 2.8782",
+    ],
+    "check": {
+        "task": "weak_acid_ph",
+        "params": {"concentration_m": 0.05, "ka": 3.6e-5},
+        "answer": 2.88,
+    },
+}
+
+
+def test_an_example_stating_the_students_answer_is_regenerated(
+    monkeypatch, ph_session
+):
+    calls = {"count": 0}
+
+    def collides_then_clears(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return (ECHOING_SOLUTIONS_EXAMPLE, 500)
+        return (GOOD_SOLUTIONS_EXAMPLE, 500)
+
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(hints, "generate_json", collides_then_clears)
+    response = hints.generate_hint(request_for(ph_session, 2))
+
+    assert calls["count"] == 2
+    assert response.worked_example is not None
+    assert "2.8782" not in " ".join(response.worked_example.steps)
+
+
+def test_an_example_that_still_collides_is_shown_anyway(monkeypatch, ph_session):
+    """The second attempt is a preference, not a gate.
+
+    The example is a verified solution to a different problem, so a number
+    inside it that happens to equal the student's answer is a coincidence and
+    not a disclosure. Dropping to the static floor over one would cost the
+    student the whole worked example, which is the worse trade while
+    withholding is off.
+    """
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints, "generate_json", lambda *a, **k: (ECHOING_SOLUTIONS_EXAMPLE, 500)
+    )
+    response = hints.generate_hint(request_for(ph_session, 2))
+
+    assert response.source == "model"
+    assert response.worked_example is not None
+    assert response.worked_example.verified is True
+
+
+def test_a_coefficient_is_not_read_as_the_students_answer(
+    monkeypatch, balance_session
+):
+    """Small whole numbers are structure, not answers.
+
+    A balancing example is nothing but small integers, and treating each one
+    as a possible collision would regenerate every example in the topic.
+    """
+    calls = {"count": 0}
+
+    def counted(*args, **kwargs):
+        calls["count"] += 1
+        return (GOOD_BALANCE_EXAMPLE, 700)
+
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(hints, "generate_json", counted)
+    response = hints.generate_hint(request_for(balance_session, 2))
+
+    assert calls["count"] == 1
+    assert response.worked_example is not None
+
+
 def test_math_level_2_accepts_verified_example(monkeypatch, algebra_session):
     monkeypatch.setattr(hints, "is_configured", lambda: True)
 

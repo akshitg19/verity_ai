@@ -36,7 +36,7 @@ from judge.solutions import SolutionsProblem as _SolutionsProblem
 from judge.stoichiometry import TASK_INPUTS as _STOICHIOMETRY_INPUTS
 from judge.stoichiometry import StoichiometryProblem as _StoichiometryProblem
 from model import ModelError, generate_json, is_configured
-from redaction import numbers_differ, redact_or_fallback
+from redaction import numbers_differ, redact_or_fallback, standalone_numbers
 from schemas import HintRequest, HintResponse, WorkedExample
 from sessions import SESSIONS, ProblemSession
 
@@ -1507,12 +1507,44 @@ def _filtered(params: dict, model_class) -> dict:
     return cleaned
 
 
+def _example_restates_answer(
+    example: WorkedExample, session: ProblemSession
+) -> float | None:
+    """A number in the analogue's own working that equals the student's answer.
+
+    The analogue is a different problem about different substances, so this
+    is coincidence rather than disclosure, and with withholding off it is not
+    grounds for throwing a verified example away: no example at all is worse
+    than one whose fourth line happens to read 0.250. It is grounds for
+    preferring the other one, which is what this is used for.
+
+    Small whole numbers are ignored on the same reasoning as
+    `numbers_differ`: a subscript, a coefficient or a chain length is
+    structure, not an answer, and treating every 2 as a leak would regenerate
+    half the examples in the subject for nothing.
+    """
+    vault = session.vault
+    if vault is None:
+        return None
+    for line in [example.problem, example.technique, *example.steps]:
+        for value in standalone_numbers(line):
+            if float(value).is_integer() and abs(value) <= 10:
+                continue
+            if vault.matches_number(value):
+                return value
+    return None
+
+
 def _generate_level_2(
     req: HintRequest, session: ProblemSession
 ) -> tuple[WorkedExample, int] | None:
     topic = req.topic or session.topic
     problem = req.problem or session.problem
     total_latency = 0
+    # A verified example that happens to state the student's answer as one of
+    # its own intermediates. Held rather than returned, so a later attempt can
+    # beat it, and returned unchanged if none does.
+    echoing: WorkedExample | None = None
     for attempt in range(MAX_GENERATION_ATTEMPTS):
         try:
             payload, latency = generate_json(
@@ -1537,8 +1569,20 @@ def _generate_level_2(
             problem,
         )
         if example is not None:
-            return example, total_latency
+            echoed = _example_restates_answer(example, session)
+            if echoed is None:
+                return example, total_latency
+            logger.warning(
+                "level 2 example states the student's answer (%g) as its own "
+                "intermediate, attempt %d",
+                echoed,
+                attempt + 1,
+            )
+            echoing = echoing or example
+            continue
         logger.warning("level 2 example failed verification, attempt %d", attempt + 1)
+    if echoing is not None:
+        return echoing, total_latency
     return None
 
 
