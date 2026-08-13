@@ -162,6 +162,7 @@ export default function WorksheetOverlay({
   targetPicture = null,
   answerText = "",
   answerVerdict = null,
+  onAddRow = null,
   width,
   lineHeight = DEFAULT_LINE_HEIGHT,
 }) {
@@ -183,7 +184,6 @@ export default function WorksheetOverlay({
 
   return (
     <div
-      aria-hidden="true"
       style={{
         position: "absolute",
         top: 0,
@@ -301,6 +301,48 @@ export default function WorksheetOverlay({
           skipping the working, which is the part they are meant to be
           doing, and on a steps page it is not even true. */}
       <Caption top={working.top + 8}>{worksheet.workingLabel}</Caption>
+
+      {/* One more line, on request.
+          The automatic growth freezes the moment the answer box has
+          something in it, which is exactly when a student who wants another
+          line of working finds the page will not give them one. This is the
+          one thing on the sheet that takes a pointer, so it is the one thing
+          with `pointerEvents` turned back on. */}
+      {onAddRow && (
+        <button
+          type="button"
+          aria-label="Add another line of working"
+          onPointerDown={(event) => {
+            // The canvas is listening for pointers underneath. Without this
+            // the press both adds a row and draws a dot on the page.
+            event.stopPropagation();
+            event.preventDefault();
+          }}
+          onClick={onAddRow}
+          style={{
+            position: "absolute",
+            top: working.top + working.height - 26,
+            left,
+            width: 26,
+            height: 22,
+            display: "grid",
+            placeItems: "center",
+            padding: 0,
+            fontSize: 15,
+            fontWeight: 700,
+            lineHeight: 1,
+            color: PAPER.muted,
+            background: "transparent",
+            border: `1px dashed ${PAPER.line}`,
+            borderRadius: RADIUS.sm ?? 4,
+            cursor: "pointer",
+            pointerEvents: "auto",
+            touchAction: "manipulation",
+          }}
+        >
+          +
+        </button>
+      )}
 
       {hasAnswer && (
         <>

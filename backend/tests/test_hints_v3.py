@@ -140,8 +140,65 @@ def test_hint_request_accepts_math_topic():
 # ---------------------------------------------------------------------------
 
 
-def test_no_session_means_the_static_floor(monkeypatch):
+def test_a_problem_we_could_not_solve_still_gets_a_generated_hint(monkeypatch):
+    """The Aug 12 product call, and the reason for it.
+
+    A net ionic equation our solubility rules cannot settle used to get the
+    static floor on all three levels: one sentence that would fit any problem
+    in the topic, plus a link out. The model has never been told an answer
+    here, because there is no answer to tell it, so the hint is written from
+    the question and their own work.
+    """
     monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints,
+        "_generate_level_1",
+        lambda req, session, retry=None: ("You wrote AgCl on both sides.", 40),
+    )
+    response = hints.generate_hint(
+        HintRequest(
+            line_number=1,
+            error_type="unbalanced_atoms",
+            level=1,
+            subject="chemistry",
+            topic="balancing",
+            student_line="AgNO3 + NaCl -> AgCl + NaNO3",
+        )
+    )
+
+    assert response.source == "model"
+    assert response.hint == "You wrote AgCl on both sides."
+
+
+def test_an_unsolvable_problem_grants_no_level_3_budget(monkeypatch):
+    """The transient session is never stored, so it cannot become a way to
+    mint escalations for a problem the store knows nothing about."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints,
+        "_generate_level_3",
+        lambda req, session, retry=None: ("Work the charges through.", 40),
+    )
+    response = hints.generate_hint(
+        HintRequest(
+            line_number=1,
+            error_type="unbalanced_atoms",
+            level=3,
+            subject="chemistry",
+            topic="balancing",
+            student_line="Ag+ + Cl- -> AgCl",
+        )
+    )
+
+    assert response.source == "model"
+    # Never stored, so it cannot be fetched again and cannot accumulate
+    # state between requests.
+    assert SESSIONS.get("") is None
+
+
+def test_no_model_still_means_the_static_floor(monkeypatch):
+    """Losing the vault is a reason to generate. Losing the model is not."""
+    monkeypatch.setattr(hints, "is_configured", lambda: False)
     response = hints.generate_hint(
         HintRequest(
             line_number=1,

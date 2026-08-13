@@ -433,7 +433,16 @@ def _finalise(
     # having it.
     level_3_unrestricted = not WITHHOLD_ANSWER and req.level == 3
 
-    if (trusted or level_3_unrestricted) and worked_example is None:
+    # A problem we could not solve has no vault, so there is no answer to
+    # redact against and `check_outbound` refuses everything. Refusing here
+    # is what turned every hint on an unsolvable problem into the template.
+    # The hint is generated from the question and their own work and was
+    # never told an answer, which is not the same as proving it withheld;
+    # this is the one path where that proof does not exist, and it is the
+    # trade the Aug 12 product call made deliberately.
+    unsolved = vault is None
+
+    if (trusted or level_3_unrestricted or unsolved) and worked_example is None:
         # Text this module wrote itself -- a template, the terminal-step
         # message, the budget message -- has never been told an answer, so
         # it does not need checking against one. Running it through
@@ -1723,6 +1732,22 @@ def _generate_level_3(
 # ---------------------------------------------------------------------------
 # Entry point.
 # ---------------------------------------------------------------------------
+def _unsolved_session(req: HintRequest, topic: str | None) -> ProblemSession:
+    """A session for a problem we could not solve, carrying no vault.
+
+    It is never stored, so it grants no level-3 budget and survives nothing.
+    It exists so the ladder has somewhere to hang a topic and a problem
+    statement while the model writes a hint about work we cannot check.
+    """
+    return ProblemSession(
+        session_id="",
+        topic=topic or "",
+        problem=req.problem or "",
+        vault=None,
+        student_lines=[line for line in (req.working_lines or []) if line],
+    )
+
+
 def generate_hint(req: HintRequest) -> HintResponse:
     if req.level not in (1, 2, 3):
         raise ValueError("level must be 1, 2, or 3")
@@ -1736,12 +1761,34 @@ def generate_hint(req: HintRequest) -> HintResponse:
     topic = req.topic or (session.topic if session else None)
     resource = RESOURCES.get(topic or "", None)
 
-    # No session means no vault, and no vault means nothing to redact
-    # against. Serving the floor is the correct behaviour, not an error.
-    if session is None or not is_configured():
+    # Math is untouched, as `CLAUDE.md` requires: the v3 ladder is chemistry
+    # only, and math with no session stays on the static ladder it has always
+    # had, without so much as asking whether a model is configured.
+    if session is None and req.subject != "chemistry":
         return _finalise(
             req, _template_hint(req), session=session, resource=resource, trusted=True
         )
+
+    # No model, no hint. Nothing else can be done here.
+    if not is_configured():
+        return _finalise(
+            req, _template_hint(req), session=session, resource=resource, trusted=True
+        )
+
+    # No session means we could not solve the problem ahead of time, which
+    # until now meant the static floor on every level: a sentence that would
+    # fit any problem in the topic, plus a link out. On a net ionic equation
+    # our solubility rules cannot settle, or any question whose setup we
+    # could not parse, the whole ladder was that.
+    #
+    # Explicit product call, Aug 12, same one that suspended the withholding
+    # guarantee: a generated hint that has never been told the answer beats a
+    # template that never knew the question. What is given up is the
+    # redaction reference, so on these problems only, the answer is not
+    # provably withheld. See the unsolved-problem section of
+    # `final_tasks.md`.
+    if session is None:
+        session = _unsolved_session(req, topic)
 
     if req.student_line:
         SESSIONS.record_lines(req.session_id, [req.student_line])

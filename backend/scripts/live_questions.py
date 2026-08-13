@@ -60,7 +60,7 @@ QUESTIONS: list[Question] = [
                  "O 4 x 16.00 = 64.00", "53.96 + 96.18 + 64.00 = 214.14"],
         check_path="/chemistry/stoichiometry",
         check_body={"task": "molar_mass", "formula": "Al2(SO4)3"},
-    ),
+    ), # for some reason sometimes when Im writing working it creates new rows sometimes it doesnt in every text box for working or even answer key would add a really small + symbol below to just add like 3 rows and unlimited + symbols for unlimited rows btw don stop that feature  even for answer box ( do this for all 30 concepts not just stochio)
     Question(
         concept="molar_mass", topic="stoichiometry",
         problem="Find the molar mass of Ca(NO3)2",
@@ -81,7 +81,7 @@ QUESTIONS: list[Question] = [
                  "12.01 / 96.13 = 0.125", "0.125 x 100 = 12.5"],
         check_path="/chemistry/stoichiometry",
         check_body={"task": "percent_composition", "formula": "C6H12O6",
-                    "element": "C"},
+                    "element": "C"},# the hint 3 for all the places do not actually consider the working right cause I actually wrote gibberish and it just said to look how many nitorgen atoms were in the compound instead step 3 should maybe give a part of the answer obv this differs for every concept but maybe it could give the molar mass of nitrogen and the total molar mass? similar logical hint 3's for all stochio chem parts
     ),
     Question(
         concept="percent_composition", topic="stoichiometry",
@@ -93,7 +93,7 @@ QUESTIONS: list[Question] = [
                  "14.01 / 132.14 = 0.106", "0.106 x 100 = 10.6"],
         check_path="/chemistry/stoichiometry",
         check_body={"task": "percent_composition", "formula": "(NH4)2SO4",
-                    "element": "N"},
+                    "element": "N"}, # also why are decimal places alwasy not gconsidered in the answer and even if I write the whole number its showing right is this something we can fix or no if not its fine dont waste speed and tokens and API fpprr this
     ),
     Question(
         concept="moles_from_mass", topic="stoichiometry",
@@ -113,7 +113,7 @@ QUESTIONS: list[Question] = [
         correct="0.500", wrong="2.00", error_type="wrong_value", leak="0.50",
         working=["molar mass CO2 = 44.01", "44.01 / 22.00 = 2.00", "n = 2.00"],
         check_path="/chemistry/stoichiometry",
-        check_body={"task": "moles_from_mass", "formula": "CO2", "mass_g": 22.0},
+        check_body={"task": "moles_from_mass", "formula": "CO2", "mass_g": 22.0}, # hints 1 is  beautiful so if hint 3 is too hard to make perfect leave for now ask me before doing okay WAIT I spoke too soon why does hint for this link me to libre txt but not even an example of the question is this something that can be fixed why is it built in rather just asking AI to solve(tell me in clade no changes to code)
     ),
     Question(
         concept="mass_from_moles", topic="stoichiometry",
@@ -123,7 +123,7 @@ QUESTIONS: list[Question] = [
         correct="14.61", wrong="0.25", error_type="wrong_value", leak="14.6",
         working=["molar mass NaCl = 58.44", "0.25 mol", "m = 0.25"],
         check_path="/chemistry/stoichiometry",
-        check_body={"task": "mass_from_moles", "formula": "NaCl", "moles": 0.25},
+        check_body={"task": "mass_from_moles", "formula": "NaCl", "moles": 0.25}, # nice but could add atomic masses of na and cl 
     ),
     Question(
         concept="mass_from_moles", topic="stoichiometry",
@@ -160,7 +160,7 @@ QUESTIONS: list[Question] = [
                  "divide by 1.25: Fe 1 O 1.5"],
         check_path="/chemistry/stoichiometry",
         check_body={"task": "empirical_formula",
-                    "composition": {"Fe": 69.9, "O": 30.1}},
+                    "composition": {"Fe": 69.9, "O": 30.1}}, # hint 2 again leads to some random website but ig its fine for now
     ),
     Question(
         concept="molecular_formula", topic="stoichiometry",
@@ -191,7 +191,7 @@ QUESTIONS: list[Question] = [
         check_path="/chemistry/stoichiometry",
         check_body={"task": "molecular_formula",
                     "composition": {"C": 92.3, "H": 7.7},
-                    "target_molar_mass": 78.0},
+                    "target_molar_mass": 78.0}, # hint 2 same thing as above linking tor andom website
     ),
     Question(
         concept="limiting_reagent", topic="stoichiometry",
@@ -219,7 +219,7 @@ QUESTIONS: list[Question] = [
                  "2 Mg needs 1 O2", "O2 is limiting"],
         check_path="/chemistry/stoichiometry",
         check_body={"task": "limiting_reagent", "equation": "Mg + O2 -> MgO",
-                    "amounts": {"Mg": 24.0, "O2": 32.0}},
+                    "amounts": {"Mg": 24.0, "O2": 32.0}}, # hint 1, 2 had a read more the first time but then hint 2 only has it the second time and hint 3 doesnt work for this atm for many of these because it doesnt consider the working but this makes sense rn no need ot change
     ),
     Question(
         concept="theoretical_yield", topic="stoichiometry",
@@ -280,7 +280,7 @@ QUESTIONS: list[Question] = [
         check_path="/chemistry/stoichiometry",
         check_body={"task": "percent_yield", "equation": "H2 + O2 -> H2O",
                     "amounts": {"H2": 4.0, "O2": 32.0}, "product": "H2O",
-                    "actual_yield_g": 30.0},
+                    "actual_yield_g": 30.0}, # same for the last 2 just if hints 1, 2 and 3 are okay ( for this I wrote 137 as a wrong asnwer and it told me I mutiplied the masses of h2 and o2 but 32*4 is is not 137 right again bad wrong hints man)
     ),
 
     # -------------------------------------------------------------- solutions
@@ -334,7 +334,7 @@ QUESTIONS: list[Question] = [
                  "V2 = 0.120"],
         check_path="/chemistry/solutions",
         check_body={"task": "dilution", "initial_concentration_m": 12.0,
-                    "initial_volume_l": 0.010, "final_concentration_m": 0.5},
+                    "initial_volume_l": 0.010, "final_concentration_m": 0.5}, # this si not working only also dont you thinre should be some sorta look at claude prompt for more 
     ),
     Question(
         concept="strong_acid_ph", topic="solutions",
