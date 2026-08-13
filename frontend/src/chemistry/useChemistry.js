@@ -514,7 +514,22 @@ export default function useChemistry({
         if (pageScopeRef.current !== requestPage) return;
       }
 
-      if (!isDrawing || !strokes?.length) return;
+      if (!isDrawing) return;
+
+      // Never silent. This used to return here with no message at all, so a
+      // drawing that landed in the question zone, or a page with the
+      // structure drawn too high, left the answer sitting on "waiting"
+      // forever and there was nothing on screen to say why. A read that
+      // cannot happen has to say so.
+      if (!strokes?.length) {
+        setStatus({
+          notice:
+            "Nothing was found in the drawing area. The question boxes are " +
+            "at the top; draw the structure below them, under the line that " +
+            "says to draw it there.",
+        });
+        return;
+      }
       const id = ++requestId.current;
       const requestPageId = pageScopeRef.current;
       checkAbortRef.current?.abort();
