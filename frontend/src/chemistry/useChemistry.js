@@ -455,6 +455,10 @@ export default function useChemistry({
 
   // -- reading ------------------------------------------------------------
 
+  // `readWork` is declared before `readLine` and calls it, so it goes
+  // through a ref rather than reordering two long callbacks under a demo.
+  const readLineRef = useRef(null);
+
   const readWork = useCallback(
     async (allStrokes) => {
       // The question boxes are above the drawing area, and their ink is a
@@ -467,6 +471,35 @@ export default function useChemistry({
               isDrawingRow(sheet, getStrokeRow(stroke))
             )
           : allStrokes;
+
+      // The question boxes, read as text, at the same time.
+      //
+      // The canvas is in structure mode on a drawing page, and structure
+      // mode returns before it ever queues a row, so nothing on these pages
+      // was read row by row: not the drawing, which is deliberate, and not
+      // the question boxes, which was not. "Draw propan-2-ol" had a Name box
+      // that could not be filled by writing in it, by any means, because
+      // Read Page only ever sent the figure.
+      //
+      // `readLine` already knows a question box from a figure and fills the
+      // field itself. It was simply never called here.
+      if (sheet?.kind === KINDS.DRAW) {
+        const promptStrokes = new Map();
+        for (const stroke of allStrokes ?? []) {
+          const row = getStrokeRow(stroke);
+          if (!promptAtRow(sheet, row)) continue;
+          if (!promptStrokes.has(row)) promptStrokes.set(row, []);
+          promptStrokes.get(row).push(stroke);
+        }
+        for (const [row, rowStrokes] of promptStrokes) {
+          void readLineRef.current?.({
+            row,
+            strokes: rowStrokes,
+            pageId: pageScopeRef.current,
+          });
+        }
+      }
+
       if (!isDrawing || !strokes?.length) return;
       const id = ++requestId.current;
       const requestPageId = pageScopeRef.current;
@@ -604,6 +637,10 @@ export default function useChemistry({
     },
     [isDrawing, setValue]
   );
+
+  useEffect(() => {
+    readLineRef.current = readLine;
+  }, [readLine]);
 
   // The canvas invokes this after a row has been idle or explicitly finished.
   // Keeping the snapshot at the boundary prevents a later stroke from
