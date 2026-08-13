@@ -465,6 +465,7 @@ export default function useChemistry({
       // formula written as text. Sending it inside the figure would hand the
       // structure recogniser a picture with a caption in it.
       const sheet = worksheetRef.current;
+      const requestPage = pageScopeRef.current;
       const strokes =
         sheet?.kind === KINDS.DRAW
           ? (allStrokes ?? []).filter((stroke) =>
@@ -494,13 +495,23 @@ export default function useChemistry({
           if (!byPrompt.has(prompt.row)) byPrompt.set(prompt.row, []);
           byPrompt.get(prompt.row).push(stroke);
         }
-        for (const [row, rowStrokes] of byPrompt) {
-          void readLineRef.current?.({
-            row,
-            strokes: rowStrokes,
-            pageId: pageScopeRef.current,
-          });
-        }
+        // Awaited, and this is load-bearing rather than tidiness. Filling a
+        // question box calls `setValue`, which cancels the session and
+        // clears the verdict, and clearing the verdict bumps the request id
+        // and aborts whatever check is in flight. Fired off unawaited, the
+        // boxes came back mid-read and aborted the structure read that Read
+        // Page had just started: the drawing never landed and the answer sat
+        // on "waiting" however many times you pressed it.
+        await Promise.all(
+          [...byPrompt].map(([row, rowStrokes]) =>
+            readLineRef.current?.({
+              row,
+              strokes: rowStrokes,
+              pageId: pageScopeRef.current,
+            })
+          )
+        );
+        if (pageScopeRef.current !== requestPage) return;
       }
 
       if (!isDrawing || !strokes?.length) return;
