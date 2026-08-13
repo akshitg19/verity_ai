@@ -3137,3 +3137,42 @@ is worth finding out which of the two is wrong.**
 - [ ] Naming a target molecule is caught by resolving the name back to a
       structure, which needs Java for OPSIN. The container has none, so the
       check does not fire in production.
+
+## 26. What the first real handwriting session found, Aug 12
+
+Not the audit. A person with a stylus, asking the questions themselves,
+which is the one thing thirty concepts of scripted questions cannot test.
+Four findings, all of them in the half of the app the audit never touches:
+setting the question up.
+
+**The structure topics could not be asked from the page.** The reference
+molecule of an isomer question, and the starting material of a reaction,
+were typed SMILES in a side panel. SMILES is ours: the student has never
+seen one, the page is forbidden to print one, and the panel is not
+something anyone working with a stylus opens. So "draw an isomer of
+ethanol" could not be set up at all, and the check answered "fill in the
+question" while the working sat there transcribed. Both take a written
+name now, resolved by OPSIN, with the typed SMILES kept as the panel path.
+`structure_from_text` passes a SMILES straight through, so nothing that
+already worked starts needing Java.
+
+**"Draw propan-2-ol" opened no session.** The one drawing type whose
+question a student could already write was the one type whose `session()`
+returned null, so there was no vault, and with no vault levels 1 and 2
+never ask the model at all. That is the generic level 1 hint, and it was
+our own front end, not the ladder.
+
+**A name written in words read as chemistry.** `TEXT_PROMPT` said the line
+was an equation, a formula or a calculation, and told the reader to keep
+element symbols capitalised. Handwritten "propan-2-ol" had nowhere to land.
+It now has a rule of its own, lowercase, hyphens and locants kept.
+
+**Dark mode drew black on black.** The rule meant to rescue RDKit's black
+strokes on a dark card repainted them to `#14181a`, which is a dark
+*background* token. The drawing sits on a light plate in both themes now,
+the same call the ruled page already makes, which also keeps red oxygen
+red.
+
+Still open from that session: whether level 1 falls back on the other
+structure types for the same missing-vault reason or a different one. It
+needs a live run to answer and has not had one.

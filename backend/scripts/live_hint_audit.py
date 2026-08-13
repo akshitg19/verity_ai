@@ -275,6 +275,9 @@ def main() -> int:
     parser.add_argument("--concept", default="all")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--out", default="hint_audit.json")
+    # Half a run, one question per concept, for when the question is "does
+    # every concept still work" rather than "how good are the hints".
+    parser.add_argument("--per-concept", type=int, default=0)
     args = parser.parse_args()
     base = args.base.rstrip("/")
 
@@ -282,6 +285,16 @@ def main() -> int:
         question for question in QUESTIONS
         if args.concept in ("all", question.concept)
     ]
+    if args.per_concept > 0:
+        seen: dict[str, int] = {}
+        capped = []
+        for question in wanted:
+            count = seen.get(question.concept, 0)
+            if count >= args.per_concept:
+                continue
+            seen[question.concept] = count + 1
+            capped.append(question)
+        wanted = capped
     if not wanted:
         print(f"no questions for concept {args.concept!r}")
         return 2

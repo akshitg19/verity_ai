@@ -167,11 +167,15 @@ def transcribe_structure(image_base64: str) -> tuple[str, bool, str, int]:
 # ---------------------------------------------------------------------------
 TEXT_PROMPT = (
     "This image shows one line of a student's handwritten chemistry work on "
-    "ruled notebook paper. It may be a chemical equation, a formula, or a "
-    "calculation with units.\n"
+    "ruled notebook paper. It may be a chemical equation, a formula, a "
+    "calculation with units, or the name of a compound written in words.\n"
     "Transcribe it as plain text, exactly as written.\n"
     "Rules:\n"
     "- Put the transcription on the first line and nothing else on it.\n"
+    "- A name written in words is a name, not a formula. Write propan-2-ol, "
+    "ethanoic acid, methyl ethanoate as words, all lowercase, keeping every "
+    "hyphen and locant digit. Never convert a name into a formula and never "
+    "capitalise a letter inside one.\n"
     "- On a second line reply with exactly CONFIDENCE: high or "
     "CONFIDENCE: low. Use low if any subscript, superscript, charge, "
     "coefficient, or decimal point was ambiguous.\n"

@@ -124,6 +124,28 @@ def looks_like_a_name(text: str) -> bool:
     return bool(re.search(r"[aeiou]", text))
 
 
+def structure_from_text(text: str) -> str:
+    """A reference molecule written either way, resolved to a SMILES.
+
+    A student setting up their own question writes "ethanol", because that is
+    what the molecule is called. SMILES is ours: they have never seen it, the
+    page is forbidden to show it, and asking them to type one to ask a
+    question was the reason the structure topics could not be started from
+    the page at all.
+
+    A SMILES passes through untouched, so nothing that already worked
+    changes. Only text that reads as a name is sent to OPSIN, and OPSIN
+    being absent surfaces as `unsupported` rather than as a wrong answer,
+    which is the same gate the rest of this module uses.
+    """
+    if not isinstance(text, str) or not text.strip():
+        raise NameParseError("a reference molecule must be a non-empty string")
+    written = text.strip()
+    if not looks_like_a_name(written):
+        return written
+    return name_to_smiles(written)
+
+
 class NamingJudge(Judge[str, ChemistryStep, ChemistryLineVerdict]):
     """Checks a written name against a target structure.
 
@@ -252,4 +274,5 @@ __all__ = [
     "looks_like_a_name",
     "name_to_smiles",
     "opsin_available",
+    "structure_from_text",
 ]

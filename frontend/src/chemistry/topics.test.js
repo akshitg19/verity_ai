@@ -317,3 +317,74 @@ describe("nothing gets typed, across every topic", () => {
     expect(questionFieldFor(structure, fromFormula, {})).toBe("target_formula");
   });
 });
+
+describe("a structure question a student can actually ask", () => {
+  // Every one of these could only be set up by typing a SMILES into the
+  // panel, which is our notation and not theirs. Nobody with a stylus found
+  // it, so from the page these questions did not exist.
+  const organic = TOPIC_BY_ID.organic;
+  const structure = TOPIC_BY_ID.structure;
+  const typeOf = (topic, id) => topic.types.find((t) => t.id === id);
+
+  it("takes the isomer reference as a written name", () => {
+    const isomer = typeOf(structure, "isomer");
+    const written = isomer.fields.find((f) => f.name === "reference_name");
+
+    expect(written?.ink).toBeTruthy();
+    expect(
+      structure.session(isomer, { reference_name: "ethanol" }, "Draw an isomer")
+    ).toEqual({
+      topic: "structure",
+      problem: "Draw an isomer",
+      target_smiles: "ethanol",
+    });
+  });
+
+  it("still prefers a typed SMILES when one is given", () => {
+    const isomer = typeOf(structure, "isomer");
+
+    expect(
+      structure.session(
+        isomer,
+        { reference_name: "ethanol", reference_smiles: "CCO" },
+        "Draw an isomer"
+      ).target_smiles
+    ).toBe("CCO");
+  });
+
+  it("opens a session for a named compound, which it never used to", () => {
+    // No session means no vault, and no vault means the hint ladder serves
+    // the static floor however good the model is. This was the whole reason
+    // "Draw propan-2-ol" gave a generic level 1.
+    const drawFromName = typeOf(organic, "draw_from_name");
+
+    expect(
+      organic.session(
+        drawFromName,
+        { target_name: "propan-2-ol" },
+        "Draw propan-2-ol"
+      )
+    ).toEqual({
+      topic: "organic",
+      problem: "Draw propan-2-ol",
+      target_name: "propan-2-ol",
+    });
+  });
+
+  it("opens no session when the name has not been written yet", () => {
+    const drawFromName = typeOf(organic, "draw_from_name");
+
+    expect(organic.session(drawFromName, {}, "Draw it")).toBe(null);
+  });
+
+  it("takes a reaction's starting material as a written name", () => {
+    const reaction = typeOf(organic, "reaction");
+    const written = reaction.fields.find((f) => f.name === "reactant_name");
+
+    expect(written?.ink).toBeTruthy();
+    expect(
+      organic.session(reaction, { reactant_name: "ethene" }, "React it")
+        .target_smiles
+    ).toBe("ethene");
+  });
+});
