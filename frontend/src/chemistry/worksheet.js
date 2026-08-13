@@ -158,7 +158,20 @@ export function buildWorksheet(
       // or "draw an isomer of this" of somebody who has never heard of
       // SMILES. It needs real height to be readable.
       secret,
-      rows: secret ? PICTURE_ROWS : 1,
+      // Two rows for a written box on a drawing page.
+      //
+      // A stroke belongs to the row containing its vertical centre, and a
+      // formula written by hand does not respect a 64px band: write C4H10
+      // with a tall C and it centres a few pixels low, lands in the next
+      // row, and on a drawing page the next row is the figure. So the
+      // formula went to the structure recogniser as part of the drawing and
+      // the question box stayed empty, which reads exactly like the box
+      // being ignored.
+      //
+      // Only on drawing pages. Everywhere else the row below a question box
+      // is another question box or working, where the same overflow is
+      // read as text and costs nothing.
+      rows: secret ? PICTURE_ROWS : kind === KINDS.DRAW && isWritable(field) ? 2 : 1,
       options: field.options ?? null,
     };
     row += prompt.rows;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { TOPICS } from "./topics";
+import { TOPICS, TOPIC_BY_ID } from "./topics";
 import {
   KINDS,
   MIN_WORKING_ROWS,
@@ -283,5 +283,55 @@ describe("an answer box big enough for the answer", () => {
 
     expect(sheet.answerRow).toBeNull();
     expect(sheet.answerRows).toBe(0);
+  });
+});
+
+describe("a question box a formula fits in", () => {
+  // A stroke belongs to the row containing its vertical centre, so a
+  // formula written by hand does not respect a 64px band. Write C4H10 with
+  // a tall C, it centres a few pixels low, and it lands in the next row.
+  // On a drawing page the next row is the figure, so the formula went to
+  // the structure recogniser as part of the drawing and the question box
+  // stayed empty. It read exactly like the box being ignored.
+  const drawn = (topicId, typeId) => {
+    const topic = TOPIC_BY_ID[topicId];
+    return buildWorksheet(topic, topic.types.find((t) => t.id === typeId));
+  };
+
+  it("gives a written box two rows on a drawing page", () => {
+    const sheet = drawn("structure", "formula_structure");
+
+    expect(sheet.kind).toBe(KINDS.DRAW);
+    expect(promptAtRow(sheet, 0)?.key).toBe("target_formula");
+    expect(promptAtRow(sheet, 1)?.key).toBe("target_formula");
+    // The row under the box is the drawing, and it starts below both.
+    expect(sheet.workingStart).toBe(2);
+  });
+
+  it("keeps every drawing topic's question out of the figure", () => {
+    for (const [topicId, typeId] of [
+      ["structure", "formula_structure"],
+      ["structure", "isomer"],
+      ["organic", "draw_from_name"],
+      ["organic", "reaction"],
+    ]) {
+      const sheet = drawn(topicId, typeId);
+      const written = sheet.prompts.filter((p) => p.source === "ink");
+      for (const prompt of written) {
+        expect(prompt.rows).toBe(2);
+        expect(isDrawingRow(sheet, prompt.row)).toBe(false);
+        expect(isDrawingRow(sheet, prompt.row + 1)).toBe(false);
+      }
+    }
+  });
+
+  it("leaves the numeric pages on one row", () => {
+    // There the row under a question box is another box or working, where
+    // the same overflow is read as text and costs nothing.
+    const topic = TOPIC_BY_ID.stoichiometry;
+    const sheet = buildWorksheet(topic, topic.types[0]);
+
+    expect(sheet.kind).toBe(KINDS.ANSWER);
+    expect(sheet.prompts[0].rows).toBe(1);
   });
 });

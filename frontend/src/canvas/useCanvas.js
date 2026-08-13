@@ -569,6 +569,20 @@ export default function useCanvas({
     if (isStructure) {
       startTransition(() => setStrokes(updatedStrokes));
       onStructureChangedRef.current();
+      // The question boxes above the drawing still read themselves.
+      //
+      // Structure mode used to return here, so no row on a drawing page was
+      // ever queued: not the figure, which is right and goes through Read
+      // Page as one image, and not the boxes above it, which meant a
+      // formula or a compound name could not be read by writing it. The
+      // consumer decides which rows are readable and drops the drawing
+      // rows, so offering every row here costs nothing and asks for
+      // nothing.
+      if (rowIdleTimerRef.current) clearTimeout(rowIdleTimerRef.current);
+      rowIdleTimerRef.current = setTimeout(() => {
+        notifyRowReady(row);
+        rowIdleTimerRef.current = null;
+      }, 1500);
       return;
     }
 

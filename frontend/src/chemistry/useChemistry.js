@@ -484,14 +484,17 @@ export default function useChemistry({
       // `readLine` already knows a question box from a figure and fills the
       // field itself. It was simply never called here.
       if (sheet?.kind === KINDS.DRAW) {
-        const promptStrokes = new Map();
+        // Grouped by box rather than by row. A written box is two rows tall
+        // on these pages, and a formula whose strokes straddle both is one
+        // formula, not two half-read ones.
+        const byPrompt = new Map();
         for (const stroke of allStrokes ?? []) {
-          const row = getStrokeRow(stroke);
-          if (!promptAtRow(sheet, row)) continue;
-          if (!promptStrokes.has(row)) promptStrokes.set(row, []);
-          promptStrokes.get(row).push(stroke);
+          const prompt = promptAtRow(sheet, getStrokeRow(stroke));
+          if (!prompt) continue;
+          if (!byPrompt.has(prompt.row)) byPrompt.set(prompt.row, []);
+          byPrompt.get(prompt.row).push(stroke);
         }
-        for (const [row, rowStrokes] of promptStrokes) {
+        for (const [row, rowStrokes] of byPrompt) {
           void readLineRef.current?.({
             row,
             strokes: rowStrokes,
