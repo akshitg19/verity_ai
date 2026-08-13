@@ -3272,16 +3272,38 @@ organic failures are the front end failing to ask the question, not the
 judges failing to answer it. That is worth stating because the two look
 identical from the page.
 
-### Still not done, and asked for
+### Both closed, same day
 
-- [ ] An answer box on the steps pages, so balancing and redox have one
-      line that is the answer rather than a convention.
-- [ ] The drawing topics send no working to the hint layer, because their
-      working is the drawing. Level 1 and 3 there see a SMILES they are
-      forbidden to quote and nothing else. A word description of the
-      drawing, derived from RDKit rather than from the model, is the fix
-      and is not written yet. **This is the remaining reason structure and
-      organic hints read thin.**
+- [x] **An answer box on the steps pages.** Balancing, net ionic and half
+      reaction have one now. The last line of the working used to be the
+      answer by convention, which said so nowhere: nothing on the page
+      meant "this is my answer", so nothing could be marked as one. The
+      working above it is still judged row by row, which is the promise on
+      those topics and is untouched; the answer box is one more judged line
+      under it. No unit is printed, because an equation is not measured in
+      anything.
+
+- [x] **The drawing topics now describe the drawing.** `describe_structure`
+      in `judge/chemistry.py` turns the recognised structure into the words
+      a person would use for it: "2 carbon atoms, formula C2H4O, containing
+      an aldehyde group". It goes into the level 1 and level 3 prompts on
+      structure and organic only. Deterministic, from RDKit, never from a
+      model, and it says only what is on the page: a recogniser reads, it
+      never decides.
+
+      This was the last reason those hints read thin. The model had one
+      thing to go on, the SMILES, and the standing rule forbids writing a
+      SMILES at a student, so level 1 was pointing at a line it could not
+      quote. An unreadable drawing adds nothing to the prompt rather than
+      failing.
+
+### Still open
+
 - [ ] Level 3 on the numeric topics reads the working but does not lean on
       it hard enough: gibberish working still gets a hint about the
       compound rather than about what they wrote.
+- [ ] The sweep is deterministic only. It proves every concept opens a
+      session and judges both answers correctly, which is what makes the
+      hint ladder generate rather than fall back, but it does not read a
+      single hint. `live_hint_audit.py` is still the only thing that does,
+      and it has not been run since any of these changes.

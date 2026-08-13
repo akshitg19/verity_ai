@@ -580,6 +580,39 @@ _MATH_LEVEL_1_PROMPT = (
 )
 
 
+def _drawing_block(req: HintRequest) -> str:
+    """What the student drew, in words, for the topics whose working is a picture.
+
+    On the drawing topics nothing is transcribed: the middle of the page is
+    one figure, read whole. So the hint layer had exactly one thing to go on,
+    the SMILES the recogniser produced, and it is forbidden to write that at
+    a student. Level 1 was left pointing at a line it could not quote, which
+    is why hints on structure and organic read thin next to the numeric
+    topics.
+
+    The description is deterministic, from RDKit, and says only what is on
+    the page. It never says whether the drawing is right; the judge has
+    already settled that and its verdict arrives separately.
+    """
+    if (req.topic or "") not in _STRUCTURE_TOPICS:
+        return ""
+    line = (req.student_line or "").strip()
+    if not line:
+        return ""
+
+    from judge.chemistry import describe_structure
+
+    described = describe_structure(line)
+    if not described:
+        return ""
+    return (
+        "\nWhat they drew, read back from the picture: "
+        + described
+        + ". Describe it to them in these terms. They drew a picture and "
+        "have never seen a SMILES string, so never write one.\n"
+    )
+
+
 def _working_block(req: HintRequest) -> str:
     """The student's whole page, when they wrote one.
 
@@ -741,6 +774,7 @@ def _generate_level_1(
         + f"\nThe line before: {req.previous_line or '(this is the first line)'}"
         + f"\nThe flagged line (line {req.line_number}): {req.student_line}"
         + _working_block(req)
+        + _drawing_block(req)
         + f"\nWhat the checker proved: {req.error_type}"
     )
 
@@ -1781,6 +1815,7 @@ def _generate_level_3(
         + f"\nThe line before: {req.previous_line or '(this is the first line)'}"
         + f"\nTheir line (line {req.line_number}): {req.student_line}"
         + _working_block(req)
+        + _drawing_block(req)
         + f"\nWhat the checker proved: {req.error_type}"
     )
 

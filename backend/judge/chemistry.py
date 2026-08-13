@@ -426,6 +426,57 @@ class FunctionalGroupJudge(Judge[str, ChemistryStep, ChemistryLineVerdict]):
 DEFAULT_DRAWING_SIZE = (320, 240)
 
 
+def describe_structure(smiles: str) -> str | None:
+    """A drawing, in the words a person would use for it.
+
+    The hint layer is forbidden to write a SMILES at a student, and on the
+    drawing topics a SMILES is the only thing it had: the working is a
+    picture, so nothing is transcribed, and level 1 was left describing a
+    line it could not quote. This is the same drawing said out loud, so a
+    hint can name what they actually drew.
+
+    Deterministic, from RDKit, never from a model. It states what is on the
+    page and nothing about whether it is right, which is the recogniser's
+    side of the line: a recogniser reads, it never decides.
+
+    >>> describe_structure("CC=O")
+    '2 carbon atoms, formula C2H4O, containing an aldehyde group'
+    """
+    try:
+        molecule = _parse_smiles(smiles)
+    except (ChemistryParseError, UnsupportedChemistryError):
+        return None
+
+    parts: list[str] = []
+    carbons = sum(
+        1 for atom in molecule.GetAtoms() if atom.GetAtomicNum() == 6
+    )
+    if carbons:
+        parts.append(f"{carbons} carbon atom{'s' if carbons != 1 else ''}")
+
+    try:
+        parts.append(f"formula {rdMolDescriptors.CalcMolFormula(molecule)}")
+    except Exception:  # pragma: no cover - defensive
+        pass
+
+    rings = molecule.GetRingInfo().NumRings()
+    if rings:
+        parts.append(f"{rings} ring{'s' if rings != 1 else ''}")
+
+    groups = [
+        name.replace("_", " ")
+        for name, pattern in _FUNCTIONAL_GROUP_PATTERNS.items()
+        if pattern is not None and molecule.HasSubstructMatch(pattern)
+    ]
+    if groups:
+        parts.append(
+            "containing "
+            + ", ".join(f"{'an' if g[0] in 'aeiou' else 'a'} {g} group" for g in groups)
+        )
+
+    return ", ".join(parts) if parts else None
+
+
 def render_svg(smiles: str, size: tuple[int, int] = DEFAULT_DRAWING_SIZE) -> str:
     """Draw a structure as an SVG, using the RDKit already in the stack.
 

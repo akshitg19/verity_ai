@@ -177,10 +177,17 @@ export function buildWorksheet(
     prompts,
     workingStart,
     workingRows: rows,
-    // Only an ANSWER page has an answer box. On a STEPS page the last line
-    // of the working is the answer, and on a DRAW page the answer is the
-    // picture.
-    answerRow: kind === KINDS.ANSWER ? workingStart + rows : null,
+    // A steps page has one too now. It used to rely on the last line of the
+    // working being the answer by convention, which said so nowhere: a
+    // student balancing an equation had no box that meant "this is my
+    // answer", and neither did we, so nothing could be marked as one. The
+    // working above it is still judged row by row, which is the whole
+    // promise on these topics and is untouched.
+    //
+    // A drawing page still has none. There the answer is the picture.
+    answerRow: kind === KINDS.DRAW ? null : workingStart + rows,
+    // Equations are not measured in anything, so a steps page prints no
+    // unit rather than printing a wrong one.
     answerUnit: kind === KINDS.ANSWER ? problemType.answerUnit ?? null : null,
     workingLabel:
       kind === KINDS.DRAW

@@ -695,9 +695,13 @@ export default function useChemistry({
       ? linesRef.current.filter(
           (line) => line.row === active.answerRow && line.text.trim()
         )
-      : orderedChemistryLines(linesRef.current).filter(
-          (line) => zoneAtRow(active, line.row) === ZONES.WORKING
-        );
+      : // A steps page judges its working row by row, and now the answer
+        // box under it as well: the last line of the working used to be the
+        // answer by convention and nothing on the page said so.
+        orderedChemistryLines(linesRef.current).filter((line) => {
+          const zone = zoneAtRow(active, line.row);
+          return zone === ZONES.WORKING || zone === ZONES.ANSWER;
+        });
     const steps = isDrawing
       ? written
         ? [{ line_number: 1, smiles: written }]
@@ -861,9 +865,12 @@ export default function useChemistry({
       ? chemistryStepLines(linesRef.current, questionRowsRef.current)
       : sheet.kind === KINDS.ANSWER
       ? linesRef.current.filter((line) => line.row === sheet.answerRow)
-      : orderedChemistryLines(linesRef.current).filter(
-          (line) => zoneAtRow(sheet, line.row) === ZONES.WORKING
-        );
+      : // Same list `checkAnswer` sent, in the same order, or the line
+        // number the hint layer is given points at the wrong row.
+        orderedChemistryLines(linesRef.current).filter((line) => {
+          const zone = zoneAtRow(sheet, line.row);
+          return zone === ZONES.WORKING || zone === ZONES.ANSWER;
+        });
     const lineIndex = stepLines.findIndex((line) => line.row === firstWrongRow);
     const activeVerdict = isDrawing
       ? verdict
