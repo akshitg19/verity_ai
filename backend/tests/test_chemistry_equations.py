@@ -322,3 +322,109 @@ def test_every_step_receives_its_own_verdict():
         "invalid",
         "parse_error",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Hydrates
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "formula,atoms",
+    [
+        ("CuSO4.5H2O", {"Cu": 1, "S": 1, "O": 9, "H": 10}),
+        ("CuSO4·5H2O", {"Cu": 1, "S": 1, "O": 9, "H": 10}),
+        ("CuSO4•5H2O", {"Cu": 1, "S": 1, "O": 9, "H": 10}),
+        ("Na2CO3.10H2O", {"Na": 2, "C": 1, "O": 13, "H": 20}),
+        ("MgSO4.7H2O", {"Mg": 1, "S": 1, "O": 11, "H": 14}),
+        ("CaSO4.2H2O", {"Ca": 1, "S": 1, "O": 6, "H": 4}),
+        # No multiplier means one of them.
+        ("CuSO4.H2O", {"Cu": 1, "S": 1, "O": 5, "H": 2}),
+    ],
+)
+def test_a_hydrate_adds_its_water(formula, atoms):
+    """The dot means "and this many of these too".
+
+    Copper sulfate pentahydrate is on every molar mass sheet and was a
+    parse error, so a student could not ask the question and a worked
+    example could not use it. The demo script carried "no hydrates" as a
+    thing to avoid on stage.
+    """
+    assert parse_formula(formula) == (atoms, 0)
+
+
+def test_a_hydrate_has_the_molar_mass_the_book_gives_it():
+    from judge.stoichiometry import StoichiometryProblem, solve_stoichiometry
+
+    solution = solve_stoichiometry(
+        StoichiometryProblem(task="molar_mass", formula="CuSO4.5H2O")
+    )
+
+    assert round(solution.answer.quantity.value, 2) == 249.68
+
+
+def test_an_ordinary_formula_is_unaffected():
+    assert parse_formula("Al2(SO4)3") == ({"Al": 2, "S": 3, "O": 12}, 0)
+    assert parse_formula("H2O") == ({"H": 2, "O": 1}, 0)
+
+
+def test_a_dot_with_nothing_after_it_is_still_an_error():
+    """The relaxation is about hydrates, not about accepting anything with a
+    dot in it."""
+    with pytest.raises(EquationParseError):
+        parse_formula("CuSO4.5")
+
+
+# ---------------------------------------------------------------------------
+# A charge sign is not a plus sign
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "equation,left,right",
+    [
+        # How a student writes it, and how the model writes it.
+        ("Ag+ + Cl- -> AgCl", [(1, "Ag+"), (1, "Cl-")], [(1, "AgCl")]),
+        (
+            "NH4+ + OH- -> NH3 + H2O",
+            [(1, "NH4+"), (1, "OH-")],
+            [(1, "NH3"), (1, "H2O")],
+        ),
+        (
+            "MnO4- + 8H+ + 5e- -> Mn2+ + 4H2O",
+            [(1, "MnO4-"), (8, "H+"), (5, "e-")],
+            [(1, "Mn2+"), (4, "H2O")],
+        ),
+        # With state symbols hanging off the charge.
+        (
+            "3Ag+(aq) + PO4^3-(aq) -> Ag3PO4(s)",
+            [(3, "Ag+"), (1, "PO4^3-")],
+            [(1, "Ag3PO4")],
+        ),
+        (
+            "Pb2+(aq) + 2I-(aq) -> PbI2(s)",
+            [(1, "Pb2+"), (2, "I-")],
+            [(1, "PbI2")],
+        ),
+    ],
+)
+def test_a_charge_written_without_a_caret_stays_with_its_ion(equation, left, right):
+    """"Ag+ + Cl- -> AgCl" split into "Ag" and "(aq)" and came back as "has
+    an empty term", because a "+" only counted as a charge after a caret.
+    Nobody writes the caret on paper. Live, it threw away four correct net
+    ionic worked examples, and it would have done the same to a student."""
+    assert parse_equation(equation) == (left, right)
+
+
+@pytest.mark.parametrize(
+    "equation",
+    [
+        "2H2+O2->2H2O",       # no spaces anywhere, still two reactants
+        "2H2 + O2 -> 2H2O",
+        "Fe^3+ + e- -> Fe^2+",  # the caret form, untouched
+    ],
+)
+def test_a_separator_is_still_a_separator(equation):
+    left, _ = parse_equation(equation)
+
+    assert len(left) == 2, "the plus between two formulas still splits them"

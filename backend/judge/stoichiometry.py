@@ -14,6 +14,7 @@ set of correct quantities for free.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from rdkit import Chem
@@ -49,6 +50,23 @@ TASKS = (
 )
 
 _PERIODIC_TABLE = Chem.GetPeriodicTable()
+
+
+# What each task needs to be solvable. Same reasoning as the solutions
+# table: a flat list of every field is not a description of any one task.
+TASK_INPUTS: dict[str, tuple[str, ...]] = {
+    "molar_mass": ("formula",),
+    "percent_composition": ("formula", "element"),
+    "moles_from_mass": ("formula", "mass_g"),
+    "mass_from_moles": ("formula", "moles"),
+    "particles_from_moles": ("moles",),
+    "moles_from_particles": ("particles",),
+    "empirical_formula": ("composition",),
+    "molecular_formula": ("composition", "target_molar_mass"),
+    "limiting_reagent": ("equation", "amounts"),
+    "theoretical_yield": ("equation", "amounts", "product"),
+    "percent_yield": ("equation", "amounts", "product", "actual_yield_g"),
+}
 
 
 class StoichiometryError(ValueError):
@@ -513,6 +531,8 @@ class StoichiometryJudge(
         self,
         problem: StoichiometryProblem,
         steps: list[ChemistryStep],
+        *,
+        answers_only: bool = False,
     ) -> list[ChemistryLineVerdict]:
         try:
             solution = solve_stoichiometry(problem)
@@ -547,17 +567,23 @@ class StoichiometryJudge(
                 )
             ]
 
-        return judge_solution_steps(solution, steps)
+        return judge_solution_steps(solution, steps, answers_only=answers_only)
+
+
+# An element symbol followed by a decimal subscript: "FeO1.5", "CH2.5O".
+_FRACTIONAL_SUBSCRIPT_RE = re.compile(r"[A-Za-z]\)?\d*\.\d")
 
 
 def judge_solution_steps(
     solution: WorkedSolution,
     steps: list[ChemistryStep],
+    *,
+    answers_only: bool = False,
 ) -> list[ChemistryLineVerdict]:
     """Judge lines against a solved problem, symbols first, then numbers."""
     symbolic_answer = solution.formula_answer or solution.species_answer
     if symbolic_answer is None:
-        return judge_quantity_steps(solution, steps)
+        return judge_quantity_steps(solution, steps, answers_only=answers_only)
 
     verdicts: list[ChemistryLineVerdict] = []
     for step in steps:
@@ -583,12 +609,27 @@ def judge_solution_steps(
             try:
                 parse_formula(candidate)
             except EquationParseError as exc:
+                # A fractional subscript is a mistake, not an unreadable
+                # line. It is *the* empirical formula mistake: the mole
+                # ratio came out at 1 to 1.5 and they wrote it down instead
+                # of scaling it up. Reporting "could not read 'FeO1.5'"
+                # tells them our parser failed, which is both untrue and the
+                # one category the UI is forbidden to flag, so the student
+                # sees nothing at all on the line they got wrong.
                 verdicts.append(
                     ChemistryLineVerdict(
                         line_number=step.line_number,
                         valid=False,
-                        error_type="parse_error",
-                        detail=str(exc),
+                        error_type=(
+                            "wrong_formula"
+                            if _FRACTIONAL_SUBSCRIPT_RE.search(candidate)
+                            else "parse_error"
+                        ),
+                        detail=(
+                            "A formula cannot have a fractional subscript"
+                            if _FRACTIONAL_SUBSCRIPT_RE.search(candidate)
+                            else str(exc)
+                        ),
                         judged_by="deterministic",
                     )
                 )
@@ -608,7 +649,9 @@ def judge_solution_steps(
             )
             continue
 
-        verdicts.extend(judge_quantity_steps(solution, [step]))
+        verdicts.extend(
+            judge_quantity_steps(solution, [step], answers_only=answers_only)
+        )
     return verdicts
 
 

@@ -531,7 +531,7 @@ def test_functional_group_unknown_group_is_a_422_not_a_verdict() -> None:
     response = client.post(
         "/chemistry/functional-group",
         json={
-            "target_group": "alkene",
+            "target_group": "flubber",
             "steps": [{"line_number": 1, "smiles": "CCO"}],
         },
     )

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import functools
 import re
+import threading
 
 from schemas import ChemistryLineVerdict, ChemistryStep
 from .base import Judge
@@ -34,6 +35,10 @@ from .chemistry import (
 MAX_NAME_LENGTH = 256
 # A name, not a SMILES: letters, digits, and the punctuation IUPAC uses.
 NAME_RE = re.compile(r"^[A-Za-z0-9\s\-,\[\]\(\)'’\.]+$")
+
+
+# OPSIN runs as a Java subprocess and is not safe to call concurrently.
+_OPSIN_LOCK = threading.Lock()
 
 
 class OpsinUnavailableError(RuntimeError):
@@ -89,7 +94,16 @@ def name_to_smiles(name: str) -> str:
 
     convert = _opsin()
     try:
-        smiles = convert(text)
+        # One at a time. py2opsin shells out to a Java process and is not
+        # safe to call concurrently: under six parallel requests it handed
+        # back another call's structure, and "methyl acetate" was judged
+        # wrong_name against methyl acetate. A confident wrong verdict on a
+        # correct answer is the top row of this product's failure taxonomy,
+        # and it was reachable by two students naming a molecule at once.
+        # Serialising costs throughput on a feature that is already slow,
+        # rare, and gated on a Java runtime the container does not have.
+        with _OPSIN_LOCK:
+            smiles = convert(text)
     except Exception as exc:
         raise NameParseError(f"OPSIN could not read {text!r}") from exc
     if not smiles:
@@ -108,6 +122,28 @@ def looks_like_a_name(text: str) -> bool:
     # lowercases into something that looks vowel-rich and is not a name,
     # while "ethanol" has real lowercase vowels and "c1ccccc1" has none.
     return bool(re.search(r"[aeiou]", text))
+
+
+def structure_from_text(text: str) -> str:
+    """A reference molecule written either way, resolved to a SMILES.
+
+    A student setting up their own question writes "ethanol", because that is
+    what the molecule is called. SMILES is ours: they have never seen it, the
+    page is forbidden to show it, and asking them to type one to ask a
+    question was the reason the structure topics could not be started from
+    the page at all.
+
+    A SMILES passes through untouched, so nothing that already worked
+    changes. Only text that reads as a name is sent to OPSIN, and OPSIN
+    being absent surfaces as `unsupported` rather than as a wrong answer,
+    which is the same gate the rest of this module uses.
+    """
+    if not isinstance(text, str) or not text.strip():
+        raise NameParseError("a reference molecule must be a non-empty string")
+    written = text.strip()
+    if not looks_like_a_name(written):
+        return written
+    return name_to_smiles(written)
 
 
 class NamingJudge(Judge[str, ChemistryStep, ChemistryLineVerdict]):
@@ -238,4 +274,5 @@ __all__ = [
     "looks_like_a_name",
     "name_to_smiles",
     "opsin_available",
+    "structure_from_text",
 ]

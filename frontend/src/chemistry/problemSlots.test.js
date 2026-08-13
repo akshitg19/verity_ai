@@ -60,10 +60,13 @@ describe("units come out of the label and sit outside the box", () => {
   });
 
   it("does not mistake a note in brackets for a unit", () => {
-    const percentComposition = stoichiometry.types.find(
-      (t) => t.id === "percent_composition"
-    );
-    const element = buildSlots(percentComposition).find((s) => s.key === "element");
+    // Built here rather than borrowed from a topic. Percent composition used
+    // to be the example, until its element was made required: the element is
+    // the whole question on that type, so calling it optional told a student
+    // it did not matter. The behaviour under test is unchanged.
+    const element = buildSlots({
+      fields: [{ name: "element", label: "Element (optional)", ink: "element" }],
+    })[0];
 
     expect(element.unit).toBe(null);
     expect(element.optional).toBe(true);
@@ -222,12 +225,16 @@ describe("knowing when the problem is ready to judge working against", () => {
   });
 
   it("does not wait on an optional slot", () => {
-    const percentComposition = stoichiometry.types.find(
-      (t) => t.id === "percent_composition"
+    const layout = layoutSlots(
+      buildSlots({
+        fields: [
+          { name: "formula", label: "Formula", ink: "formula" },
+          { name: "note", label: "Note (optional)", ink: "note" },
+        ],
+      })
     );
-    const composition = layoutSlots(buildSlots(percentComposition));
 
-    expect(slotsComplete(composition, { formula: "H2O" })).toBe(true);
+    expect(slotsComplete(layout, { formula: "H2O" })).toBe(true);
   });
 });
 

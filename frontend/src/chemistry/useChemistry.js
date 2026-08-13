@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { getStrokeRow } from "../canvas/geometry";
 import { renderLineToPng } from "../canvas/render";
 import {
   captureSample,
@@ -37,7 +38,45 @@ import {
   questionVerbFor,
   answerUnitFor,
 } from "./topics";
+import {
+  KINDS,
+  ZONES,
+  buildWorksheet,
+  growWorkingRows,
+  isDrawingRow,
+  isReadableRow,
+  promptAtRow,
+  zoneAtRow,
+} from "./worksheet";
 
+
+// A page of working, capped. Enough for any real hand-worked problem, and
+// a ceiling so a page full of doodles cannot turn one hint into forty
+// recognition calls.
+const MAX_WORKING_LINES = 12;
+
+/**
+ * The answer box as one line, however many rows it took.
+ *
+ * The box runs the full width of the page and can be given a second row,
+ * because `2Al + 3CuSO4 -> Al2(SO4)3 + 3Cu` does not fit on one and a
+ * balancing answer that wrapped had nowhere to go. Two rows are one wrapped
+ * answer and never two answers: judged separately they would come back as
+ * two broken equations, which is a verdict about our layout rather than
+ * about the student.
+ *
+ * Reported at the first answer row, so the verdict lands on the box the
+ * student is looking at.
+ */
+function joinAnswerRows(worksheet, lines) {
+  if (!worksheet || worksheet.answerRow === null) return [];
+  const written = orderedChemistryLines(lines)
+    .filter((line) => zoneAtRow(worksheet, line.row) === ZONES.ANSWER)
+    .map((line) => (line.text ?? "").trim())
+    .filter(Boolean);
+  if (!written.length) return [];
+  return [{ row: worksheet.answerRow, text: written.join(" ") }];
+}
 
 function addReadingRow(current, row) {
   const next = new Set(current);
@@ -51,7 +90,13 @@ function removeReadingRow(current, row) {
   return next;
 }
 
-export default function useChemistry({ pageId = null } = {}) {
+export default function useChemistry({
+  pageId = null,
+  // Every stroke on the page, read on demand. Only used when a hint is
+  // asked for on a worksheet whose working we never judge: see
+  // `readWorkingLines`.
+  getStrokes = null,
+} = {}) {
   const [stored] = useState(readStoredTopic);
   const [topicId, setTopicId] = useState(stored.topicId);
   const topic = TOPICS.find((entry) => entry.id === topicId) ?? TOPICS[0];
@@ -116,8 +161,96 @@ export default function useChemistry({ pageId = null } = {}) {
   const questionRowsRef = useRef([]);
   const [dismissedRows, setDismissedRows] = useState(() => new Set());
 
+  // -- the worksheet ------------------------------------------------------
+
+  // Which rows currently carry ink. The canvas reports this per row as it is
+  // written and as it is erased, which is what lets the working box grow
+  // under the pen rather than a moment later, when a row settles.
+  const [inkRows, setInkRows] = useState(() => new Set());
+
+  // Rows the student asked for with the + under the working box. Automatic
+  // growth stops once the answer box has something in it, which is exactly
+  // the moment somebody who wants one more line of working discovers they
+  // cannot have it.
+  const [addedRows, setAddedRows] = useState(0);
+  const addWorkingRow = useCallback(() => setAddedRows((n) => n + 1), []);
+
+  // A second line for the answer, on request. A balanced equation can run
+  // past the end of a line even with the box the full width of the page,
+  // and the rows are rejoined into one answer before anything judges them.
+  const [addedAnswerRows, setAddedAnswerRows] = useState(0);
+  const addAnswerRow = useCallback(() => setAddedAnswerRows((n) => n + 1), []);
+
   const inputMode = inputModeFor(topic, problemType);
   const isDrawing = isWholePageChemistryInput(inputMode);
+
+  // Built twice on purpose: once to know where the working zone is, then
+  // again with the row count that zone has grown to. Cheap, pure, and it
+  // keeps `growWorkingRows` from needing to know its own answer in advance.
+  const baseWorksheet = buildWorksheet(topic, problemType, { inputMode });
+  const worksheet = baseWorksheet
+    ? buildWorksheet(topic, problemType, {
+        inputMode,
+        answerRows: 1 + addedAnswerRows,
+        workingRows: growWorkingRows(baseWorksheet, {
+          inkRows: [...inkRows],
+          addedRows,
+          answerFilled: Boolean(
+            lines
+              .find((line) => line.row === baseWorksheet.answerRow)
+              ?.text?.trim()
+          ),
+        }),
+      })
+    : null;
+  const worksheetRef = useRef(worksheet);
+  useEffect(() => {
+    worksheetRef.current = worksheet;
+  });
+
+  // The molecule the question is about, drawn as a picture.
+  //
+  // "Name this structure" and "draw an isomer of this" both hand the student
+  // a molecule, and the only field holding it is a SMILES, which a student
+  // has never heard of and must never be shown as the question. RDKit
+  // already draws it, so the page shows the drawing and the SMILES stays in
+  // the panel as the teacher's field.
+  const targetPrompt =
+    worksheet?.prompts.find((prompt) => prompt.secret) ?? null;
+  const targetSmiles = targetPrompt ? values[targetPrompt.key] ?? "" : "";
+  const [targetPicture, setTargetPicture] = useState(null);
+  const targetRequestId = useRef(0);
+  useEffect(() => {
+    const smiles = targetSmiles.trim();
+    const id = ++targetRequestId.current;
+    const controller = new AbortController();
+    // Resolved rather than returned early, so the clear and the render take
+    // the same path out of the effect and neither sets state synchronously.
+    Promise.resolve(
+      smiles ? renderStructure(smiles, { signal: controller.signal }) : null
+    )
+      .then((data) => {
+        if (id !== targetRequestId.current) return;
+        setTargetPicture(data ? trustedStructurePreview(data) : null);
+      })
+      .catch(() => {
+        if (id === targetRequestId.current) setTargetPicture(null);
+      });
+    return () => controller.abort();
+  }, [targetSmiles]);
+
+  // Every row of the answer box, rejoined. Two rows are one wrapped answer,
+  // never two answers: a balanced equation that runs past the end of a line
+  // is still one equation, and judging its halves separately would report
+  // two broken ones.
+  const answerText = worksheet
+    ? orderedChemistryLines(lines)
+        .filter((line) => zoneAtRow(worksheet, line.row) === ZONES.ANSWER)
+        .map((line) => (line.text ?? "").trim())
+        .filter(Boolean)
+        .join(" ")
+    : "";
+
   const ready = isProblemReady(problemType, values);
   const problemText = describeProblem(topic, problemType, values);
   const reading = pageReading || readingRows.size > 0;
@@ -194,6 +327,7 @@ export default function useChemistry({ pageId = null } = {}) {
     lineVersions.current.clear();
     linesRef.current = [];
     setLines([]);
+    setInkRows(new Set());
     setAnswer("");
     setRead(false);
     setUnreadable(false);
@@ -270,6 +404,9 @@ export default function useChemistry({ pageId = null } = {}) {
   // is the natural first thing a student does, and requiring it to be typed
   // puts a seam down the middle of a handwriting app.
   const questionCandidateRow = (() => {
+    // A worksheet has labelled boxes, so there is nothing to guess and
+    // nothing to offer. The popover exists for topics without one.
+    if (worksheet) return null;
     if (isDrawing || !questionField) return null;
     const candidate = orderedChemistryLines(lines).find(
       (line) =>
@@ -319,7 +456,17 @@ export default function useChemistry({ pageId = null } = {}) {
   // -- reading ------------------------------------------------------------
 
   const readWork = useCallback(
-    async (strokes) => {
+    async (allStrokes) => {
+      // The question boxes are above the drawing area, and their ink is a
+      // formula written as text. Sending it inside the figure would hand the
+      // structure recogniser a picture with a caption in it.
+      const sheet = worksheetRef.current;
+      const strokes =
+        sheet?.kind === KINDS.DRAW
+          ? (allStrokes ?? []).filter((stroke) =>
+              isDrawingRow(sheet, getStrokeRow(stroke))
+            )
+          : allStrokes;
       if (!isDrawing || !strokes?.length) return;
       const id = ++requestId.current;
       const requestPageId = pageScopeRef.current;
@@ -358,7 +505,11 @@ export default function useChemistry({ pageId = null } = {}) {
 
   const readLine = useCallback(
     async ({ row, strokes, onProcessed, pageId: rowPageId }) => {
-      if (isDrawing || !strokes?.length) return;
+      // A drawing page still has question boxes at the top, and those are
+      // handwriting to be read as text, not part of the figure. Everything
+      // else on a drawing page goes through `readWork` as one image.
+      const isPrompt = Boolean(promptAtRow(worksheetRef.current, row));
+      if ((isDrawing && !isPrompt) || !strokes?.length) return;
       if (rowPageId !== undefined && rowPageId !== pageScopeRef.current) return;
 
       const version = lineVersions.current.get(row) ?? 0;
@@ -420,6 +571,14 @@ export default function useChemistry({ pageId = null } = {}) {
         setLines(nextLines);
         setRead(true);
         setStatus(null);
+
+        // A prompt box fills its own field. There is no popover to tap and
+        // nothing to guess at: the box the student wrote in says which field
+        // this is. `setValue` drops the session, so the vault is rebuilt from
+        // the corrected question rather than a stale one.
+        const prompt = promptAtRow(worksheetRef.current, row);
+        if (prompt && nextLine.text.trim()) setValue(prompt.key, nextLine.text.trim());
+
         onProcessed?.();
       } catch (error) {
         if (
@@ -443,7 +602,7 @@ export default function useChemistry({ pageId = null } = {}) {
         }
       }
     },
-    [isDrawing]
+    [isDrawing, setValue]
   );
 
   // The canvas invokes this after a row has been idle or explicitly finished.
@@ -451,13 +610,31 @@ export default function useChemistry({ pageId = null } = {}) {
   // changing the image that is already being recognized.
   const queueRow = useCallback(
     (rowSnapshot) => {
+      // The working is never read. Not a shortcut and not a cost saving: a
+      // page of arithmetic laid out however the student likes is exactly
+      // what recognition is worst at, and a wrong verdict on correct
+      // scribble is the failure this product cannot afford.
+      const active = worksheetRef.current;
+      if (active && !isReadableRow(active, rowSnapshot?.row)) return;
       void readLine(rowSnapshot);
     },
     [readLine]
   );
 
   const invalidateLine = useCallback(
-    (row) => {
+    (row, hasInk = true) => {
+      setInkRows((current) => {
+        if (hasInk === current.has(row)) return current;
+        const next = new Set(current);
+        if (hasInk) next.add(row);
+        else next.delete(row);
+        return next;
+      });
+      // Working rows hold no transcription and no verdict, so there is
+      // nothing to tear down and no reason to drop the answer's verdict
+      // every time the student writes another line of arithmetic.
+      const active = worksheetRef.current;
+      if (active && zoneAtRow(active, row) === ZONES.WORKING) return;
       lineVersions.current.set(row, (lineVersions.current.get(row) ?? 0) + 1);
       lineRequestIds.current.set(row, (lineRequestIds.current.get(row) ?? 0) + 1);
       lineAbortControllers.current.get(row)?.abort();
@@ -540,9 +717,28 @@ export default function useChemistry({ pageId = null } = {}) {
     // The row holding the question is not a step. Without this the student's
     // own question is checked as though it were their first line of working,
     // and is reported wrong for not being balanced.
-    const currentLines = orderedChemistryLines(linesRef.current).filter(
-      (line) => !questionRowsRef.current.includes(line.row)
-    );
+    const active = worksheetRef.current;
+    // Which lines are the student's claims depends on the shape of the page.
+    //
+    // On an ANSWER page it is the answer box alone: the working above it is
+    // their own arrangement of the arithmetic and is never sent. On a STEPS
+    // page every working row is a step and all of them go, which is what
+    // balancing and net ionic already do and what their hints depend on.
+    const currentLines = !active
+      ? orderedChemistryLines(linesRef.current).filter(
+          (line) => !questionRowsRef.current.includes(line.row)
+        )
+      : active.kind === KINDS.ANSWER
+      ? joinAnswerRows(active, linesRef.current)
+      : // A steps page judges its working row by row, and now the answer
+        // box under it as well: the last line of the working used to be the
+        // answer by convention and nothing on the page said so.
+        [
+          ...orderedChemistryLines(linesRef.current).filter(
+            (line) => zoneAtRow(active, line.row) === ZONES.WORKING
+          ),
+          ...joinAnswerRows(active, linesRef.current),
+        ];
     const steps = isDrawing
       ? written
         ? [{ line_number: 1, smiles: written }]
@@ -563,6 +759,12 @@ export default function useChemistry({ pageId = null } = {}) {
     try {
       const data = await topic.check(problemType, values, steps, {
         signal: abortController.signal,
+        // Knowing which line is the answer is what lets the judge reject an
+        // intermediate written in the answer box. Without it a student who
+        // stops at the mass of one element is told they are correct, which
+        // is the standing "nothing marks a line as the final answer"
+        // finding in final_tasks.md.
+        answersOnly: active?.kind === KINDS.ANSWER,
       });
       if (id !== requestId.current || requestPageId !== pageScopeRef.current) return;
 
@@ -632,10 +834,82 @@ export default function useChemistry({ pageId = null } = {}) {
 
   // -- hints --------------------------------------------------------------
 
+  // Read the working, once, at the moment a hint is asked for.
+  //
+  // The working is deliberately never judged, so it is never transcribed
+  // during writing: that is what stops a wrong verdict landing on correct
+  // scribble. But a hint that has not seen the working can only say "this
+  // number is wrong", and the whole point of the ladder is to say which
+  // step went wrong. So it is read here, lazily, on the one interaction
+  // where the student has asked us to look.
+  //
+  // Row by row through the prompt that is already known to work, rather
+  // than as one block through a prompt written for a single line. Failures
+  // are swallowed on purpose: a hint with no working is worse than a hint
+  // with it, and far better than no hint at all.
+  const readWorkingLines = useCallback(async () => {
+    const sheet = worksheetRef.current;
+    if (!sheet) return [];
+
+    // A steps page has already read every working row, because on those
+    // topics each row is a judged step. Those transcriptions are sitting in
+    // `lines` and were simply never handed to the hint layer, so balancing,
+    // net ionic and half-reaction hints were written without ever seeing the
+    // working. Reusing them costs nothing: no image, no second call.
+    if (sheet.kind === KINDS.STEPS) {
+      return orderedChemistryLines(linesRef.current)
+        .filter((line) => zoneAtRow(sheet, line.row) === ZONES.WORKING)
+        .map((line) => (line.text ?? "").trim())
+        .filter(Boolean)
+        .slice(0, MAX_WORKING_LINES);
+    }
+
+    if (sheet.kind !== KINDS.ANSWER || !getStrokes) return [];
+
+    const byRow = new Map();
+    for (const stroke of getStrokes() ?? []) {
+      const row = getStrokeRow(stroke);
+      if (zoneAtRow(sheet, row) !== ZONES.WORKING) continue;
+      if (!byRow.has(row)) byRow.set(row, []);
+      byRow.get(row).push(stroke);
+    }
+    if (byRow.size === 0) return [];
+
+    const rows = [...byRow.keys()].sort((a, b) => a - b).slice(0, MAX_WORKING_LINES);
+    const texts = await Promise.all(
+      rows.map(async (row) => {
+        try {
+          const dataUrl = await renderLineToPng([...byRow.get(row)]);
+          const data = await transcribeChemistryText(dataUrl.split(",")[1]);
+          return data.unreadable ? "" : (data.text ?? "").trim();
+        } catch {
+          return "";
+        }
+      })
+    );
+    return texts.filter(Boolean);
+  }, [getStrokes]);
+
   const requestHint = useCallback(async () => {
     if (hintLevel >= 3) return;
 
-    const stepLines = chemistryStepLines(linesRef.current, questionRowsRef.current);
+    // A worksheet has exactly one judged line, so the hint layer is told
+    // line 1 and handed the answer box. The working never leaves the page.
+    // The hint layer is told which of the judged lines went wrong, so this
+    // has to be the same list `checkAnswer` sent, in the same order.
+    const sheet = worksheetRef.current;
+    const stepLines = !sheet
+      ? chemistryStepLines(linesRef.current, questionRowsRef.current)
+      : sheet.kind === KINDS.ANSWER
+      ? joinAnswerRows(sheet, linesRef.current)
+      : // Same list `checkAnswer` sent, in the same order, or the line
+        // number the hint layer is given points at the wrong row.
+        [
+          ...orderedChemistryLines(linesRef.current).filter(
+            (line) => zoneAtRow(sheet, line.row) === ZONES.WORKING
+          ),
+          ...joinAnswerRows(sheet, linesRef.current),
+        ];
     const lineIndex = stepLines.findIndex((line) => line.row === firstWrongRow);
     const activeVerdict = isDrawing
       ? verdict
@@ -654,6 +928,9 @@ export default function useChemistry({ pageId = null } = {}) {
     const active = await ensureSession();
     if (id !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
 
+    const workingLines = await readWorkingLines();
+    if (id !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
+
     try {
       const data = await getHint({
         line_number: isDrawing ? 1 : lineIndex + 1,
@@ -663,9 +940,17 @@ export default function useChemistry({ pageId = null } = {}) {
         topic: topicId,
         session_id: active?.session_id ?? null,
         problem: problemText,
+        // The concept, not just the topic. A hint keyed only by
+        // "stoichiometry" cannot know that a molar mass fails on the
+        // bracket and a percent yield fails on which yield went on top.
+        problem_type: problemType.id,
         student_line: isDrawing
           ? answer || null
           : stepLines[lineIndex]?.text || null,
+        // The whole page, for the levels that read it. On an answer-box
+        // worksheet this is the only way the hint layer ever sees how they
+        // actually worked the problem, since the working is never judged.
+        working_lines: workingLines,
       }, { signal: abortController.signal });
       if (id !== hintRequestId.current || requestPageId !== pageScopeRef.current) return;
       setHintLevel(data.level);
@@ -678,7 +963,7 @@ export default function useChemistry({ pageId = null } = {}) {
       if (id === hintRequestId.current) setHintLoading(false);
       if (hintAbortRef.current === abortController) hintAbortRef.current = null;
     }
-  }, [answer, ensureSession, firstWrongRow, hintLevel, isDrawing, problemText, topicId, verdict, verdictsByLine]);
+  }, [answer, ensureSession, firstWrongRow, hintLevel, isDrawing, problemText, problemType.id, readWorkingLines, topicId, verdict, verdictsByLine]);
 
   const cancelHint = useCallback(() => {
     hintRequestId.current += 1;
@@ -824,6 +1109,15 @@ export default function useChemistry({ pageId = null } = {}) {
     questionField,
     questionRows,
     questionVerb,
+    worksheet,
+    addWorkingRow,
+    addAnswerRow,
+    targetPicture,
+    answerText,
+    answerVerdict:
+      worksheet?.answerRow !== null && worksheet
+        ? verdictsByLine.get(worksheet.answerRow) ?? null
+        : null,
     answerUnit: answerUnitFor(problemType),
     questionCandidateRow,
     useRowAsQuestion,

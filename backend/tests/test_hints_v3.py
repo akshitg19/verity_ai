@@ -140,8 +140,65 @@ def test_hint_request_accepts_math_topic():
 # ---------------------------------------------------------------------------
 
 
-def test_no_session_means_the_static_floor(monkeypatch):
+def test_a_problem_we_could_not_solve_still_gets_a_generated_hint(monkeypatch):
+    """The Aug 12 product call, and the reason for it.
+
+    A net ionic equation our solubility rules cannot settle used to get the
+    static floor on all three levels: one sentence that would fit any problem
+    in the topic, plus a link out. The model has never been told an answer
+    here, because there is no answer to tell it, so the hint is written from
+    the question and their own work.
+    """
     monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints,
+        "_generate_level_1",
+        lambda req, session, retry=None: ("You wrote AgCl on both sides.", 40),
+    )
+    response = hints.generate_hint(
+        HintRequest(
+            line_number=1,
+            error_type="unbalanced_atoms",
+            level=1,
+            subject="chemistry",
+            topic="balancing",
+            student_line="AgNO3 + NaCl -> AgCl + NaNO3",
+        )
+    )
+
+    assert response.source == "model"
+    assert response.hint == "You wrote AgCl on both sides."
+
+
+def test_an_unsolvable_problem_grants_no_level_3_budget(monkeypatch):
+    """The transient session is never stored, so it cannot become a way to
+    mint escalations for a problem the store knows nothing about."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints,
+        "_generate_level_3",
+        lambda req, session, retry=None: ("Work the charges through.", 40),
+    )
+    response = hints.generate_hint(
+        HintRequest(
+            line_number=1,
+            error_type="unbalanced_atoms",
+            level=3,
+            subject="chemistry",
+            topic="balancing",
+            student_line="Ag+ + Cl- -> AgCl",
+        )
+    )
+
+    assert response.source == "model"
+    # Never stored, so it cannot be fetched again and cannot accumulate
+    # state between requests.
+    assert SESSIONS.get("") is None
+
+
+def test_no_model_still_means_the_static_floor(monkeypatch):
+    """Losing the vault is a reason to generate. Losing the model is not."""
+    monkeypatch.setattr(hints, "is_configured", lambda: False)
     response = hints.generate_hint(
         HintRequest(
             line_number=1,
@@ -203,6 +260,182 @@ def test_level_1_returns_the_generated_diagnosis(monkeypatch, ph_session):
     assert response.source == "model"
     assert "equilibrium x" in response.hint
     assert response.latency_ms == 420
+
+
+def test_a_level_1_that_states_the_answer_is_asked_again(monkeypatch, ph_session):
+    """Redaction catching a leak should not cost the student their hint.
+
+    Running every concept live turned this up on three questions in sixty:
+    the model reasoned aloud, arrived at the answer, said it, and redaction
+    threw the whole hint away. The student then read a generic template for
+    a reason that had nothing to do with them. Level 2 already regenerates
+    once when verification fails; this is the same trade.
+    """
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=None):
+        attempts.append(retry)
+        if retry:
+            return ("You took the log of the concentration you started with, "
+                    "not of the x you solved for. Compare those two.", 300)
+        return ("You should have got pH = 2.87 here.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    response = hints.generate_hint(request_for(ph_session, 1))
+
+    assert len(attempts) == 2, "exactly one retry"
+    assert attempts[0] is None
+    assert "thrown away" in attempts[1], "and it says what was wrong"
+    assert response.source == "model"
+    assert "2.87" not in response.hint
+
+
+def test_the_retry_is_not_retried(monkeypatch, ph_session):
+    """A model that leaks twice is not going to stop on the third ask, and
+    every extra attempt is latency the student sits through."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=None):
+        attempts.append(retry)
+        return ("The answer is pH = 2.87.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    response = hints.generate_hint(request_for(ph_session, 1))
+
+    assert len(attempts) == 2
+    assert response.source == "fallback"
+    assert "2.87" not in response.hint
+
+
+def test_a_failed_retry_still_answers(monkeypatch, ph_session):
+    """The retry going missing entirely must leave the first result standing,
+    not an exception and not an empty hint."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+
+    def fake_level_1(req, session, *, retry=None):
+        return None if retry else ("pH = 2.87 is what you want.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    response = hints.generate_hint(request_for(ph_session, 1))
+
+    assert response.hint.strip()
+    assert response.source == "fallback"
+
+
+def test_the_retry_tells_the_model_which_rule_it_broke(monkeypatch, ph_session):
+    """A retry that repeats the identical prompt is a coin flip. The second
+    ask has to say what was wrong with the first."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    prompts = []
+
+    def fake_generate_json(messages, **kwargs):
+        prompts.append(messages[0])
+        return {"hint": "The answer is pH = 2.87."}, 300
+
+    monkeypatch.setattr(hints, "generate_json", fake_generate_json)
+    hints.generate_hint(request_for(ph_session, 1))
+
+    assert len(prompts) == 2
+    assert "thrown away" not in prompts[0]
+    assert "thrown away" in prompts[1]
+    assert "must already appear in the problem" in prompts[1]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "In line 3 you took the log of the wrong concentration.",
+        "Look at the third line again.",
+        "Your step 2 uses the initial concentration.",
+        "Check the first line of your working.",
+        "The last step compares the wrong two numbers.",
+    ],
+)
+def test_pointing_by_position_is_caught_before_it_is_sent(text):
+    """The prompt has said not to do this for a while and the model does it
+    anyway: five hints in sixty, live. A rule worth having is a rule that is
+    checked, so this one is checked with a regex rather than hoped for."""
+    assert hints._points_by_position(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Where you wrote 4 x 16.00, you counted four oxygens.",
+        "You lined up the 2 and the 3 the wrong way round.",
+        "Compare the moles of N2 with the moles of H2.",
+    ],
+)
+def test_quoting_the_work_is_not_pointing_by_position(text):
+    assert hints._points_by_position(text) is False
+
+
+def test_a_hint_that_points_by_position_is_asked_again(monkeypatch, ph_session):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=None):
+        attempts.append(retry)
+        if retry:
+            return ("Where you wrote the log, you used the concentration you "
+                    "started with rather than the x you solved for.", 300)
+        return ("On the third line you used the wrong concentration.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    response = hints.generate_hint(request_for(ph_session, 1))
+
+    assert len(attempts) == 2
+    assert "laid this page out themselves" in attempts[1]
+    assert "third line" not in response.hint
+    assert response.source == "model"
+
+
+def test_a_positional_hint_beats_no_hint_when_the_retry_is_no_better(
+    monkeypatch, ph_session
+):
+    """Falling back to the template here would trade a specific hint for a
+    generic one. 'On the third line you used the wrong concentration' still
+    tells them what they did; the floor tells them nothing."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints,
+        "_generate_level_1",
+        lambda req, session, *, retry=None: (
+            "On the third line you used the wrong concentration.", 300
+        ),
+    )
+    response = hints.generate_hint(request_for(ph_session, 1))
+
+    assert response.source == "model"
+    assert "concentration" in response.hint
+
+
+def test_level_3_gets_the_same_treatment(monkeypatch, ph_session):
+    """Level 3 pointed by position live too, on 'step 2' and 'first step'."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_3(req, session, *, retry=None):
+        attempts.append(retry)
+        if retry:
+            return ("Take the x you solved for and put that into the log, "
+                    "not the concentration you started with.", 700)
+        return ("Go back to step 2 and use x instead.", 700)
+
+    monkeypatch.setattr(hints, "_generate_level_3", fake_level_3)
+    response = hints.generate_hint(request_for(ph_session, 3))
+
+    assert len(attempts) == 2
+    assert "step 2" not in response.hint
+
+
+def test_level_1_is_told_not_to_do_the_arithmetic(monkeypatch, ph_session):
+    """The cheapest fix for a leak is a prompt that never invites one."""
+    assert "do not multiply, add, or divide anything yourself" in (
+        hints._CHEMISTRY_LEVEL_1_PROMPT
+    )
 
 
 def test_level_1_without_the_student_line_falls_back(monkeypatch, ph_session):
@@ -323,7 +556,10 @@ def test_a_verified_example_is_returned(monkeypatch, ph_session):
     assert len(response.worked_example.steps) == 3
 
 
-def test_an_example_with_a_wrong_final_answer_is_rejected(monkeypatch, ph_session):
+def test_an_example_with_a_wrong_final_answer_is_not_marked_verified(
+    monkeypatch, ph_session
+):
+    """Aug 12: it renders, but it never claims to have been checked."""
     bad = {**GOOD_SOLUTIONS_EXAMPLE, "check": {
         **GOOD_SOLUTIONS_EXAMPLE["check"], "answer": 2.10
     }}
@@ -331,12 +567,19 @@ def test_an_example_with_a_wrong_final_answer_is_rejected(monkeypatch, ph_sessio
     monkeypatch.setattr(hints, "generate_json", lambda *a, **k: (bad, 900))
     response = hints.generate_hint(request_for(ph_session, 2))
 
-    assert response.worked_example is None
-    assert response.source == "fallback"
+    assert response.worked_example is not None
+    assert response.worked_example.verified is False
 
 
-def test_an_example_with_an_invented_intermediate_is_rejected(monkeypatch, ph_session):
-    """One hallucinated line in the middle and the whole example goes."""
+def test_an_example_with_an_invented_intermediate_is_not_marked_verified(
+    monkeypatch, ph_session
+):
+    """One hallucinated line in the middle and the whole example is unverified.
+
+    It is still shown. What must never happen is it arriving with
+    `verified` true, because that flag is the only thing telling the two
+    kinds of example apart.
+    """
     bad = {
         **GOOD_SOLUTIONS_EXAMPLE,
         "steps": ["Ka = x^2 / (0.05 - x)", "x = 5.5e-3", "pH = 3.0937"],
@@ -345,7 +588,7 @@ def test_an_example_with_an_invented_intermediate_is_rejected(monkeypatch, ph_se
     monkeypatch.setattr(hints, "generate_json", lambda *a, **k: (bad, 900))
     response = hints.generate_hint(request_for(ph_session, 2))
 
-    assert response.worked_example is None
+    assert response.worked_example.verified is False
 
 
 def test_an_example_reusing_the_students_numbers_is_rejected(monkeypatch, ph_session):
@@ -367,7 +610,12 @@ def test_an_example_reusing_the_students_numbers_is_rejected(monkeypatch, ph_ses
     assert "2.88" not in response.hint
 
 
-def test_an_example_with_no_steps_is_rejected(monkeypatch, ph_session):
+def test_an_example_with_no_steps_is_still_dropped(monkeypatch, ph_session):
+    """The one rejection that survives the Aug 12 call.
+
+    An example with no steps is not an unverified demonstration, it is an
+    empty box. There is nothing to render and nothing for a student to read.
+    """
     monkeypatch.setattr(hints, "is_configured", lambda: True)
     monkeypatch.setattr(
         hints,
@@ -378,15 +626,18 @@ def test_an_example_with_no_steps_is_rejected(monkeypatch, ph_session):
     assert hints.generate_hint(request_for(ph_session, 2)).worked_example is None
 
 
-def test_an_example_with_a_missing_check_is_rejected(monkeypatch, ph_session):
+def test_an_example_with_a_missing_check_is_never_verified(monkeypatch, ph_session):
+    """No check object means nothing our engines can confirm, so the flag
+    stays false however good the prose looks."""
     monkeypatch.setattr(hints, "is_configured", lambda: True)
     monkeypatch.setattr(
         hints,
         "generate_json",
         lambda *a, **k: ({**GOOD_SOLUTIONS_EXAMPLE, "check": {}}, 900),
     )
+    response = hints.generate_hint(request_for(ph_session, 2))
 
-    assert hints.generate_hint(request_for(ph_session, 2)).worked_example is None
+    assert response.worked_example.verified is False
 
 
 def test_a_malformed_check_task_is_rejected(monkeypatch, ph_session):
@@ -403,7 +654,7 @@ def test_a_malformed_check_task_is_rejected(monkeypatch, ph_session):
         ),
     )
 
-    assert hints.generate_hint(request_for(ph_session, 2)).worked_example is None
+    assert hints.generate_hint(request_for(ph_session, 2)).worked_example.verified is False
 
 
 def test_verification_retries_before_giving_up(monkeypatch, ph_session):
@@ -422,6 +673,89 @@ def test_verification_retries_before_giving_up(monkeypatch, ph_session):
     response = hints.generate_hint(request_for(ph_session, 2))
 
     assert calls["count"] == 2
+    assert response.worked_example is not None
+
+
+# A different acid at a different concentration whose pH lands on the
+# student's own answer of 2.875. Nothing is wrong with it: it verifies, and
+# its numbers differ from theirs. It is the collision the audit saw once in
+# sixty, where the student reads their own answer inside an example about
+# something else.
+ECHOING_SOLUTIONS_EXAMPLE = {
+    "problem": "What is the pH of 0.0500 M propanoic acid? Ka = 3.6 x 10^-5",
+    "technique": "Set up an ICE table and solve for x, then take -log10(x)",
+    "steps": [
+        "Ka = x^2 / (0.05 - x)",
+        "x = 1.3238e-3",
+        "pH = 2.8782",
+    ],
+    "check": {
+        "task": "weak_acid_ph",
+        "params": {"concentration_m": 0.05, "ka": 3.6e-5},
+        "answer": 2.88,
+    },
+}
+
+
+def test_an_example_stating_the_students_answer_is_regenerated(
+    monkeypatch, ph_session
+):
+    calls = {"count": 0}
+
+    def collides_then_clears(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return (ECHOING_SOLUTIONS_EXAMPLE, 500)
+        return (GOOD_SOLUTIONS_EXAMPLE, 500)
+
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(hints, "generate_json", collides_then_clears)
+    response = hints.generate_hint(request_for(ph_session, 2))
+
+    assert calls["count"] == 2
+    assert response.worked_example is not None
+    assert "2.8782" not in " ".join(response.worked_example.steps)
+
+
+def test_an_example_that_still_collides_is_shown_anyway(monkeypatch, ph_session):
+    """The second attempt is a preference, not a gate.
+
+    The example is a verified solution to a different problem, so a number
+    inside it that happens to equal the student's answer is a coincidence and
+    not a disclosure. Dropping to the static floor over one would cost the
+    student the whole worked example, which is the worse trade while
+    withholding is off.
+    """
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        hints, "generate_json", lambda *a, **k: (ECHOING_SOLUTIONS_EXAMPLE, 500)
+    )
+    response = hints.generate_hint(request_for(ph_session, 2))
+
+    assert response.source == "model"
+    assert response.worked_example is not None
+    assert response.worked_example.verified is True
+
+
+def test_a_coefficient_is_not_read_as_the_students_answer(
+    monkeypatch, balance_session
+):
+    """Small whole numbers are structure, not answers.
+
+    A balancing example is nothing but small integers, and treating each one
+    as a possible collision would regenerate every example in the topic.
+    """
+    calls = {"count": 0}
+
+    def counted(*args, **kwargs):
+        calls["count"] += 1
+        return (GOOD_BALANCE_EXAMPLE, 700)
+
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(hints, "generate_json", counted)
+    response = hints.generate_hint(request_for(balance_session, 2))
+
+    assert calls["count"] == 1
     assert response.worked_example is not None
 
 
@@ -524,9 +858,11 @@ def test_a_verified_balancing_example_is_returned(monkeypatch, balance_session):
     assert response.worked_example.steps[-1].startswith("2C2H6 + 7O2")
 
 
-def test_a_balancing_example_that_does_not_balance_is_rejected(
+def test_a_balancing_example_that_does_not_balance_is_never_verified(
     monkeypatch, balance_session
 ):
+    """An equation that does not balance is exactly what the verifier is for,
+    so it renders only with the flag down."""
     bad = {
         **GOOD_BALANCE_EXAMPLE,
         "check": {
@@ -540,10 +876,10 @@ def test_a_balancing_example_that_does_not_balance_is_rejected(
         request_for(balance_session, 2, error_type="unbalanced_atoms")
     )
 
-    assert response.worked_example is None
+    assert response.worked_example.verified is False
 
 
-def test_a_balancing_example_whose_steps_never_reach_the_answer_is_rejected(
+def test_a_balancing_example_whose_steps_stop_short_is_never_verified(
     monkeypatch, balance_session
 ):
     bad = {**GOOD_BALANCE_EXAMPLE, "steps": ["2C2H6 + O2 -> 4CO2 + H2O"]}
@@ -553,7 +889,7 @@ def test_a_balancing_example_whose_steps_never_reach_the_answer_is_rejected(
         request_for(balance_session, 2, error_type="unbalanced_atoms")
     )
 
-    assert response.worked_example is None
+    assert response.worked_example.verified is False
 
 
 # ---------------------------------------------------------------------------
@@ -798,10 +1134,358 @@ def test_levels_1_and_2_are_still_redacted_when_withholding_is_off(monkeypatch):
     monkeypatch.setattr(
         hints,
         "_generate_level_1",
-        lambda req, session: ("The answer is N2 + 3H2 -> 2NH3", 100),
+        lambda req, session, retry=False: ("The answer is N2 + 3H2 -> 2NH3", 100),
     )
 
     response = hints.generate_hint(request_for(session, 1, student_line="N2 + H2 -> NH3"))
 
     assert response.source == "fallback"
     assert "3H2" not in response.hint
+
+
+# ---------------------------------------------------------------------------
+# The check object, in whatever shape the model wrote it
+# ---------------------------------------------------------------------------
+
+
+def test_a_number_written_as_a_string_is_still_a_number():
+    """Live, the verifier crashed on `unsupported operand type(s) for /:
+    'str' and 'float'`, which was caught as "verification failed" and served
+    the student the static floor. A number in quotes is a JSON style
+    difference in a description of the example's own problem."""
+    from hints import _filtered
+    from judge.solutions import SolutionsProblem
+
+    cleaned = _filtered(
+        {"concentration_m": "0.10", "ka": "1.8e-5", "volume_l": "0.250 L"},
+        SolutionsProblem,
+    )
+
+    assert cleaned == {"concentration_m": 0.1, "ka": 1.8e-5, "volume_l": 0.25}
+
+
+def test_an_amount_written_as_an_object_is_still_an_amount():
+    """The other live crash: `'<' not supported between instances of 'dict'
+    and 'dict'`, from an amounts map whose values were objects."""
+    from hints import _filtered
+    from judge.stoichiometry import StoichiometryProblem
+
+    cleaned = _filtered(
+        {
+            "equation": "N2 + H2 -> NH3",
+            "amounts": {"N2": {"mass_g": 28.0}, "H2": "6.0 g"},
+        },
+        StoichiometryProblem,
+    )
+
+    assert cleaned["amounts"] == {"N2": 28.0, "H2": 6.0}
+    assert cleaned["equation"] == "N2 + H2 -> NH3"
+
+
+def test_the_fields_that_are_meant_to_be_text_stay_text():
+    """Coercing "H2O" to nothing, or "C6H12O6" to 6, would be worse than the
+    bug it fixes."""
+    from hints import _filtered
+    from judge.stoichiometry import StoichiometryProblem
+
+    cleaned = _filtered(
+        {"formula": "C6H12O6", "element": "C", "product": "NH3"},
+        StoichiometryProblem,
+    )
+
+    assert cleaned == {"formula": "C6H12O6", "element": "C", "product": "NH3"}
+
+
+def test_an_amount_with_no_number_in_it_is_dropped_not_guessed():
+    from hints import _filtered
+    from judge.stoichiometry import StoichiometryProblem
+
+    cleaned = _filtered({"amounts": {"N2": "excess"}}, StoichiometryProblem)
+
+    assert cleaned["amounts"] == {}
+
+
+def test_unknown_fields_are_still_dropped():
+    from hints import _filtered
+    from judge.solutions import SolutionsProblem
+
+    assert _filtered({"nonsense": 1, "ka": 2.0}, SolutionsProblem) == {"ka": 2.0}
+
+
+def test_the_contract_says_what_type_each_value_has():
+    from hints import _CHEMISTRY_CHECK_CONTRACTS
+
+    contract = _CHEMISTRY_CHECK_CONTRACTS["stoichiometry"]
+
+    assert "plain JSON number" in contract
+    assert "never to an object" in contract
+
+
+# ---------------------------------------------------------------------------
+# SMILES is for the machine and the panel, never for the page
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def structure_session():
+    vault = vault_for_structure("Draw a structure with the formula C4H10", "CCCC")
+    return SESSIONS.create("structure", vault.problem, vault)
+
+
+def test_a_hint_that_writes_the_smiles_out_is_asked_again(
+    monkeypatch, structure_session
+):
+    """Live, on both formula structure questions: the student drew a chain of
+    five carbons, the recogniser read it as CCCCC, and the hint said "You
+    drew CCCCC". They never wrote that and would not recognise it."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=None):
+        attempts.append(retry)
+        if retry:
+            return ("You drew a chain of five carbons. Count them against "
+                    "the four the formula asks for.", 300)
+        return ("You drew CCCCC, which is five carbons.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    response = hints.generate_hint(
+        request_for(structure_session, 1, student_line="CCCCC",
+                    error_type="structure_mismatch")
+    )
+
+    assert len(attempts) == 2
+    assert "never seen it" in attempts[1]
+    assert "CCCCC" not in response.hint
+    assert "five carbons" in response.hint
+
+
+def test_level_3_gets_the_same_check(monkeypatch, structure_session):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_3(req, session, *, retry=None):
+        attempts.append(retry)
+        if retry:
+            return ("Your chain has one carbon too many. Take the end one "
+                    "off and the count matches the formula.", 700)
+        return ("You wrote CCCCC. That is one carbon too many.", 700)
+
+    monkeypatch.setattr(hints, "_generate_level_3", fake_level_3)
+    response = hints.generate_hint(
+        request_for(structure_session, 3, student_line="CCCCC",
+                    error_type="structure_mismatch")
+    )
+
+    assert len(attempts) == 2
+    assert "CCCCC" not in response.hint
+
+
+def test_a_formula_on_a_numeric_topic_is_not_a_smiles(monkeypatch, ph_session):
+    """The check is against their own line on the structure topics only. A
+    general SMILES detector fires on H2SO4 and on [OH-], which are chemistry
+    a student writes and reads every day."""
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=None):
+        attempts.append(retry)
+        return ("You used [OH-] where the question gives you [H+]. Convert "
+                "one to the other with Kw first.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    hints.generate_hint(request_for(ph_session, 1))
+
+    assert attempts == [None], "no retry: nothing was broken"
+
+
+def test_describing_the_drawing_is_never_retried(monkeypatch, structure_session):
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    attempts = []
+
+    def fake_level_1(req, session, *, retry=None):
+        attempts.append(retry)
+        return ("Your chain has five carbons in it. The formula asks for "
+                "four.", 300)
+
+    monkeypatch.setattr(hints, "_generate_level_1", fake_level_1)
+    hints.generate_hint(
+        request_for(structure_session, 1, student_line="CCCCC",
+                    error_type="structure_mismatch")
+    )
+
+    assert attempts == [None]
+
+
+def test_both_structure_prompts_carry_the_rule():
+    assert "never seen it" in hints._CHEMISTRY_LEVEL_1_PROMPT
+    assert "never seen it" in hints._CHEMISTRY_LEVEL_3_PROMPT_OPEN
+
+
+# ---------------------------------------------------------------------------
+# A verifier that cannot explain itself cannot be improved
+# ---------------------------------------------------------------------------
+
+
+def test_every_level_2_rejection_says_why():
+    """Level 2 is the most common failure in the ladder and the server could
+    not name a single reason for it.
+
+    Eleven rejection sites, two of them logged. The live audit could see the
+    static floor being served on nine questions and the log had one line for
+    one of them. This walks the source and fails if a bare `return False`
+    reappears in the verification block.
+    """
+    import ast
+    import inspect
+
+    import hints as module
+
+    source = inspect.getsource(module)
+    tree = ast.parse(source)
+    checked = {
+        "_verify_balancing",
+        "_verify_numeric",
+        "_verify_stoichiometry",
+        "_verify_solutions",
+        "_verify_redox",
+        "_verify_structure",
+        "_verify_math_example",
+    }
+    silent = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef) or node.name not in checked:
+            continue
+        for statement in ast.walk(node):
+            if not isinstance(statement, ast.Return):
+                continue
+            value = statement.value
+            is_false = isinstance(value, ast.Constant) and value.value is False
+            if not is_false:
+                continue
+            # A bare `return False` is allowed only where a log sits just
+            # above it. Anything else is a rejection with no reason. The
+            # window is wide enough for a multi-line logger call.
+            line = statement.lineno
+            window = source.splitlines()[max(0, line - 9):line]
+            if not any("logger." in text for text in window):
+                silent.append(f"{node.name}:{line}")
+
+    assert not silent, f"rejections with no reason logged: {silent}"
+
+
+def test_the_reject_helper_logs_and_returns_false(caplog):
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="hints"):
+        result = hints._reject("because %s", "reasons")
+
+    assert result is False
+    assert "level 2 rejected: because reasons" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Comparing equations by chemistry rather than by spelling
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "written,reference",
+    [
+        # The charge written the way a person writes it, against the way our
+        # own solver writes it. Live, this threw away correct net ionic
+        # worked examples twice over: once on the parse and once, after that
+        # was fixed, on the comparison.
+        ("Ba2+(aq) + SO4^2-(aq) -> BaSO4(s)", "Ba^2+ + SO4^2- -> BaSO4"),
+        ("Pb2+(aq) + 2I-(aq) -> PbI2(s)", "Pb^2+ + 2I^- -> PbI2"),
+        ("3Ag+(aq) + PO4^3-(aq) -> Ag3PO4(s)", "3Ag^+ + PO4^3- -> Ag3PO4"),
+        # A step is a sentence with an equation in it, not a bare equation.
+        ("The answer is 4Fe + 3O2 -> 2Fe2O3", "4Fe + 3O2 -> 2Fe2O3"),
+    ],
+)
+def test_the_same_equation_written_differently_still_matches(written, reference):
+    assert hints._same_equation(written, reference) is True
+
+
+@pytest.mark.parametrize(
+    "written,reference",
+    [
+        ("Ag+ + Cl- -> AgCl", "Ag^+ + Br^- -> AgBr"),   # a different halide
+        ("2H2 + O2 -> 2H2O", "H2 + O2 -> H2O"),         # different coefficients
+        ("Ag+ + Cl- -> AgCl", "Ag^2+ + Cl^- -> AgCl"),  # a different charge
+    ],
+)
+def test_a_different_equation_does_not_match(written, reference):
+    """Comparing by composition must not become comparing by nothing."""
+    assert hints._same_equation(written, reference) is False
+
+
+# ---------------------------------------------------------------------------
+# The drawing topics: a picture said out loud
+#
+# Nothing is transcribed on a drawing page, so the hint layer had one thing
+# to go on, the SMILES the recogniser produced, and it is forbidden to write
+# that at a student. Level 1 was left pointing at a line it could not quote.
+# ---------------------------------------------------------------------------
+
+
+def test_a_drawing_reaches_the_prompt_in_words(monkeypatch):
+    seen = {}
+
+    def capture(messages, **kwargs):
+        seen["prompt"] = messages[0]
+        return ({"hint": "You drew a two carbon chain."}, 30)
+
+    vault = vault_for_structure("Draw a ketone", "CC(=O)C")
+    session = SESSIONS.create("organic", vault.problem, vault)
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(hints, "generate_json", capture)
+    hints.generate_hint(
+        request_for(
+            session, 1, topic="organic", problem_type="functional_group",
+            student_line="CC=O",
+        )
+    )
+
+    prompt = seen["prompt"]
+    assert "aldehyde" in prompt
+    assert "2 carbon atoms" in prompt
+
+
+def test_a_numeric_topic_gets_no_drawing_block(monkeypatch):
+    """It would be describing a number as though it were a molecule."""
+    seen = {}
+
+    def capture(messages, **kwargs):
+        seen["prompt"] = messages[0]
+        return ({"hint": "Compare the two concentrations."}, 30)
+
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(hints, "generate_json", capture)
+    vault = vault_for_solutions(
+        "What is the pH of 0.100 M acetic acid? Ka = 1.8 x 10^-5",
+        SolutionsProblem(task="weak_acid_ph", concentration_m=0.1, ka=1.8e-5),
+    )
+    session = SESSIONS.create("solutions", vault.problem, vault)
+    hints.generate_hint(request_for(session, 1))
+
+    assert "read back from the picture" not in seen["prompt"]
+
+
+def test_an_unreadable_drawing_adds_nothing_rather_than_failing(monkeypatch):
+    seen = {}
+
+    def capture(messages, **kwargs):
+        seen["prompt"] = messages[0]
+        return ({"hint": "Look at where the oxygen sits."}, 30)
+
+    vault = vault_for_structure("Draw a ketone", "CC(=O)C")
+    session = SESSIONS.create("organic", vault.problem, vault)
+    monkeypatch.setattr(hints, "is_configured", lambda: True)
+    monkeypatch.setattr(hints, "generate_json", capture)
+    response = hints.generate_hint(
+        request_for(session, 1, topic="organic", student_line="not a molecule(")
+    )
+
+    assert "read back from the picture" not in seen["prompt"]
+    assert response.hint

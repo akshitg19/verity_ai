@@ -37,7 +37,10 @@ class ProblemSession:
     session_id: str
     topic: str
     problem: str
-    vault: AnswerVault
+    # None where we could not solve the problem ahead of time. The hint layer
+    # still generates against it; see `_unsolved_session` in hints.py for the
+    # product call that decided that, and what it costs.
+    vault: AnswerVault | None
     level_3_remaining: int = DEFAULT_LEVEL_3_BUDGET
     created_at: float = field(default_factory=time.monotonic)
     # Every line the student has written, in order, so terminal-step

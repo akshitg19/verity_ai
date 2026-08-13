@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { renderLineToPng } from "./canvas/render";
 import useCanvas from "./canvas/useCanvas";
 import useChemistry from "./chemistry/useChemistry";
-import QuestionPrompt from "./chemistry/QuestionPrompt";
+import ChemistryPageOverlays from "./chemistry/ChemistryPageOverlays";
 import CanvasSurface from "./components/CanvasSurface";
 import useKeyboardShortcuts from "./useKeyboardShortcuts";
 import FeedbackPanel from "./components/FeedbackPanel";
@@ -24,7 +24,13 @@ const SIDEBAR_WIDTH = 288;
 export default function App({ theme: themeFromRoute, subject }) {
   const notebook = useNotebook();
   const pageId = notebook.activePage.id;
-  const chemistry = useChemistry({ pageId });
+  // The canvas is created below, so the getter reads through a ref rather
+  // than capturing a value that does not exist yet.
+  const canvasRef = useRef(null);
+  const chemistry = useChemistry({
+    pageId,
+    getStrokes: () => canvasRef.current?.getStrokesSnapshot() ?? [],
+  });
   const math = useMathWorkflow({ pageId });
   const theme = themeFromRoute;
   const mode = notebook.activeNote.subject;
@@ -49,6 +55,10 @@ export default function App({ theme: themeFromRoute, subject }) {
       chemistry.clearAnswer();
     },
   });
+
+  useEffect(() => {
+    canvasRef.current = canvas;
+  }, [canvas]);
 
   const workspace = useWorkspaceNavigation({ notebook, canvas, mode, chemistry, math });
 
@@ -176,23 +186,13 @@ export default function App({ theme: themeFromRoute, subject }) {
         subject={mode}
         onSubjectChange={workspace.handleModeChange}
       />
-      <CanvasSurface canvas={canvas} mode={mode}>
-        {mode === "chemistry" && chemistry.questionCandidateRow !== null && (
-          <QuestionPrompt
-            bounds={canvas.getRowBounds(chemistry.questionCandidateRow)}
-            text={
-              chemistry.lines.find(
-                (line) => line.row === chemistry.questionCandidateRow
-              )?.text
-            }
-            verb={chemistry.questionVerb}
-            onUseAsQuestion={() =>
-              chemistry.useRowAsQuestion(chemistry.questionCandidateRow)
-            }
-            onDismiss={() =>
-              chemistry.dismissQuestionCandidate(chemistry.questionCandidateRow)
-            }
-          />
+      <CanvasSurface
+        canvas={canvas}
+        mode={mode}
+        hideEmptyHint={mode === "chemistry" && Boolean(chemistry.worksheet)}
+      >
+        {mode === "chemistry" && (
+          <ChemistryPageOverlays chemistry={chemistry} canvas={canvas} />
         )}
       </CanvasSurface>
       <WorkspaceToolbar

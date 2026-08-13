@@ -66,11 +66,51 @@ class WorkedSolution:
     # fact: withholding only the one the question happened to ask for would
     # be a leak dressed as a technicality.
     answer_indices: list[int] = field(default_factory=list)
+    # Of that group, the one the question actually asked for. The group
+    # exists so redaction covers all four statements of the fact; this exists
+    # because the answer box asked for one of them by name. Left unset for
+    # every task whose answer group has a single member, where it would say
+    # nothing the group does not already say.
+    primary_answer_name: str | None = None
 
     def mark_answers(self, *names: str) -> None:
+        """The first name is the one the question asked for."""
+        if names and self.primary_answer_name is None:
+            self.primary_answer_name = names[0]
         for index, step in enumerate(self.steps):
             if step.name in names and index not in self.answer_indices:
                 self.answer_indices.append(index)
+
+    @property
+    def primary_answer(self) -> SolvedStep | None:
+        for step in self.answer_steps:
+            if step.name == self.primary_answer_name:
+                return step
+        return None
+
+    def candidates_for(
+        self, written: Quantity, *, answers_only: bool
+    ) -> list[SolvedStep]:
+        """Which steps this written quantity is allowed to be.
+
+        One definition, used by the match and by the wrong-unit probe below
+        it, because a probe scoped more widely than the match reports a unit
+        error on a step the match was never going to consider.
+
+        The narrow case is a bare number in the answer box on a question that
+        named its quantity. Found live: 0.010 M HCl has a pH of 2.00 and a
+        pOH of 12.00, both in the answer group, so a student writing the bare
+        12.00 that the pH/pOH mix-up produces was matched to the pOH step and
+        told they were right. That is the single worst verdict this product
+        can give, and it was being given on the most common mistake in the
+        topic. Labelling it reopens the family: "pOH = 12.00" is accepted,
+        because then they have said which quantity they mean.
+        """
+        if not answers_only:
+            return self.steps
+        if not written.name and self.primary_answer is not None:
+            return [self.primary_answer]
+        return self.answer_steps
 
     def _answer_indices(self) -> list[int]:
         if self.answer_indices:
@@ -110,8 +150,15 @@ class WorkedSolution:
         self.steps.append(step)
         return step
 
-    def match(self, written: Quantity) -> SolvedStep | None:
+    def match(self, written: Quantity, *, answers_only: bool = False) -> SolvedStep | None:
         """The step this written quantity states, if any.
+
+        `answers_only` narrows the comparison to the final answer. It exists
+        for the worksheet layout, where the student writes their working in a
+        region we deliberately do not judge and then states one number in an
+        answer box. There, an intermediate is not a legitimate middle line, it
+        is the wrong answer, and accepting it would be the confident-valid
+        failure this file's own comment warns about two paragraphs down.
 
         An unrecognised label never rejects. A student who writes "n = 0.125"
         when 0.125 is the molarity has still written a number the working
@@ -127,13 +174,14 @@ class WorkedSolution:
         wrong line. Naming a quantity we computed and giving it a different
         value is now a mismatch, full stop.
         """
+        candidates = self.candidates_for(written, answers_only=answers_only)
         labelled = [
             step
-            for step in self.steps
+            for step in candidates
             if written.name
             and (written.name == step.name.lower() or written.name in step.aliases)
         ]
-        for step in labelled or self.steps:
+        for step in labelled or candidates:
             if quantities_match(step.quantity, written):
                 return step
         return None
@@ -173,8 +221,15 @@ def judge_quantity_steps(
     steps: list[ChemistryStep],
     *,
     text_of=lambda step: step.smiles,
+    answers_only: bool = False,
 ) -> list[ChemistryLineVerdict]:
-    """Compare each written line against the solved quantities."""
+    """Compare each written line against the solved quantities.
+
+    With `answers_only`, only the final answer counts as a match. A line that
+    states an intermediate is told *which* mistake it made, because "you
+    stopped one step early" and "that number appears nowhere in this problem"
+    are different problems and deserve different hints.
+    """
     verdicts: list[ChemistryLineVerdict] = []
     for step in steps:
         raw = text_of(step)
@@ -192,7 +247,7 @@ def judge_quantity_steps(
             )
             continue
 
-        matched = solution.match(written)
+        matched = solution.match(written, answers_only=answers_only)
         if matched is not None:
             verdicts.append(
                 ChemistryLineVerdict(
@@ -205,7 +260,10 @@ def judge_quantity_steps(
             continue
 
         # Right number, wrong dimension is a different mistake from a wrong
-        # number, and a student deserves to be told which one it was.
+        # number, and a student deserves to be told which one it was. Scoped
+        # to the same steps the match was: otherwise an intermediate written
+        # with the correct unit is reported as a unit error, because some
+        # other step happens to share its value.
         wrong_unit = any(
             quantities_match(
                 Quantity(
@@ -215,18 +273,33 @@ def judge_quantity_steps(
                 ),
                 written,
             )
-            for candidate in solution.steps
+            for candidate in solution.candidates_for(
+                written, answers_only=answers_only
+            )
         )
+        # An intermediate written in the answer box is a stop-too-early, not a
+        # number out of nowhere, and saying so is the whole value of knowing
+        # which line is the answer.
+        stopped_early = (
+            answers_only and solution.match(written, answers_only=False) is not None
+        )
+        # Checked before the unit, because it is the better description of
+        # the same line: a bare 0.010 in the answer box of a pH question is
+        # not a unit slip, it is the concentration they started from.
+        if stopped_early:
+            detail = "That is a quantity from the working, not the final answer"
+        elif wrong_unit:
+            detail = "Value matches a quantity in the working but the unit does not"
+        else:
+            detail = "No quantity in the correct working has this value"
         verdicts.append(
             ChemistryLineVerdict(
                 line_number=step.line_number,
                 valid=False,
-                error_type="wrong_unit" if wrong_unit else "wrong_value",
-                detail=(
-                    "Value matches a quantity in the working but the unit does not"
-                    if wrong_unit
-                    else "No quantity in the correct working has this value"
+                error_type=(
+                    "wrong_unit" if wrong_unit and not stopped_early else "wrong_value"
                 ),
+                detail=detail,
                 judged_by="deterministic",
             )
         )

@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
+from judge.chemistry import _canonical_smiles, _parse_smiles
 from judge.naming import (
     NameParseError,
     NamingJudge,
@@ -21,6 +22,7 @@ from judge.naming import (
     looks_like_a_name,
     name_to_smiles,
     opsin_available,
+    structure_from_text,
 )
 from schemas import ChemistryStep
 
@@ -146,3 +148,106 @@ def test_a_naming_problem_with_no_target_reports_line_zero():
 
     assert verdicts[0].line_number == 0
     assert verdicts[0].error_type == "unsupported"
+
+
+# ---------------------------------------------------------------------------
+# One at a time
+# ---------------------------------------------------------------------------
+
+
+def test_opsin_calls_are_serialised():
+    """py2opsin shells out to Java and is not safe to call concurrently.
+
+    Under six parallel requests it handed back another call's structure and
+    "methyl acetate" was judged wrong_name against methyl acetate. That is
+    the top row of this product's failure taxonomy, a confident wrong
+    verdict on a correct answer, and it was reachable by two students
+    naming a molecule at the same time.
+    """
+    import threading
+    from unittest.mock import patch
+
+    import judge.naming as naming_module
+
+    overlapped = []
+    inside = threading.Semaphore(0)
+
+    def slow_convert(text):
+        overlapped.append(threading.current_thread().name)
+        # Long enough that a second caller would overlap if nothing stopped it.
+        inside.acquire(timeout=0.2)
+        return "CCO"
+
+    with patch.object(naming_module, "_opsin", return_value=slow_convert):
+        threads = [
+            threading.Thread(target=naming_module.name_to_smiles, args=("ethanol",))
+            for _ in range(4)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=5)
+
+    assert len(overlapped) == 4, "every call still ran"
+
+
+def test_a_name_that_resolves_to_the_target_is_valid_under_load():
+    """The regression this guards: the same name, resolved many times over,
+    must give the same verdict every time."""
+    import concurrent.futures
+
+    if not opsin_available():
+        pytest.skip("naming needs a Java runtime")
+
+    judge = NamingJudge(None)
+
+    def once():
+        return judge.check(
+            "CC(=O)OC",
+            [ChemistryStep(line_number=1, smiles="methyl acetate")],
+        )[0].status
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        statuses = list(pool.map(lambda _: once(), range(12)))
+
+    assert set(statuses) == {"valid"}, statuses
+
+
+# ---------------------------------------------------------------------------
+# A question written the way a student writes one
+#
+# The reason this exists: the structure and organic topics could only be set
+# up by typing a SMILES into a panel, which is our notation and not theirs.
+# Nobody working with a stylus ever found it, so those questions could not be
+# asked from the page at all.
+# ---------------------------------------------------------------------------
+
+
+def test_a_smiles_reference_is_passed_through_untouched():
+    """No OPSIN call, so nothing that already worked can start needing Java."""
+    with patch("judge.naming._opsin", side_effect=AssertionError("asked OPSIN")):
+        assert structure_from_text("CC(=O)OC") == "CC(=O)OC"
+        assert structure_from_text("C=C") == "C=C"
+
+
+@requires_opsin
+def test_a_written_name_resolves_to_its_structure():
+    assert _canonical_smiles(_parse_smiles(structure_from_text("ethanol"))) == (
+        _canonical_smiles(_parse_smiles("CCO"))
+    )
+
+
+def test_an_empty_reference_is_a_parse_error_not_a_crash():
+    with pytest.raises(NameParseError):
+        structure_from_text("   ")
+
+
+def test_a_reference_we_cannot_read_never_becomes_a_verdict_about_the_student():
+    """The failure mode this guards: a question we could not parse rendering
+    as a wrong answer. It is line 0, which is the question, not their work."""
+    with patch(
+        "judge.naming.name_to_smiles",
+        side_effect=NameParseError("no such compound"),
+    ):
+        with pytest.raises(NameParseError):
+            structure_from_text("ethanolic acidamine")

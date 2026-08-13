@@ -122,10 +122,25 @@ describe("isProblemReady", () => {
   });
 
   it("does not require a field marked optional in its label", () => {
+    // Percent composition was the example until its element became
+    // required. The rule still holds; nothing ships marked optional today.
+    const type = {
+      fields: [
+        { name: "formula", label: "Formula", type: "text" },
+        { name: "note", label: "Note (optional)", type: "text" },
+      ],
+    };
+    expect(isProblemReady(type, { formula: "C6H12O6" })).toBe(true);
+  });
+
+  it("requires the element on percent composition", () => {
     const percent = TOPIC_BY_ID.stoichiometry.types.find(
       (t) => t.id === "percent_composition"
     );
-    expect(isProblemReady(percent, { formula: "C6H12O6" })).toBe(true);
+    expect(isProblemReady(percent, { formula: "C6H12O6" })).toBe(false);
+    expect(isProblemReady(percent, { formula: "C6H12O6", element: "C" })).toBe(
+      true
+    );
   });
 
   it("does not require the value a dilution problem solves for", () => {
@@ -300,5 +315,131 @@ describe("nothing gets typed, across every topic", () => {
 
     expect(fromFormula).toBeTruthy();
     expect(questionFieldFor(structure, fromFormula, {})).toBe("target_formula");
+  });
+});
+
+describe("a structure question a student can actually ask", () => {
+  // Every one of these could only be set up by typing a SMILES into the
+  // panel, which is our notation and not theirs. Nobody with a stylus found
+  // it, so from the page these questions did not exist.
+  const organic = TOPIC_BY_ID.organic;
+  const structure = TOPIC_BY_ID.structure;
+  const typeOf = (topic, id) => topic.types.find((t) => t.id === id);
+
+  it("takes the isomer reference as a written name", () => {
+    const isomer = typeOf(structure, "isomer");
+    const written = isomer.fields.find((f) => f.name === "reference_name");
+
+    expect(written?.ink).toBeTruthy();
+    expect(
+      structure.session(isomer, { reference_name: "ethanol" }, "Draw an isomer")
+    ).toEqual({
+      topic: "structure",
+      problem: "Draw an isomer",
+      target_smiles: "ethanol",
+    });
+  });
+
+  it("still prefers a typed SMILES when one is given", () => {
+    const isomer = typeOf(structure, "isomer");
+
+    expect(
+      structure.session(
+        isomer,
+        { reference_name: "ethanol", reference_smiles: "CCO" },
+        "Draw an isomer"
+      ).target_smiles
+    ).toBe("CCO");
+  });
+
+  it("opens a session for a named compound, which it never used to", () => {
+    // No session means no vault, and no vault means the hint ladder serves
+    // the static floor however good the model is. This was the whole reason
+    // "Draw propan-2-ol" gave a generic level 1.
+    const drawFromName = typeOf(organic, "draw_from_name");
+
+    expect(
+      organic.session(
+        drawFromName,
+        { target_name: "propan-2-ol" },
+        "Draw propan-2-ol"
+      )
+    ).toEqual({
+      topic: "organic",
+      problem: "Draw propan-2-ol",
+      target_name: "propan-2-ol",
+    });
+  });
+
+  it("opens no session when the name has not been written yet", () => {
+    const drawFromName = typeOf(organic, "draw_from_name");
+
+    expect(organic.session(drawFromName, {}, "Draw it")).toBe(null);
+  });
+
+  it("takes a reaction's starting material as a written name", () => {
+    const reaction = typeOf(organic, "reaction");
+    const written = reaction.fields.find((f) => f.name === "reactant_name");
+
+    expect(written?.ink).toBeTruthy();
+    expect(
+      organic.session(reaction, { reactant_name: "ethene" }, "React it")
+        .target_smiles
+    ).toBe("ethene");
+  });
+});
+
+describe("a number as a student writes one", () => {
+  // This was silent and it cost whole problems. A dilution with all four
+  // boxes filled arrived at the solver with two of them missing, and the
+  // page said "outside what we can check yet" about a perfectly good
+  // question.
+  const dilution = TOPIC_BY_ID.solutions.types.find((t) => t.id === "dilution");
+  const payload = (values) =>
+    TOPIC_BY_ID.solutions.buildPayload(dilution, values, []);
+
+  it("reads a value with its unit written after it", () => {
+    const body = payload({
+      initial_concentration_m: "12.0 M",
+      initial_volume_l: "0.010 L",
+      final_concentration_m: "0.500 M",
+    });
+
+    expect(body.initial_concentration_m).toBe(12);
+    expect(body.initial_volume_l).toBe(0.01);
+    expect(body.final_concentration_m).toBe(0.5);
+  });
+
+  it("leaves the box being solved for out of the payload", () => {
+    const body = payload({
+      initial_concentration_m: "12.0 M",
+      initial_volume_l: "0.010 L",
+      final_concentration_m: "0.500 M",
+      final_volume_l: "",
+    });
+
+    expect("final_volume_l" in body).toBe(false);
+  });
+
+  it("reads a Ka the way it is written by hand", () => {
+    const weakAcid = TOPIC_BY_ID.solutions.types.find(
+      (t) => t.id === "weak_acid_ph"
+    );
+    const body = TOPIC_BY_ID.solutions.buildPayload(
+      weakAcid,
+      { concentration_m: "0.10 M", ka: "1.8 x 10^-5" },
+      []
+    );
+
+    expect(body.ka).toBeCloseTo(1.8e-5, 12);
+  });
+
+  it("refuses working written into a value box", () => {
+    // "44.01 / 22.00" is two numbers and a division. Guessing which one is
+    // meant is exactly the confident-wrong behaviour this product must not
+    // have, so it stays out of the payload.
+    const body = payload({ initial_concentration_m: "44.01 / 22.00" });
+
+    expect("initial_concentration_m" in body).toBe(false);
   });
 });

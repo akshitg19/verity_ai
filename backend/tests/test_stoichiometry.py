@@ -235,3 +235,120 @@ def test_every_verdict_is_labelled_deterministic():
     problem = StoichiometryProblem(task="molar_mass", formula="H2O")
 
     assert all(v.judged_by == "deterministic" for v in check(problem, "18.02 g/mol"))
+
+
+# The worksheet layout: the working is not judged, one answer box is.
+#
+# This is the mode that closes the standing finding in `final_tasks.md` --
+# "the numeric judges mark a line valid when it matches *any* quantity in the
+# correct working ... nothing marks a line as the final answer". On a
+# worksheet the answer box *is* the marker, so the tests below are the
+# rejection path that could not exist before.
+
+
+def check_answer(problem: StoichiometryProblem, line: str):
+    return judge.check(
+        problem, [ChemistryStep(line_number=1, smiles=line)], answers_only=True
+    )[0]
+
+
+ALUMINIUM_SULFATE = StoichiometryProblem(task="molar_mass", formula="Al2(SO4)3")
+
+
+def test_the_answer_is_accepted_in_the_answer_box():
+    assert check_answer(ALUMINIUM_SULFATE, "342.15 g/mol").valid
+    assert check_answer(ALUMINIUM_SULFATE, "342.15").valid
+
+
+def test_an_intermediate_in_the_answer_box_is_wrong():
+    # 53.96 is the mass of the aluminium, a real quantity in the working and
+    # a valid middle line. In the answer box it is a stop-too-early, and the
+    # old behaviour of accepting it is the fatal category in this repo's own
+    # failure taxonomy.
+    verdict = check_answer(ALUMINIUM_SULFATE, "53.96 g/mol")
+    assert not verdict.valid
+    assert verdict.error_type == "wrong_value"
+    assert "not the final answer" in verdict.detail
+
+
+def test_a_labelled_intermediate_in_the_answer_box_is_wrong_too():
+    verdict = check_answer(ALUMINIUM_SULFATE, "Al = 53.96")
+    assert not verdict.valid
+    assert verdict.error_type == "wrong_value"
+
+
+def test_an_intermediate_with_the_right_unit_is_not_called_a_unit_error():
+    # The value collides with a step in the working, so a unit check scoped
+    # to every step would report `wrong_unit` on a line whose unit is right.
+    assert check_answer(ALUMINIUM_SULFATE, "53.96 g/mol").error_type == "wrong_value"
+
+
+def test_a_number_from_nowhere_says_so_rather_than_blaming_the_working():
+    verdict = check_answer(ALUMINIUM_SULFATE, "149.04 g/mol")
+    assert not verdict.valid
+    assert "not the final answer" not in verdict.detail
+
+
+def test_a_genuine_unit_error_still_reads_as_one():
+    verdict = check_answer(ALUMINIUM_SULFATE, "342.15 g")
+    assert not verdict.valid
+    assert verdict.error_type == "wrong_unit"
+
+
+def test_answers_only_is_off_by_default_so_working_still_passes():
+    # Every existing caller judges a chain of steps, where an intermediate is
+    # exactly what a student should be writing.
+    assert statuses(check(ALUMINIUM_SULFATE, "53.96", "96.20", "342.15")) == [
+        "valid",
+        "valid",
+        "valid",
+    ]
+
+
+# ---------------------------------------------------------------------------
+# A fractional subscript is the empirical formula mistake, not a parse failure
+# ---------------------------------------------------------------------------
+
+
+FE_OXIDE = StoichiometryProblem(
+    task="empirical_formula", composition={"Fe": 69.9, "O": 30.1}
+)
+
+
+def _empirical(written: str):
+    return StoichiometryJudge().check(
+        FE_OXIDE, [ChemistryStep(line_number=1, smiles=written)], answers_only=True
+    )[0]
+
+
+@pytest.mark.parametrize("written", ["FeO1.5", "Fe1O1.5", "FeO1.50"])
+def test_a_fractional_subscript_is_flagged_rather_than_shrugged_at(written):
+    """The mole ratio came out 1 to 1.5 and they wrote it down.
+
+    It was reporting parse_error, which the UI is forbidden to show as a
+    student mistake, so the one line they got wrong was the one line with no
+    mark on it. Found by running every concept live.
+    """
+    verdict = _empirical(written)
+
+    assert verdict.status == "invalid"
+    assert verdict.error_type == "wrong_formula"
+    assert "fractional subscript" in (verdict.detail or "")
+
+
+def test_the_detail_does_not_hand_over_the_multiplier():
+    """Naming the mistake is level 1's job. Saying 'double it' is level 3's."""
+    detail = (_empirical("FeO1.5").detail or "").lower()
+
+    assert "2" not in detail
+    assert "double" not in detail
+
+
+def test_genuinely_unreadable_text_is_still_a_parse_error():
+    """The relaxation is about one recognisable mistake, not about calling
+    everything we cannot read a wrong answer."""
+    assert _empirical("Fe??O").error_type == "parse_error"
+
+
+def test_the_right_answer_is_unaffected():
+    assert _empirical("Fe2O3").valid is True

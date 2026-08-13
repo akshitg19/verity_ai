@@ -115,3 +115,49 @@ def test_a_bare_number_matches_any_dimension():
     written = Quantity(value=0.125, sig_figs=3)
 
     assert quantities_match(expected, written)
+
+
+# ---------------------------------------------------------------------------
+# Precision the student actually wrote
+#
+# Reported from the page: "when I write a whole number 12, and the answer is
+# 12.3, it still says right." Two significant figures gave half a unit in the
+# last place of 0.5, and 12.3 sat well inside it. Rounding 12.3 to two
+# figures really is 12, so this was not a rounding rule failing; it was a
+# rounding rule applied to somebody who never wrote a decimal point.
+# ---------------------------------------------------------------------------
+
+
+def _matches(expected: float, written: str) -> bool:
+    quantity = parse_quantity(written)
+    return values_match(expected, quantity.value, sig_figs=quantity.sig_figs)
+
+
+def test_a_whole_number_is_not_a_decimal_answer():
+    assert _matches(12.3, "12") is False
+    assert _matches(12.3, "12.3") is True
+
+
+def test_two_figures_no_longer_swallow_the_third():
+    # A pH of 2.87 written as 2.9 is a different answer, not a rounding of
+    # the one we solved for.
+    assert _matches(2.8752770615501357, "2.9") is False
+    assert _matches(2.8752770615501357, "2.88") is True
+
+
+def test_an_exact_answer_written_short_is_still_right():
+    # 74 and 74.0 are the same number. Tightening the rounding rule must not
+    # start marking a correct answer wrong for the trailing zero it did not
+    # write.
+    assert _matches(74.0, "74") is True
+    assert _matches(0.5, "0.5") is True
+
+
+def test_rounding_still_works_once_three_figures_are_written():
+    assert _matches(33.7917, "33.8") is True
+    assert _matches(342.153, "342.15") is True
+
+
+def test_one_figure_never_reopens_the_door():
+    # The case the cap was written for: "20" for 18.02.
+    assert _matches(18.015, "20") is False

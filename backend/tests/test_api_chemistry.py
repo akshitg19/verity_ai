@@ -21,6 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+from judge.naming import opsin_available
 from sessions import SESSIONS
 
 
@@ -442,3 +443,112 @@ def test_the_math_hint_contract_is_unchanged():
     assert body["max_level"] == 3
     assert body["worked_example"] is None
     assert "positive/negative signs" in body["hint"]
+
+
+# ---------------------------------------------------------------------------
+# A question given as a name
+#
+# "Draw propan-2-ol" opened no session at all, and no session means no vault,
+# which means the hint ladder serves the static floor however good the model
+# is. The name is the question; the structure it names is the answer.
+# ---------------------------------------------------------------------------
+
+
+def test_a_named_compound_opens_a_session():
+    if not opsin_available():
+        pytest.skip("resolving a name needs a Java runtime")
+
+    response = client.post(
+        "/chemistry/session",
+        json={
+            "topic": "organic",
+            "problem": "Draw propan-2-ol",
+            "target_name": "propan-2-ol",
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()["session_id"]) > 16
+
+
+def test_a_named_compound_session_leaks_no_structure():
+    if not opsin_available():
+        pytest.skip("resolving a name needs a Java runtime")
+
+    response = client.post(
+        "/chemistry/session",
+        json={
+            "topic": "organic",
+            "problem": "Draw propan-2-ol",
+            "target_name": "propan-2-ol",
+        },
+    )
+
+    assert "CC(O)C" not in response.text
+    assert "CC(C)O" not in response.text
+
+
+def test_a_name_nobody_can_resolve_is_refused_rather_than_crashing():
+    response = client.post(
+        "/chemistry/session",
+        json={
+            "topic": "organic",
+            "problem": "Draw it",
+            "target_name": "not a compound at all",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_an_isomer_question_can_name_its_reference_molecule():
+    if not opsin_available():
+        pytest.skip("resolving a name needs a Java runtime")
+
+    response = client.post(
+        "/chemistry/isomer",
+        json={
+            "reference_smiles": "ethanol",
+            "isomer_type": "constitutional",
+            "steps": steps("COC"),
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["verdicts"][0]["status"] == "valid"
+
+
+def test_naming_the_reference_does_not_make_the_same_molecule_an_isomer():
+    """The rejection path: dimethyl ether is an isomer of ethanol, ethanol is
+    not an isomer of itself, and resolving the reference must not blur that."""
+    if not opsin_available():
+        pytest.skip("resolving a name needs a Java runtime")
+
+    response = client.post(
+        "/chemistry/isomer",
+        json={
+            "reference_smiles": "ethanol",
+            "isomer_type": "constitutional",
+            "steps": steps("CCO"),
+        },
+    )
+
+    assert response.json()["verdicts"][0]["status"] == "invalid"
+
+
+def test_a_question_we_cannot_read_is_our_limit_and_not_a_wrong_answer():
+    """Line 0 is the question. The UI is forbidden to render it as a mistake
+    in the student's drawing, so this must never come back `invalid` on the
+    line they drew."""
+    response = client.post(
+        "/chemistry/isomer",
+        json={
+            "reference_smiles": "ethanolic wibble compound",
+            "isomer_type": "constitutional",
+            "steps": steps("COC"),
+        },
+    )
+
+    body = response.json()
+    assert body["verdicts"] == [] or body["verdicts"][0]["line_number"] == 0
+    assert body.get("problem_error") in ("parse_error", "unsupported")

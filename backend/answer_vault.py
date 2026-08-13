@@ -42,6 +42,12 @@ from judge.chemistry_equations import (
     balanced_equation,
     coefficient_distance,
 )
+from judge.naming import (
+    NameParseError,
+    OpsinUnavailableError,
+    name_to_smiles,
+    structure_from_text,
+)
 from judge.net_ionic import net_ionic_equation
 from judge.numeric import WorkedSolution, quantity_forms
 from judge.quantities import values_match
@@ -194,6 +200,24 @@ def vault_for_structure(problem: str, target_smiles: str) -> AnswerVault:
                 vault.answer_forms.append(key)
     except Exception:  # InChI support is optional in some RDKit builds
         pass
+    return vault
+
+
+def vault_for_formula_structure(problem: str, target_formula: str) -> AnswerVault:
+    """Drawing any structure with a given formula.
+
+    There is no single answer here on purpose: C2H6O is ethanol and it is
+    also dimethyl ether, and the question asked for a structure with that
+    formula rather than for one particular molecule. So the vault guards the
+    formula, which is the one thing a hint must not hand over, and holds no
+    structure at all. This is the "the vault would have to hold any of these"
+    gap in final_tasks.md, closed by guarding the question instead of the
+    set of acceptable answers.
+    """
+    vault = AnswerVault(topic="structure", problem=problem, single_step=True)
+    formula = target_formula.strip()
+    if formula:
+        vault.answer_forms.append(formula)
     return vault
 
 
@@ -425,6 +449,13 @@ def build_vault(
     target_smiles: str | None = None,
     target_group: str | None = None,
     reference_equation: str | None = None,
+    molecular_equation: str | None = None,
+    oxidation_formula: str | None = None,
+    oxidation_element: str | None = None,
+    cathode: str | None = None,
+    anode: str | None = None,
+    target_formula: str | None = None,
+    target_name: str | None = None,
     stoichiometry: StoichiometryProblem | None = None,
     solutions: SolutionsProblem | None = None,
 ) -> AnswerVault:
@@ -440,16 +471,41 @@ def build_vault(
             return vault_for_stoichiometry(problem, stoichiometry)
         if solutions is not None:
             return vault_for_solutions(problem, solutions)
+        # Net ionic is checked first because a net ionic problem also carries
+        # a molecular equation, and building a balancing vault from it would
+        # guard the balanced equation rather than the net ionic one. That is
+        # the "net ionic opens a balancing-shaped session" gap.
+        if molecular_equation:
+            return vault_for_net_ionic(problem, molecular_equation)
+        if oxidation_formula and oxidation_element:
+            return vault_for_oxidation_state(
+                problem, oxidation_formula, oxidation_element
+            )
+        if cathode and anode:
+            return vault_for_cell_potential(problem, cathode, anode)
         if target_smiles:
-            return vault_for_structure(problem, target_smiles)
+            return vault_for_structure(problem, structure_from_text(target_smiles))
+        # "Draw propan-2-ol". The name is the question, and the structure it
+        # resolves to is the answer, so this is a structure vault like any
+        # other once OPSIN has read it. Without this the drawing types opened
+        # no session at all, and no session means no vault, which means the
+        # hint ladder served the static floor however good the model was.
+        if target_name:
+            return vault_for_structure(problem, name_to_smiles(target_name))
         if target_group:
             return vault_for_functional_group(problem, target_group)
+        if target_formula:
+            return vault_for_formula_structure(problem, target_formula)
         if reference_equation:
             return vault_for_balance(problem, reference_equation)
     except (
         ChemistryParseError,
         EquationParseError,
         EquationUnbalanceableError,
+        # No Java on this machine means no name resolution, which is a
+        # missing session and a static hint, never a crash and never a claim
+        # about the student. `NameParseError` is a ValueError already.
+        OpsinUnavailableError,
         RedoxError,
         SolutionsError,
         StoichiometryError,
@@ -518,6 +574,7 @@ __all__ = [
     "build_vault",
     "vault_for_balance",
     "vault_for_cell_potential",
+    "vault_for_formula_structure",
     "vault_for_functional_group",
     "vault_for_net_ionic",
     "vault_for_oxidation_state",

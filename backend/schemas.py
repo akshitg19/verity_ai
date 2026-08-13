@@ -365,6 +365,11 @@ class StoichiometryRequest(BaseModel):
     ] = Field(default_factory=dict, max_length=12)
     target_molar_mass: Annotated[float, Field(gt=0, le=1e6)] | None = None
     steps: Annotated[list[ChemistryStep], Field(min_length=1, max_length=50)]
+    # The worksheet layout judges one answer box rather than a chain of
+    # working lines, so an intermediate quantity is the wrong answer there
+    # rather than a legitimate middle step. Defaults false, which is exactly
+    # the behaviour every existing caller already gets.
+    answers_only: bool = False
 
     @model_validator(mode="after")
     def steps_are_unique_and_ordered(self):
@@ -401,6 +406,10 @@ class SolutionsRequest(BaseModel):
     solute_mass_g: Annotated[float, Field(gt=0, le=1e9)] | None = None
     solution_mass_g: Annotated[float, Field(gt=0, le=1e9)] | None = None
     steps: Annotated[list[ChemistryStep], Field(min_length=1, max_length=50)]
+    # See the note on StoichiometryRequest.answers_only. It matters most
+    # here: a pH answer group holds pH, pOH, [H+] and [OH-], so without it
+    # the answer box accepts the pOH for a pH question.
+    answers_only: bool = False
 
     @model_validator(mode="after")
     def steps_are_unique_and_ordered(self):
@@ -581,6 +590,22 @@ class ChemistrySessionRequest(BaseModel):
     target_smiles: SmilesText | None = None
     target_group: Annotated[str, StringConstraints(max_length=64)] | None = None
     reference_equation: EquationText | None = None
+    # Added so the topics that used to open no session can open one. Without
+    # a session there is no vault, and without a vault the hint layer falls
+    # back to the static templates no matter what else is fixed, which is
+    # why hints looked broken on redox, net ionic, and the drawing types.
+    molecular_equation: EquationText | None = None
+    oxidation_formula: FormulaText | None = None
+    oxidation_element: Annotated[str, StringConstraints(max_length=3)] | None = None
+    cathode: EquationText | None = None
+    anode: EquationText | None = None
+    target_formula: FormulaText | None = None
+    # "Draw propan-2-ol". The question is a name, because a name is what a
+    # student can write and a SMILES is not, and the structure it resolves to
+    # is what the vault guards.
+    target_name: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)
+    ] | None = None
     stoichiometry: StoichiometryRequest | None = None
     solutions: SolutionsRequest | None = None
 
@@ -618,6 +643,22 @@ HintText = Annotated[
 ]
 
 
+class ExampleQuantity(BaseModel):
+    """One number a worked step states, so the client can show it moving.
+
+    Carries no part of any answer to the student's own problem: a worked
+    example is a *different* problem by construction, and the redaction pass
+    runs over the whole example before it is returned.
+    """
+
+    value: float
+    unit: str | None = None
+    label: str | None = None
+    # As the student would write it, e.g. "0.250 M". Rendered rather than
+    # reformatted on the client, so the two cannot disagree about rounding.
+    text: str
+
+
 class WorkedExample(BaseModel):
     """A different problem, worked in full, verified line by line.
 
@@ -630,6 +671,19 @@ class WorkedExample(BaseModel):
     technique: str
     steps: Annotated[list[str], Field(min_length=1, max_length=20)]
     verified: bool = False
+    # One entry per step, aligned by index: the quantity that step states, as
+    # `judge.quantities.parse_quantity` reads it, or null where the step
+    # states no single quantity. Same reasoning as `equations` below, for the
+    # numeric topics: the client should not be running a regex over prose to
+    # find out which number moved, because the parser that judges the student
+    # already knows.
+    quantities: list["ExampleQuantity | None"] = Field(default_factory=list)
+    # The structure this worked example arrives at, for the topics where the
+    # answer is a molecule. It is the answer to the *example's* problem, not
+    # the student's, which is the whole reason level 2 can be generous: a
+    # fully worked solution to a different problem contains none of theirs.
+    # Set only after the example has been verified.
+    structure: SmilesText | None = None
     # One entry per step, aligned by index: the equation on that step as our
     # own parser reads it, or null where the step carries no equation.
     #
@@ -656,6 +710,20 @@ class HintRequest(BaseModel):
     problem: Annotated[str, StringConstraints(max_length=1024)] | None = None
     student_line: Annotated[str, StringConstraints(max_length=512)] | None = None
     previous_line: Annotated[str, StringConstraints(max_length=512)] | None = None
+    # Which concept under the topic: "molar_mass", "buffer_ph",
+    # "oxidation_state". A hint keyed only by the topic can never be more
+    # specific than the topic, which is the same ceiling the static template
+    # ladder had, one level up. Free text rather than a Literal so a new
+    # problem type cannot 422 an otherwise valid hint request.
+    problem_type: Annotated[str, StringConstraints(max_length=64)] | None = None
+    # The student's whole working, in order, when the page has one. Level 3
+    # reads all of it: on a page where every student lays the arithmetic out
+    # differently, one line in isolation is not enough to say where it went
+    # wrong.
+    working_lines: Annotated[
+        list[Annotated[str, StringConstraints(max_length=512)]],
+        Field(max_length=40),
+    ] = Field(default_factory=list)
 
 
 class HintResponse(BaseModel):
