@@ -24,7 +24,12 @@ describe("math topics", () => {
   });
 
   it("does not falsely mark unimplemented topics as ready", () => {
-    const implementedTopics = new Set(["pre_algebra", "algebra"]);
+    const implementedTopics = new Set([
+      "pre_algebra", 
+      "algebra",
+      "trigonometry",
+      "calculus",
+    ]);
 
     for (const topic of MATH_TOPICS) {
       if (implementedTopics.has(topic.id)) continue;

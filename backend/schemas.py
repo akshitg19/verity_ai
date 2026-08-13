@@ -18,14 +18,37 @@ SmilesText = Annotated[
 ]
 LineNumber = Annotated[int, Field(ge=1, le=1000)]
 ErrorType = Literal[
+    "order_of_operations",
+    "fraction",
+    "exponent",
     "sign",
     "arithmetic",
     "division",
     "distribution",
     "algebraic",
+    "trig_sign",
+    "trig_value",
+    "trig_reciprocal",
+    "trig_quotient",
+    "trig_identity",
+    "trig_algebraic",
+    "derivative_power_rule",
+    "derivative_product_rule",
+    "derivative_chain_rule",
+    "derivative_sum_rule",
+    "derivative_trig_rule",
+    "derivative_rule",
+    "integral_rule",
+    "limit_evaluation",
+    "calculus_algebraic",
     "parse_error",
     "unsupported",
 ]
+
+MathWarningType = Literal[
+    "missing_constant_of_integration",
+]
+
 VerdictStatus = Literal["valid", "invalid", "unsupported", "parse_error"]
 
 # Which engine decided this verdict. Deterministic beats model wherever both
@@ -79,6 +102,7 @@ class LineVerdict(BaseModel):
     # One of: "sign", "arithmetic", "division", "distribution",
     # "algebraic", "parse_error", "unsupported"
     error_type: ErrorType | None = None
+    warning_type: MathWarningType | None = None
     detail: str | None = None       # machine detail, NOT student-facing
     judged_by: JudgedBy = "deterministic"
 

@@ -148,7 +148,7 @@ export default function useMathWorkflow({ pageId = null } = {}) {
           setLastResult({
             warning:
               problemError === "unsupported"
-                ? "This problem is outside the current one-variable linear scope."
+                ? "This problem is outside the current supported scope for this topic."
                 : "The problem could not be parsed. Check the format and try again.",
           });
           return;

@@ -133,21 +133,47 @@ def check_outbound(
 
     normalised = normalise(text)
     tokens = set(tokenise(normalised))
+    problem_normalised = normalise(vault.problem)
+    problem_tokens = set(tokenise(problem_normalised))
 
     for form in vault.answer_forms:
         candidate = normalise(str(form))
         if not candidate:
             continue
-        # Standalone token, not a substring: "4" inside "24" is not the
-        # answer, and rejecting it would make every hint unwritable.
-        if candidate in tokens:
+
+        # If the exact answer token was already visible in the original problem,
+        # merely repeating that token is not itself an answer leak. For example,
+        # a limit problem may contain the number 4 and also happen to have answer 4.
+        candidate_already_in_problem = candidate in problem_tokens
+
+        # Standalone token, not a substring: "4" inside "24" is not the answer.
+        if candidate in tokens and not candidate_already_in_problem:
             return False, f"states the answer form {form!r}"
-        if len(candidate) > 3 and candidate in normalised:
+
+        if (
+            len(candidate) > 3
+            and candidate in normalised
+            and candidate not in problem_normalised
+        ):
             return False, f"contains the answer form {form!r}"
+
+    problem_values = _numeric_tokens(problem_normalised)
 
     for value in _numeric_tokens(normalised):
         if vault.matches_number(value):
-            return False, f"states a value within tolerance of the answer ({value})"
+            already_in_problem = any(
+                values_match(
+                    problem_value,
+                    value,
+                    relative_floor=LEAK_TOLERANCE,
+                )
+                for problem_value in problem_values
+            )
+
+            if not already_in_problem:
+                return False, (
+                    f"states a value within tolerance of the answer ({value})"
+                )
 
     for match in _ASSIGNMENT_RE.finditer(normalised):
         try:
