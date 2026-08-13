@@ -556,7 +556,10 @@ def test_a_verified_example_is_returned(monkeypatch, ph_session):
     assert len(response.worked_example.steps) == 3
 
 
-def test_an_example_with_a_wrong_final_answer_is_rejected(monkeypatch, ph_session):
+def test_an_example_with_a_wrong_final_answer_is_not_marked_verified(
+    monkeypatch, ph_session
+):
+    """Aug 12: it renders, but it never claims to have been checked."""
     bad = {**GOOD_SOLUTIONS_EXAMPLE, "check": {
         **GOOD_SOLUTIONS_EXAMPLE["check"], "answer": 2.10
     }}
@@ -564,12 +567,19 @@ def test_an_example_with_a_wrong_final_answer_is_rejected(monkeypatch, ph_sessio
     monkeypatch.setattr(hints, "generate_json", lambda *a, **k: (bad, 900))
     response = hints.generate_hint(request_for(ph_session, 2))
 
-    assert response.worked_example is None
-    assert response.source == "fallback"
+    assert response.worked_example is not None
+    assert response.worked_example.verified is False
 
 
-def test_an_example_with_an_invented_intermediate_is_rejected(monkeypatch, ph_session):
-    """One hallucinated line in the middle and the whole example goes."""
+def test_an_example_with_an_invented_intermediate_is_not_marked_verified(
+    monkeypatch, ph_session
+):
+    """One hallucinated line in the middle and the whole example is unverified.
+
+    It is still shown. What must never happen is it arriving with
+    `verified` true, because that flag is the only thing telling the two
+    kinds of example apart.
+    """
     bad = {
         **GOOD_SOLUTIONS_EXAMPLE,
         "steps": ["Ka = x^2 / (0.05 - x)", "x = 5.5e-3", "pH = 3.0937"],
@@ -578,7 +588,7 @@ def test_an_example_with_an_invented_intermediate_is_rejected(monkeypatch, ph_se
     monkeypatch.setattr(hints, "generate_json", lambda *a, **k: (bad, 900))
     response = hints.generate_hint(request_for(ph_session, 2))
 
-    assert response.worked_example is None
+    assert response.worked_example.verified is False
 
 
 def test_an_example_reusing_the_students_numbers_is_rejected(monkeypatch, ph_session):
@@ -600,7 +610,12 @@ def test_an_example_reusing_the_students_numbers_is_rejected(monkeypatch, ph_ses
     assert "2.88" not in response.hint
 
 
-def test_an_example_with_no_steps_is_rejected(monkeypatch, ph_session):
+def test_an_example_with_no_steps_is_still_dropped(monkeypatch, ph_session):
+    """The one rejection that survives the Aug 12 call.
+
+    An example with no steps is not an unverified demonstration, it is an
+    empty box. There is nothing to render and nothing for a student to read.
+    """
     monkeypatch.setattr(hints, "is_configured", lambda: True)
     monkeypatch.setattr(
         hints,
@@ -611,15 +626,18 @@ def test_an_example_with_no_steps_is_rejected(monkeypatch, ph_session):
     assert hints.generate_hint(request_for(ph_session, 2)).worked_example is None
 
 
-def test_an_example_with_a_missing_check_is_rejected(monkeypatch, ph_session):
+def test_an_example_with_a_missing_check_is_never_verified(monkeypatch, ph_session):
+    """No check object means nothing our engines can confirm, so the flag
+    stays false however good the prose looks."""
     monkeypatch.setattr(hints, "is_configured", lambda: True)
     monkeypatch.setattr(
         hints,
         "generate_json",
         lambda *a, **k: ({**GOOD_SOLUTIONS_EXAMPLE, "check": {}}, 900),
     )
+    response = hints.generate_hint(request_for(ph_session, 2))
 
-    assert hints.generate_hint(request_for(ph_session, 2)).worked_example is None
+    assert response.worked_example.verified is False
 
 
 def test_a_malformed_check_task_is_rejected(monkeypatch, ph_session):
@@ -636,7 +654,7 @@ def test_a_malformed_check_task_is_rejected(monkeypatch, ph_session):
         ),
     )
 
-    assert hints.generate_hint(request_for(ph_session, 2)).worked_example is None
+    assert hints.generate_hint(request_for(ph_session, 2)).worked_example.verified is False
 
 
 def test_verification_retries_before_giving_up(monkeypatch, ph_session):
@@ -840,9 +858,11 @@ def test_a_verified_balancing_example_is_returned(monkeypatch, balance_session):
     assert response.worked_example.steps[-1].startswith("2C2H6 + 7O2")
 
 
-def test_a_balancing_example_that_does_not_balance_is_rejected(
+def test_a_balancing_example_that_does_not_balance_is_never_verified(
     monkeypatch, balance_session
 ):
+    """An equation that does not balance is exactly what the verifier is for,
+    so it renders only with the flag down."""
     bad = {
         **GOOD_BALANCE_EXAMPLE,
         "check": {
@@ -856,10 +876,10 @@ def test_a_balancing_example_that_does_not_balance_is_rejected(
         request_for(balance_session, 2, error_type="unbalanced_atoms")
     )
 
-    assert response.worked_example is None
+    assert response.worked_example.verified is False
 
 
-def test_a_balancing_example_whose_steps_never_reach_the_answer_is_rejected(
+def test_a_balancing_example_whose_steps_stop_short_is_never_verified(
     monkeypatch, balance_session
 ):
     bad = {**GOOD_BALANCE_EXAMPLE, "steps": ["2C2H6 + O2 -> 4CO2 + H2O"]}
@@ -869,7 +889,7 @@ def test_a_balancing_example_whose_steps_never_reach_the_answer_is_rejected(
         request_for(balance_session, 2, error_type="unbalanced_atoms")
     )
 
-    assert response.worked_example is None
+    assert response.worked_example.verified is False
 
 
 # ---------------------------------------------------------------------------

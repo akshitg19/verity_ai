@@ -3231,14 +3231,57 @@ Same reasoning as the Aug 10 withholding call, and it should be revisited
 the same way: a hint written from the question and their own work beats a
 sentence that would fit any problem in the topic.
 
+## 28. Precision, level 2, and a sweep of all thirty, Aug 12
+
+**A whole number was accepted for a decimal answer.** Reported twice from
+the page: write 12, the answer is 12.3, marked right. Two significant
+figures granted half a unit in the last place, which is 0.5, and 12.3 sat
+well inside it. Rounding 12.3 to two figures really is 12, so this was not
+a rounding rule failing; it was a rounding rule applied to somebody who
+never wrote a decimal point. Half-a-unit now needs three figures before it
+applies at all, and stretches at most 2% rather than 5%. Below that the
+relative floor decides, so 74 for 74.0 is still right, because those are
+the same number. This was a wrong answer marked correct, which is the top
+row of the failure taxonomy, and it was live on every numeric topic.
+
+**Level 2 no longer gives up.** An example our engines cannot verify is
+shown with `verified` false rather than replaced by a link out. Recorded
+in `CLAUDE.md` against the line it overrides, with what it costs. Math is
+excluded: SymPy rejecting an algebra example means the arithmetic is
+wrong, not that our vocabulary ran out.
+
+**The + rendered over the drawing area.** Introduced the same day it was
+asked for. On a drawing page the middle of the sheet is one figure, and a
+control sitting in it swallows the strokes drawn over it. It is now on
+answer and steps pages only, which is where rows exist to add.
+
+**The isomer and reaction pages carried a dead SMILES field.** Added the
+day before, alongside the name box that replaced it, so the page printed
+three blank picture rows for a molecule nobody had typed and pushed the
+drawing area down. Both are gone. What is left is what was asked for: the
+molecule, the kind of isomer, and somewhere to draw.
+
+### The sweep
+
+All thirty concepts, both questions each, through the real API with no
+model and no network. Every one of the sixty opens a session, judges the
+correct answer valid and the wrong answer invalid. **60/60.**
+
+So the deterministic half is sound end to end, and the structure and
+organic failures are the front end failing to ask the question, not the
+judges failing to answer it. That is worth stating because the two look
+identical from the page.
+
 ### Still not done, and asked for
 
-- [ ] Level 2 falls back to a link when the verifier rejects an example
-      twice. The ask is to show the model's example anyway. That is the one
-      rule `CLAUDE.md` calls non-negotiable, so it is not being changed
-      without a decision on the record.
 - [ ] An answer box on the steps pages, so balancing and redox have one
       line that is the answer rather than a convention.
+- [ ] The drawing topics send no working to the hint layer, because their
+      working is the drawing. Level 1 and 3 there see a SMILES they are
+      forbidden to quote and nothing else. A word description of the
+      drawing, derived from RDKit rather than from the model, is the fix
+      and is not written yet. **This is the remaining reason structure and
+      organic hints read thin.**
 - [ ] Level 3 on the numeric topics reads the working but does not lean on
       it hard enough: gibberish working still gets a hint about the
       compound rather than about what they wrote.

@@ -657,11 +657,10 @@ export const TOPICS = [
             placeholder: "ethanol",
             prompt: "write the molecule to find an isomer of, like ethanol",
           }),
-          field("reference_smiles", "Molecule to find an isomer of (optional)", {
-            placeholder: "CCO",
-            optional: true,
-            pictureLabel: "draw a different molecule with the same formula",
-          }),
+          // The SMILES field that used to sit here is gone. It was a panel
+          // field, so it printed three blank picture rows on a page whose
+          // question the student now writes themselves, and pushed the
+          // drawing area down for a molecule nobody had typed.
           {
             name: "isomer_type",
             label: "Kind of isomer",
@@ -772,11 +771,9 @@ export const TOPICS = [
             placeholder: "ethene",
             prompt: "write the molecule you are reacting, like ethene",
           }),
-          field("reactants_smiles", "Starting material (optional)", {
-            placeholder: "C=C",
-            optional: true,
-            pictureLabel: "the molecule you are reacting",
-          }),
+          // Same as the isomer reference: the SMILES field printed three
+          // blank picture rows above a drawing area on a page whose question
+          // the student now writes.
           inkField("reagent", "Reagent / conditions", "reagent", {
             placeholder: "H2, Pd",
             prompt: "write the reagent and conditions, like H2, Pd",

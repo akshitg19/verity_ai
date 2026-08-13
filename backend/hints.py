@@ -483,12 +483,15 @@ def _finalise(
                 break
 
     if worked_example is not None and not worked_example.verified:
-        # Belt and braces: an unverified example must never render, and the
-        # only code that may set this flag is the verification loop.
-        logger.error("unverified worked example reached the chokepoint")
-        worked_example = None
-        safe_text = fallback
-        source = "fallback"
+        # This used to drop the example and fall back. It no longer does, per
+        # the Aug 12 call: the alternative was a link to somebody else's
+        # website, and a worked analogue our engines could not check still
+        # shows the technique.
+        #
+        # The flag rides out to the client untouched so the UI can mark it,
+        # and it is logged at warning so a run can be counted afterwards.
+        # Only the verification loop may set it either way.
+        logger.warning("serving a worked example that was not verified")
 
     return HintResponse(
         level=req.level,
@@ -916,6 +919,55 @@ def _level_2_prompt(
         + '"steps": ["<step 1>", "<step 2>", "..."], '
         + contract
         + "}"
+    )
+
+
+def _unverified_example(
+    subject: str, topic: str, payload: dict, student_problem: str
+) -> WorkedExample | None:
+    """The model's example as written, with `verified` left false.
+
+    Explicit product call, Aug 12, overriding the "nothing unverified ever
+    renders" rule in `CLAUDE.md`: a worked analogue our engines could not
+    check is still a worked analogue, and the thing it replaces is a link to
+    somebody else's website. The verifier still runs first and a verified
+    example still wins; this is what happens instead of giving up.
+
+    What is given up is the guarantee that every line of a demonstration is
+    correct, which was the point of the loop. `verified` reaches the client,
+    so the UI can say so, and it stays false here so that nothing downstream
+    can mistake one of these for a checked example.
+    """
+    problem = str(payload.get("problem", "")).strip()
+    technique = str(payload.get("technique", "")).strip()
+    raw_steps = [str(step).strip() for step in (payload.get("steps") or [])]
+    steps = [step for step in raw_steps if step]
+    if not problem or not technique or not steps:
+        return None
+    if not numbers_differ(problem, student_problem):
+        # Still refused: an analogue built from the student's own numbers is
+        # their problem wearing a hat, and showing it unverified would be
+        # showing them their own answer.
+        logger.warning("level 2 unverified example reuses the student's numbers")
+        return None
+
+    check = payload.get("check") if isinstance(payload.get("check"), dict) else {}
+    return WorkedExample(
+        problem=problem,
+        technique=technique,
+        steps=steps[:20],
+        verified=False,
+        equations=(
+            [_step_equation(step) for step in steps[:20]]
+            if subject == "chemistry"
+            else []
+        ),
+        quantities=[_step_quantity(step) for step in steps[:20]],
+        structure=(
+            str(check.get("smiles") or "").strip() or None
+            if topic in ("structure", "organic")
+            else None
+        ),
     )
 
 
@@ -1554,6 +1606,9 @@ def _generate_level_2(
     # its own intermediates. Held rather than returned, so a later attempt can
     # beat it, and returned unchanged if none does.
     echoing: WorkedExample | None = None
+    # The last example our engines could not check. Shown only if every
+    # attempt failed verification, in place of giving up and linking out.
+    unchecked: WorkedExample | None = None
     for attempt in range(MAX_GENERATION_ATTEMPTS):
         try:
             payload, latency = generate_json(
@@ -1590,8 +1645,19 @@ def _generate_level_2(
             echoing = echoing or example
             continue
         logger.warning("level 2 example failed verification, attempt %d", attempt + 1)
+        # Chemistry only. Math is untouched, as it has been throughout: its
+        # verifier is SymPy on an equation we already parsed, so a rejection
+        # there is a real arithmetic error rather than a gap in what our
+        # engines can represent.
+        if req.subject == "chemistry":
+            unchecked = unchecked or _unverified_example(
+                req.subject, topic, payload, problem
+            )
     if echoing is not None:
         return echoing, total_latency
+    if unchecked is not None:
+        logger.warning("level 2 serving an example our engines could not verify")
+        return unchecked, total_latency
     return None
 
 
