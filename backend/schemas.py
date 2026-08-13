@@ -576,6 +576,12 @@ class ChemistrySessionRequest(BaseModel):
     cathode: EquationText | None = None
     anode: EquationText | None = None
     target_formula: FormulaText | None = None
+    # "Draw propan-2-ol". The question is a name, because a name is what a
+    # student can write and a SMILES is not, and the structure it resolves to
+    # is what the vault guards.
+    target_name: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)
+    ] | None = None
     stoichiometry: StoichiometryRequest | None = None
     solutions: SolutionsRequest | None = None
 

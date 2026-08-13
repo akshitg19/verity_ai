@@ -293,12 +293,16 @@ textarea,
   stroke-linejoin: miter;
 }
 
-/* RDKit returns SVG with black strokes, which vanishes on a dark card.
-   The markup is ours -- it comes from our own /chemistry/render endpoint and
-   never from the model -- so recolouring it here is safe. */
-:root[data-theme="dark"] .structure-preview svg path[stroke="#000000"],
-:root[data-theme="dark"] .structure-preview svg path[stroke="#000"] {
-  stroke: #14181a;
+/* A molecule is drawn on paper, in both themes.
+   This used to repaint RDKit's black strokes for dark mode and repainted
+   them to #14181a, which is a dark *background* token: black bonds on a dark
+   card became near-black bonds on a dark card, and the structure was
+   invisible in dark mode. The drawing sits on a light plate instead, the
+   same call the ruled page already makes, so the bonds stay dark and the
+   heteroatom colours stay meaningful. Red oxygen has to read as red. */
+.structure-preview {
+  background: var(--v-paper-card);
+  border-radius: 6px;
 }
 
 /* The molecule on the page sits on a white card over light paper in both

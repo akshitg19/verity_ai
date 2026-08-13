@@ -26,7 +26,12 @@ from judge.chemistry import (
     render_svg,
     _parse_smiles,
 )
-from judge.naming import NamingJudge
+from judge.naming import (
+    NameParseError,
+    NamingJudge,
+    OpsinUnavailableError,
+    structure_from_text,
+)
 from judge.net_ionic import NetIonicJudge
 from judge.redox import (
     CellPotentialJudge,
@@ -46,6 +51,7 @@ from schemas import (
     CheckResponse,
     ChemistryCheckRequest,
     ChemistryCheckResponse,
+    ChemistryLineVerdict,
     ChemistrySessionRequest,
     ChemistrySessionResponse,
     FormulaStructureRequest,
@@ -375,10 +381,45 @@ def check_formula_structure_steps(req: FormulaStructureRequest):
     )
 
 
+def _reference_structure(text: str) -> str | ChemistryCheckResponse:
+    """The reference molecule of a question, written as a name or a SMILES.
+
+    A student setting their own question writes "ethanol". Failing to read it
+    is our limitation and must be reported as one: an `unsupported` or a
+    `parse_error` on line 0, which the UI renders as a problem with the
+    question rather than as a mistake in the student's drawing.
+    """
+    try:
+        return structure_from_text(text)
+    except OpsinUnavailableError as exc:
+        return _chemistry_response([
+            ChemistryLineVerdict(
+                line_number=0,
+                valid=False,
+                error_type="unsupported",
+                detail=str(exc),
+                judged_by="deterministic",
+            )
+        ])
+    except NameParseError as exc:
+        return _chemistry_response([
+            ChemistryLineVerdict(
+                line_number=0,
+                valid=False,
+                error_type="parse_error",
+                detail=f"Could not read the molecule in the question: {exc}",
+                judged_by="deterministic",
+            )
+        ])
+
+
 @app.post("/chemistry/isomer", response_model=ChemistryCheckResponse)
 def check_isomer_steps(req: IsomerRequest):
+    reference = _reference_structure(req.reference_smiles)
+    if isinstance(reference, ChemistryCheckResponse):
+        return reference
     return _chemistry_response(
-        IsomerJudge(req.isomer_type).check(req.reference_smiles, req.steps)
+        IsomerJudge(req.isomer_type).check(reference, req.steps)
     )
 
 
@@ -396,8 +437,14 @@ def check_reaction_steps(req: ReactionRequest):
     Every verdict carries `judged_by`, so a model judgement can never be
     presented in the UI as a proven one.
     """
+    reactants = []
+    for written in req.reactants_smiles:
+        resolved = _reference_structure(written)
+        if isinstance(resolved, ChemistryCheckResponse):
+            return resolved
+        reactants.append(resolved)
     problem = {
-        "reactants_smiles": list(req.reactants_smiles),
+        "reactants_smiles": reactants,
         "reagent": req.reagent,
         "reaction_type": req.reaction_type,
     }
@@ -459,6 +506,7 @@ def open_chemistry_session(req: ChemistrySessionRequest):
             topic=req.topic,
             problem=req.problem,
             target_smiles=req.target_smiles,
+            target_name=req.target_name,
             target_group=req.target_group,
             reference_equation=req.reference_equation,
             stoichiometry=stoichiometry,

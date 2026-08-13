@@ -610,8 +610,19 @@ export const TOPICS = [
         id: "isomer",
         label: "Draw an isomer of this",
         fields: [
-          field("reference_smiles", "Molecule to find an isomer of", {
+          // The molecule, by its name, written on the page. A SMILES is ours
+          // and a student has never seen one, so asking for a typed SMILES
+          // made this question impossible to ask from the page at all: the
+          // only way in was a panel field nobody working with a stylus ever
+          // opens. The backend resolves a name to a structure, so "ethanol"
+          // is a question and so is CCO.
+          inkField("reference_name", "Molecule", "molecule", {
+            placeholder: "ethanol",
+            prompt: "write the molecule to find an isomer of, like ethanol",
+          }),
+          field("reference_smiles", "Molecule to find an isomer of (optional)", {
             placeholder: "CCO",
+            optional: true,
             pictureLabel: "draw a different molecule with the same formula",
           }),
           {
@@ -634,7 +645,7 @@ export const TOPICS = [
       }
       if (type.id === "isomer") {
         return checkIsomer(
-          values.reference_smiles,
+          values.reference_smiles || values.reference_name,
           values.isomer_type || "constitutional",
           steps,
           options
@@ -658,8 +669,9 @@ export const TOPICS = [
       // answer is any different structure with the same formula. The
       // reference is what a hint must not simply restate.
       if (type.id === "isomer") {
-        return values.reference_smiles
-          ? { topic: "structure", problem, target_smiles: values.reference_smiles }
+        const reference = values.reference_smiles || values.reference_name;
+        return reference
+          ? { topic: "structure", problem, target_smiles: reference }
           : null;
       }
       return { topic: "structure", problem, target_smiles: values.target_smiles };
@@ -717,8 +729,15 @@ export const TOPICS = [
         id: "reaction",
         label: "Predict the product",
         fields: [
-          field("reactants_smiles", "Starting material", {
+          // Same reasoning as the isomer reference: the starting material is
+          // written by name, because that is the form a student has.
+          inkField("reactant_name", "Starting material", "starting material", {
+            placeholder: "ethene",
+            prompt: "write the molecule you are reacting, like ethene",
+          }),
+          field("reactants_smiles", "Starting material (optional)", {
             placeholder: "C=C",
+            optional: true,
             pictureLabel: "the molecule you are reacting",
           }),
           inkField("reagent", "Reagent / conditions", "reagent", {
@@ -742,9 +761,11 @@ export const TOPICS = [
         return checkName(values.target_smiles, values.target_name, steps, options);
       }
       return checkReaction({
-        reactants_smiles: (values.reactants_smiles || "")
-          .split(/[.\s,]+/)
-          .filter(Boolean),
+        // A name is one molecule and may contain spaces and hyphens, so it is
+        // never split. Only a typed SMILES list is.
+        reactants_smiles: values.reactants_smiles
+          ? values.reactants_smiles.split(/[.\s,]+/).filter(Boolean)
+          : [values.reactant_name].filter(Boolean),
         reagent: values.reagent || null,
         reaction_type: values.reaction_type || null,
         steps,
@@ -761,15 +782,21 @@ export const TOPICS = [
       if (type.id === "naming" && values.target_smiles) {
         return { topic: "organic", problem, target_smiles: values.target_smiles };
       }
+      // "Draw propan-2-ol" opened no session at all, which is why its hints
+      // were the static floor however good the model was: no session means
+      // no vault, and no vault means level 1 and level 2 never even ask.
+      // The name is the question and the structure it names is the answer.
+      if (type.id === "draw_from_name" && values.target_name) {
+        return { topic: "organic", problem, target_name: values.target_name };
+      }
       // Predicting a product: the starting material is the molecule the
       // question is about, so it is what the vault guards. The product
       // itself is the model path and has no deterministic answer to hold.
-      if (type.id === "reaction" && values.reactants_smiles) {
-        return {
-          topic: "organic",
-          problem,
-          target_smiles: values.reactants_smiles.split(/[.\s,]+/).filter(Boolean)[0],
-        };
+      const reactant =
+        values.reactants_smiles?.split(/[.\s,]+/).filter(Boolean)[0] ||
+        values.reactant_name;
+      if (type.id === "reaction" && reactant) {
+        return { topic: "organic", problem, target_smiles: reactant };
       }
       return null;
     },
