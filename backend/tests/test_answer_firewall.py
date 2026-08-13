@@ -38,6 +38,7 @@ from answer_vault import (
     vault_for_stoichiometry,
     vault_for_structure,
     vault_for_algebra,
+    build_math_vault,
 )
 from judge.solutions import SolutionsProblem
 from judge.stoichiometry import StoichiometryProblem
@@ -692,3 +693,59 @@ def test_algebra_vault_rejects_multiple_solutions():
 def test_algebra_vault_rejects_multiple_variables():
     with pytest.raises(ValueError):
         vault_for_algebra("x + y = 5")
+
+# ---------------------------------------------------------------------------
+# Build_math_vault: it is a symbolic solver, so the answer is a number, not a coefficient.
+# ---------------------------------------------------------------------------
+
+from answer_vault import build_math_vault
+
+
+def test_pre_algebra_expression_builds_math_vault():
+    vault = build_math_vault(
+        topic="pre_algebra",
+        problem="12 + 4 * 3",
+    )
+
+    assert vault.topic == "pre_algebra"
+    assert vault.answer_forms
+
+
+def test_pre_algebra_equation_builds_math_vault():
+    vault = build_math_vault(
+        topic="pre_algebra",
+        problem="x + 5 = 12",
+    )
+
+    assert vault.topic == "pre_algebra"
+    assert vault.answer_forms
+
+
+def test_algebra_builds_math_vault():
+    vault = build_math_vault(
+        topic="algebra",
+        problem="x + 5 = 12",
+    )
+
+    assert vault.topic == "algebra"
+    assert vault.answer_forms
+
+
+def test_trigonometry_builds_math_vault():
+    vault = build_math_vault(
+        topic="trigonometry",
+        problem="sin(x)^2 + cos(x)^2",
+    )
+
+    assert vault.topic == "trigonometry"
+    assert vault.answer_forms
+
+
+def test_calculus_builds_math_vault():
+    vault = build_math_vault(
+        topic="calculus",
+        problem="d/dx x^3",
+    )
+
+    assert vault.topic == "calculus"
+    assert vault.answer_forms

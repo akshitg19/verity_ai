@@ -1,5 +1,5 @@
 import { COLORS, FONT, RADIUS, verdictStyle } from "../theme";
-import { categoryLabel } from "./verdictLabels";
+import { categoryLabel, warningLabel } from "./verdictLabels";
 
 // Four outcomes, four treatments, and the provenance badge.
 //
@@ -52,6 +52,7 @@ export default function VerdictCard({
     : "waiting";
   const style = verdictStyle(status);
   const category = categoryLabel(verdict?.error_type);
+  const warning = warningLabel(verdict?.warning_type);
 
   const detail = !verdict
     ? waitingDetail ?? "This hasn't been checked yet."
@@ -124,11 +125,29 @@ export default function VerdictCard({
               color: COLORS.muted,
               fontSize: 12,
               lineHeight: 1.4,
-              marginBottom: children ? 8 : 0,
+              marginBottom: children || warning ? 8 : 0,
             }}
           >
             {detail}
           </div>
+
+          {warning && (
+            <div
+              style={{
+                marginBottom: children ? 8 : 0,
+                padding: "8px 10px",
+                borderRadius: RADIUS.md,
+                border: "1px solid var(--v-unsupported-border)",
+                background: "var(--v-unsupported-bg)",
+                color: "var(--v-unsupported)",
+                fontSize: 12,
+                lineHeight: 1.45,
+                fontWeight: 600,
+              }}
+            >
+              {warning}
+            </div>
+          )}
 
           {verdict?.needs_confirmation && (
             // Self-consistency disagreed. Asking beats guessing: a confident

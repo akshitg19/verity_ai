@@ -2,6 +2,8 @@ from schemas import LineVerdict, MathTopic, Step
 
 from .algebra import AlgebraJudge
 from .pre_algebra import PreAlgebraJudge
+from .trigonometry import TrigonometryJudge
+from .calculus import CalculusJudge
 
 
 class MathJudgeDispatcher:
@@ -9,6 +11,8 @@ class MathJudgeDispatcher:
         self._judges = {
             "pre_algebra": PreAlgebraJudge(),
             "algebra": AlgebraJudge(),
+            "trigonometry": TrigonometryJudge(),
+            "calculus": CalculusJudge(),
         }
 
     def check(

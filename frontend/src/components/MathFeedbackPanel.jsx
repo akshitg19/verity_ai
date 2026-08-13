@@ -5,6 +5,7 @@ import {
 } from "../math/lineModel";
 import { MATH_TOPICS } from "../math/topics";
 import HintLadder from "./HintLadder";
+import { categoryLabel, warningLabel } from "./verdictLabels";
 
 function MathTopicPicker({ topicId, onChoose }) {
   return (
@@ -130,7 +131,7 @@ function lineStatus(line, isProblem, verdict, blocked) {
     return {
       label: "Review this step",
       detail: verdict.error_type
-        ? `Possible ${verdict.error_type.replaceAll("_", " ")}.`
+        ? `This may be a ${categoryLabel(verdict.error_type)}.`
         : "This does not follow from the previous line.",
       color: COLORS.danger,
       background: "var(--v-invalid-bg)",
@@ -244,12 +245,17 @@ export default function MathFeedbackPanel({ workflow }) {
             Boolean(line.text.trim()) &&
             !line.unreadable &&
             !readableRows.has(line.row);
+
+          const verdict = verdictsByLine.get(line.row);
+
           const status = lineStatus(
             line,
             line.row === handwrittenProblemRow,
-            verdictsByLine.get(line.row),
+            verdict,
             blocked
           );
+
+          const warning = warningLabel(verdict?.warning_type);
           return (
             <div key={line.row} style={{ padding: 12, borderRadius: 12, border: `1px solid ${status.color}33`, background: status.background }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
@@ -262,6 +268,23 @@ export default function MathFeedbackPanel({ workflow }) {
                     <div style={{ color: status.color, fontSize: 12, fontWeight: 700 }}>{status.label}</div>
                   </div>
                   <div style={{ color: COLORS.muted, fontSize: 12, lineHeight: 1.35, marginBottom: 8 }}>{status.detail}</div>
+                  {warning && (
+                    <div
+                      style={{
+                        marginBottom: 8,
+                        padding: "8px 10px",
+                        borderRadius: 9,
+                        border: "1px solid var(--v-unsupported-border)",
+                        background: "var(--v-unsupported-bg)",
+                        color: "var(--v-unsupported)",
+                        fontSize: 12,
+                        lineHeight: 1.4,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {warning}
+                    </div>
+                  )}
                   <input
                     aria-label={`Math line ${index + 1}`}
                     type="text"

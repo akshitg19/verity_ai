@@ -741,7 +741,7 @@ def test_math_session_opens_for_supported_algebra():
     # The server may know the answer, but the response must not expose it.
     assert "17" not in str(body)
 
-def test_math_session_rejects_unimplemented_topic():
+def test_math_session_opens_for_supported_calculus():
     response = client.post(
         "/math/session",
         json={
@@ -750,4 +750,28 @@ def test_math_session_rejects_unimplemented_topic():
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["topic"] == "calculus"
+    assert body["session_id"]
+    assert body["level_3_remaining"] == 3
+
+
+def test_math_session_opens_for_supported_trigonometry():
+    response = client.post(
+        "/math/session",
+        json={
+            "topic": "trigonometry",
+            "problem": "sin(x)^2 + cos(x)^2",
+        },
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["topic"] == "trigonometry"
+    assert body["session_id"]
+    assert body["level_3_remaining"] == 3

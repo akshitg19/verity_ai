@@ -48,7 +48,7 @@ def test_wrong_arithmetic_step_is_invalid():
 
     assert len(verdicts) == 1
     assert verdicts[0].valid is False
-    assert verdicts[0].error_type == "arithmetic"
+    assert verdicts[0].error_type == "fraction"
 
 
 def test_valid_square_root_arithmetic():
@@ -216,3 +216,53 @@ def test_equivalent_inequality_transformation():
 
     assert len(verdicts) == 2
     assert all(verdict.valid for verdict in verdicts)
+
+
+def test_order_of_operations_error_is_classified():
+    verdicts = check(
+        "12 + 4 * 3",
+        "48",
+    )
+
+    assert verdicts[0].valid is False
+    assert verdicts[0].error_type == "order_of_operations"
+
+
+def test_fraction_error_is_classified():
+    verdicts = check(
+        "3/4 + 1/8",
+        "5/8",
+    )
+
+    assert verdicts[0].valid is False
+    assert verdicts[0].error_type == "fraction"
+
+
+def test_exponent_error_is_classified():
+    verdicts = check(
+        "2^3",
+        "6",
+    )
+
+    assert verdicts[0].valid is False
+    assert verdicts[0].error_type == "exponent"
+
+
+def test_distribution_error_is_classified():
+    verdicts = check(
+        "2(x + 3)",
+        "2x + 3",
+    )
+
+    assert verdicts[0].valid is False
+    assert verdicts[0].error_type == "distribution"
+
+
+def test_plain_arithmetic_remains_arithmetic():
+    verdicts = check(
+        "12 + 7",
+        "20",
+    )
+
+    assert verdicts[0].valid is False
+    assert verdicts[0].error_type == "arithmetic"

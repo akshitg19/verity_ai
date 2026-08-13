@@ -265,26 +265,30 @@ def check_outbound(
         if candidate in problem_tokens or (
             len(candidate) > 3 and candidate in problem_text
         ):
-            # Printed in the question. Repeating it is quoting, not leaking,
-            # unless the sentence around it says this is the answer.
+            # Printed in the question or already visible work. Repeating it is
+            # quoting, not leaking, unless the hint explicitly declares it as
+            # the answer.
             if _declared_as_the_answer(normalised, candidate):
                 return False, f"declares the answer form {form!r}"
             continue
-        # Standalone token, not a substring: "4" inside "24" is not the
-        # answer, and rejecting it would make every hint unwritable.
+
+        # Standalone token, not a substring: "4" inside "24" is not the answer.
         if candidate in tokens:
             return False, f"states the answer form {form!r}"
+
         if len(candidate) > 3 and candidate in normalised:
             return False, f"contains the answer form {form!r}"
 
     for value in _numeric_tokens(normalised):
         if not vault.matches_number(value):
             continue
+
         if any(
             values_match(given, value, relative_floor=LEAK_TOLERANCE)
             for given in problem_numbers
         ):
             continue
+
         return False, f"states a value within tolerance of the answer ({value})"
 
     for match in _ASSIGNMENT_RE.finditer(normalised):
