@@ -43,7 +43,16 @@ logger = logging.getLogger(__name__)
 # is a short judgement and gets thinking but a small output.
 BUDGETS = {
     "structure": {"max_output_tokens": 1024, "thinking_budget": -1},
-    "hint": {"max_output_tokens": 1536, "thinking_budget": -1},
+    # Level 3 reads the student's whole working before it writes, and on
+    # Gemini 2.5 the thinking tokens are spent from this same budget. At 1536
+    # a long working left too little room and the JSON came back truncated,
+    # which surfaced only as "model did not return valid JSON" and dropped the
+    # student to the static floor. Found by running every concept live. 3072
+    # still truncated on roughly one hint in six, so the retry below was
+    # firing constantly and answering with thinking switched off, which is a
+    # worse hint bought at twice the latency. This is a ceiling, not a
+    # charge: raising it costs nothing on the hints that never reach it.
+    "hint": {"max_output_tokens": 8192, "thinking_budget": -1},
     # A worked example is a problem statement, a technique line, up to twenty
     # steps and a machine-checkable spec, all as one JSON object. At 2048 the
     # object was being truncated mid-string, which surfaces as "model did not
@@ -70,6 +79,10 @@ class ModelError(TranscriptionServiceError):
 class ModelResult:
     text: str
     latency_ms: int
+    # The model ran out of output budget mid-answer. Worth naming separately
+    # from any other failure: the text that comes back looks fine until you
+    # try to parse it, and the caller's only clue was a JSON error.
+    truncated: bool = False
 
 
 def model_name() -> str:
@@ -134,7 +147,38 @@ def generate(
 
     latency_ms = int((time.perf_counter() - started) * 1000)
     logger.info("gemini job=%s latency_ms=%d", job, latency_ms)
-    return ModelResult(text=(response.text or "").strip(), latency_ms=latency_ms)
+
+    if _hit_the_output_ceiling(response) and thinking_budget is None:
+        # Thinking tokens are spent from the same budget as the answer, so a
+        # long read can leave nothing to write with. Turning thinking off
+        # hands the whole budget to the answer. One retry, because the second
+        # call passes an explicit budget and cannot recurse again.
+        logger.warning(
+            "gemini job=%s ran out of output tokens, retrying without thinking",
+            job,
+        )
+        return generate(
+            parts,
+            job=job,
+            temperature=temperature,
+            thinking_budget=0,
+            response_mime_type=response_mime_type,
+        )
+
+    return ModelResult(
+        text=(response.text or "").strip(),
+        latency_ms=latency_ms,
+        truncated=_hit_the_output_ceiling(response),
+    )
+
+
+def _hit_the_output_ceiling(response) -> bool:
+    """Whether the answer stops because the budget ran out, not because it ended."""
+    for candidate in getattr(response, "candidates", None) or []:
+        reason = getattr(candidate, "finish_reason", None)
+        if reason is not None and "MAX_TOKENS" in str(reason).upper():
+            return True
+    return False
 
 
 def generate_json(
@@ -160,7 +204,15 @@ def generate_json(
     try:
         payload = json.loads(text)
     except (json.JSONDecodeError, ValueError) as exc:
-        raise ModelError("model did not return valid JSON") from exc
+        # Say which failure this is. "did not return valid JSON" covers both a
+        # model that wrote prose and a model that was cut off mid-string, and
+        # those have different fixes. The tail is logged because without it
+        # the only way to tell them apart was to reproduce the call by hand.
+        why = "was cut off by the output budget" if result.truncated else "was not JSON"
+        logger.warning(
+            "gemini job=%s response %s; last 120 chars: %r", job, why, text[-120:]
+        )
+        raise ModelError(f"model did not return valid JSON: it {why}") from exc
     if not isinstance(payload, dict):
         raise ModelError("model returned JSON that is not an object")
     return payload, result.latency_ms

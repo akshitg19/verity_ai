@@ -35,6 +35,17 @@ CORRECT_MOLECULES = {
     "carboxylic_acid": "CC(=O)O",  # acetic acid
     "amine": "CCN",               # ethylamine
     "amide": "CC(=O)N",           # acetamide
+    # The hydrocarbon families and the rest of a first-year sheet, added
+    # after the live audit rejected three worked examples for naming a group
+    # we had no pattern for.
+    "alkene": "CC=C",             # propene
+    "alkyne": "CC#C",             # propyne
+    "arene": "c1ccccc1",          # benzene
+    "phenol": "Oc1ccccc1",        # phenol
+    "nitrile": "CC#N",            # acetonitrile
+    "thiol": "CCS",               # ethanethiol
+    "alkyl_halide": "CCBr",       # bromoethane
+    "nitro": "C[N+](=O)[O-]",     # nitromethane
 }
 WRONG_GROUP_MOLECULES = {
     "ester": "CCO",               # an alcohol, not an ester
@@ -45,6 +56,14 @@ WRONG_GROUP_MOLECULES = {
     "carboxylic_acid": "CC(=O)OC",  # an ester, not an acid
     "amine": "CC(=O)N",           # an amide, not a free amine
     "amide": "CCN",               # an amine, not an amide
+    "alkene": "CC#C",             # an alkyne, not an alkene
+    "alkyne": "CC=C",             # an alkene, not an alkyne
+    "arene": "C1CCCCC1",          # cyclohexane, saturated and not aromatic
+    "phenol": "CCO",              # an alcohol on a carbon, not on a ring
+    "nitrile": "CC(=O)N",         # an amide, not a nitrile
+    "thiol": "CCO",               # an alcohol, not a thiol
+    "alkyl_halide": "CCO",        # an alcohol, no halogen at all
+    "nitro": "CCN",               # an amine, not a nitro group
 }
 
 
@@ -139,8 +158,42 @@ def test_reaction_smiles_is_unsupported_not_parse_error():
 
 
 def test_unknown_group_name_raises_before_checking_any_step():
+    # A name with no pattern behind it, not merely one we had not got round
+    # to: "alkene" used to sit here and is a supported group now.
     with pytest.raises(ValueError, match="unknown functional group"):
-        check("alkene", "CCO")
+        check("flubber", "CCO")
+
+
+@pytest.mark.parametrize(
+    "written", ["Alcohol", "ALCOHOL", "carboxylic acid", "carboxylic-acid"]
+)
+def test_a_group_is_found_however_its_name_is_written(written):
+    """Rejecting a group we have a pattern for, over its spelling, is
+    measuring typing rather than chemistry. Found live: a level 2 worked
+    example said "Alcohol" and was thrown away."""
+    from judge.chemistry import canonical_group
+
+    assert canonical_group(written) in FUNCTIONAL_GROUP_SMARTS
+
+
+@pytest.mark.parametrize(
+    "group_name,smiles",
+    [
+        ("alkene", "C=C"),
+        ("alkyne", "C#C"),
+        ("arene", "c1ccccc1"),
+        ("phenol", "Oc1ccccc1"),
+        ("nitrile", "CC#N"),
+        ("thiol", "CCS"),
+        ("alkyl_halide", "CCBr"),
+    ],
+)
+def test_the_groups_added_for_the_live_audit_match_what_they_name(
+    group_name, smiles
+):
+    """Three level 2 examples were rejected for naming "alkene", which we
+    simply had no pattern for. A group in the table has to actually work."""
+    assert check(group_name, smiles)[0].valid is True
 
 
 def test_unknown_group_error_names_the_supported_groups():

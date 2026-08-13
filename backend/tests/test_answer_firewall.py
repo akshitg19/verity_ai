@@ -198,6 +198,182 @@ def test_main_does_not_build_hint_responses_itself():
 # ---------------------------------------------------------------------------
 
 
+def _limiting_reagent_vault() -> AnswerVault:
+    """The answer is a species, and that species is named in the question."""
+    return vault_for_stoichiometry(
+        "28.0 g N2 reacts with 6.0 g H2 in N2 + H2 -> NH3. Which is limiting?",
+        StoichiometryProblem(
+            task="limiting_reagent",
+            equation="N2 + H2 -> NH3",
+            amounts={"N2": 28.0, "H2": 6.0},
+        ),
+    )
+
+
+def test_quoting_the_question_is_not_leaking_the_answer():
+    """Found by running every concept against the live model.
+
+    On limiting reagent the answer is one of the two species the question
+    names, so "compare the moles of N2 with the moles of H2" was thrown away
+    for containing the answer, and the student got a generic template. The
+    student can read H2 in their own question; there is nothing to protect.
+    """
+    allowed, violation = check_outbound(
+        "Work out the moles of N2 and the moles of H2, then compare each one "
+        "against what the equation says it needs.",
+        _limiting_reagent_vault(),
+    )
+
+    assert allowed is True, violation
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The answer is H2, so use that one.",
+        "The limiting reagent is H2.",
+        "It is H2.",
+        "H2 is the limiting one.",
+        "The result is the H2.",
+    ],
+)
+def test_naming_the_species_as_the_answer_is_still_caught_by_the_shape(text):
+    """The relaxation is about bare mentions. Stating it is still stating it,
+    and a species answer has no number for the assignment check to find."""
+    allowed, _ = check_outbound(text, _limiting_reagent_vault())
+
+    assert allowed is False, text
+
+
+def test_a_number_printed_in_the_question_may_be_quoted():
+    vault = vault_for_solutions(
+        "50.0 mL of 2.00 M HCl is diluted to 500 mL. Find the new concentration.",
+        SolutionsProblem(
+            task="dilution",
+            initial_concentration_m=2.0,
+            initial_volume_l=0.05,
+            final_volume_l=0.5,
+        ),
+    )
+    allowed, violation = check_outbound(
+        "You multiplied 2.00 by 0.050 correctly, then multiplied by the new "
+        "volume instead of dividing by it.",
+        vault,
+    )
+
+    assert allowed is True, violation
+
+
+def test_a_number_not_in_the_question_is_still_protected():
+    """The relaxation must not become 'any number is fine'."""
+    vault = vault_for_solutions(
+        "50.0 mL of 2.00 M HCl is diluted to 500 mL. Find the new concentration.",
+        SolutionsProblem(
+            task="dilution",
+            initial_concentration_m=2.0,
+            initial_volume_l=0.05,
+            final_volume_l=0.5,
+        ),
+    )
+    allowed, _ = check_outbound("You should end up with 0.200 there.", vault)
+
+    assert allowed is False
+
+
+def test_a_subscript_is_not_a_given_quantity():
+    """'H2SO4' must not license a pH of 2.00 on the grounds that the formula
+    contains a 2. Only whole numeric tokens count as printed in the question."""
+    vault = vault_for_solutions(
+        "Find the pH of 0.0050 M H2SO4.",
+        SolutionsProblem(task="strong_acid_ph", concentration_m=0.005, protons=2),
+    )
+    allowed, _ = check_outbound("You will get 2.00 once you double it.", vault)
+
+    assert allowed is False
+
+
+def test_quoting_the_students_own_line_is_not_leaking():
+    """Their page is not a secret from them.
+
+    The net ionic vault lists the complete ionic equation, the student had
+    written the complete ionic equation, and the level 1 hint quoting their
+    own line back was thrown away for containing an answer form. Live, on
+    the first of the two net ionic questions.
+    """
+    from answer_vault import vault_for_net_ionic
+
+    written = "Ag^+ + NO3^- + Na^+ + Cl^- -> AgCl + Na^+ + NO3^-"
+    vault = vault_for_net_ionic(
+        "Write the net ionic equation for AgNO3 + NaCl -> AgCl + NaNO3",
+        "AgNO3 + NaCl -> AgCl + NaNO3",
+    )
+
+    allowed, violation = check_outbound(
+        f"You wrote {written}, which is the complete ionic equation. Look "
+        "for the ions that are identical on both sides.",
+        vault,
+        also_visible=written,
+    )
+
+    assert allowed is True, violation
+
+
+def test_the_students_page_does_not_license_the_answer_they_did_not_write():
+    vault = vault_for_solutions(
+        "What is the pH of 0.100 M acetic acid? Ka = 1.8 x 10^-5",
+        SolutionsProblem(task="weak_acid_ph", concentration_m=0.1, ka=1.8e-5),
+    )
+    allowed, _ = check_outbound(
+        "You should get 2.88.", vault, also_visible="pH = 4.20"
+    )
+
+    assert allowed is False
+
+
+@pytest.mark.skipif(
+    not __import__("judge.naming", fromlist=["x"]).opsin_available(),
+    reason="naming needs a Java runtime",
+)
+def test_naming_the_target_molecule_is_caught(structure_vault):
+    """The vault holds the structure and there is no structure-to-name
+    direction, so "ethanol" was sayable and was said. Resolving a name back
+    to a structure is the direction we do have."""
+    vault = vault_for_structure("Name this molecule.", "CCO")
+    allowed, violation = check_outbound(
+        "This one is ethanol, count the carbons again.", vault
+    )
+
+    assert allowed is False
+    assert violation == "names the target structure"
+
+
+@pytest.mark.skipif(
+    not __import__("judge.naming", fromlist=["x"]).opsin_available(),
+    reason="naming needs a Java runtime",
+)
+def test_naming_a_different_molecule_is_fine():
+    """Including the wrong name the student wrote, which is the whole point
+    of level 1: say what they did."""
+    vault = vault_for_structure("Name this molecule.", "CCO")
+    allowed, violation = check_outbound(
+        "You wrote methanol, which has one carbon. Count the carbons in the "
+        "drawing and compare.",
+        vault,
+    )
+
+    assert allowed is True, violation
+
+
+def test_the_name_check_is_bounded():
+    """A hint is not a place to run a dictionary over: every candidate costs
+    an OPSIN call, so the number of candidates is capped."""
+    from redaction import _MAX_NAME_CANDIDATES, _name_candidates
+
+    text = " ".join(f"compound{index}ane" for index in range(40))
+
+    assert len(_name_candidates(text)) <= _MAX_NAME_CANDIDATES
+
+
 def test_a_safe_hint_passes(ph_vault):
     allowed, violation = check_outbound(
         "Look at the ICE table again: the x you subtract from the initial "
@@ -418,7 +594,10 @@ def test_a_leaking_generated_hint_is_replaced_by_the_static_floor(monkeypatch, p
     monkeypatch.setattr(
         hints,
         "_generate_level_1",
-        lambda req, session: ("The answer is pH = 2.88.", 100),
+        # `retry` because a redacted level 1 is asked once more before the
+        # floor is served. This stub leaks on both attempts, which is the
+        # case this test is about: the floor is still where it ends up.
+        lambda req, session, retry=False: ("The answer is pH = 2.88.", 100),
     )
 
     response = hints.generate_hint(

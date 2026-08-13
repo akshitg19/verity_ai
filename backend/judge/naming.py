@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import functools
 import re
+import threading
 
 from schemas import ChemistryLineVerdict, ChemistryStep
 from .base import Judge
@@ -34,6 +35,10 @@ from .chemistry import (
 MAX_NAME_LENGTH = 256
 # A name, not a SMILES: letters, digits, and the punctuation IUPAC uses.
 NAME_RE = re.compile(r"^[A-Za-z0-9\s\-,\[\]\(\)'’\.]+$")
+
+
+# OPSIN runs as a Java subprocess and is not safe to call concurrently.
+_OPSIN_LOCK = threading.Lock()
 
 
 class OpsinUnavailableError(RuntimeError):
@@ -89,7 +94,16 @@ def name_to_smiles(name: str) -> str:
 
     convert = _opsin()
     try:
-        smiles = convert(text)
+        # One at a time. py2opsin shells out to a Java process and is not
+        # safe to call concurrently: under six parallel requests it handed
+        # back another call's structure, and "methyl acetate" was judged
+        # wrong_name against methyl acetate. A confident wrong verdict on a
+        # correct answer is the top row of this product's failure taxonomy,
+        # and it was reachable by two students naming a molecule at once.
+        # Serialising costs throughput on a feature that is already slow,
+        # rare, and gated on a Java runtime the container does not have.
+        with _OPSIN_LOCK:
+            smiles = convert(text)
     except Exception as exc:
         raise NameParseError(f"OPSIN could not read {text!r}") from exc
     if not smiles:

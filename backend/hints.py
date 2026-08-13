@@ -28,7 +28,13 @@ import logging
 import os
 import re
 import time
+from collections.abc import Callable
 
+from hint_rules import analogue_for, coaching_for
+from judge.solutions import TASK_INPUTS as _SOLUTIONS_INPUTS
+from judge.solutions import SolutionsProblem as _SolutionsProblem
+from judge.stoichiometry import TASK_INPUTS as _STOICHIOMETRY_INPUTS
+from judge.stoichiometry import StoichiometryProblem as _StoichiometryProblem
 from model import ModelError, generate_json, is_configured
 from redaction import numbers_differ, redact_or_fallback
 from schemas import HintRequest, HintResponse, WorkedExample
@@ -166,6 +172,39 @@ _LEVEL_2_FALLBACK = (
     "Something about this step doesn't follow from the line before it. "
     "Re-derive this line from the previous one, one operation at a time."
 )
+
+# The chemistry level 1 floor. Says what the checker proved and where to
+# look, without numbering a row: the student laid the page out themselves.
+# Anything not listed here falls through to the level 2 templates, which are
+# already keyed by error type and already avoid row numbers.
+_CHEMISTRY_LEVEL_1_FLOOR = {
+    "wrong_value": (
+        "The number in your answer isn't one this working produces. Go back "
+        "through what you multiplied and what you divided, and check each "
+        "quantity against where it came from."
+    ),
+    "wrong_unit": (
+        "That value does appear in the working, but not with that unit. "
+        "Write the units next to the numbers and cancel them through."
+    ),
+    "unbalanced_atoms": (
+        "One element still has a different count on each side. Take them one "
+        "element at a time and find the one that doesn't match."
+    ),
+    "unbalanced_charge": (
+        "Every atom is accounted for, but the two sides don't carry the same "
+        "total charge. Add up the charges on each side and compare them."
+    ),
+    "wrong_oxidation_state": (
+        "Check the elements whose oxidation states are fixed by a rule "
+        "first, and check what the whole species has to add up to."
+    ),
+    "structure_mismatch": (
+        "This isn't the structure the question asks for. Go through your "
+        "drawing atom by atom: which atoms are joined to which, and by what "
+        "kind of bond."
+    ),
+}
 
 # Level 3: a general conceptual explanation, not tied to this problem's
 # specific numbers -- safe by construction, same reasoning as level 2.
@@ -332,6 +371,16 @@ MAX_GENERATION_ATTEMPTS = 2
 
 def _template_hint(req: HintRequest) -> str:
     if req.level == 1:
+        if req.subject == "chemistry":
+            # Math is written one line under the last and our count is the
+            # student's count, so naming the row there is the most useful
+            # thing the floor can say. On a chemistry worksheet the working
+            # is laid out however they like, in a region we do not read, and
+            # "line 3" sends them counting rows that are not ours to count.
+            # Better to name the mistake, which the checker already proved.
+            return _CHEMISTRY_LEVEL_1_FLOOR.get(
+                req.error_type, _LEVEL_2_TEMPLATES.get(req.error_type, _LEVEL_2_FALLBACK)
+            )
         return _LEVEL_1_TEMPLATE.format(line_number=req.line_number)
     if req.level == 2:
         return _LEVEL_2_TEMPLATES.get(req.error_type, _LEVEL_2_FALLBACK)
@@ -345,6 +394,21 @@ def _template_hint(req: HintRequest) -> str:
 # is constructed and the only place redaction runs, so the guarantee can be
 # audited by reading one function.
 # ---------------------------------------------------------------------------
+def _student_page(req: HintRequest) -> str:
+    """Everything the student has already written, as one string.
+
+    Handed to redaction so a hint may quote their own work back at them. On
+    the net ionic question the vault lists the complete ionic equation as an
+    answer form, the student had written the complete ionic equation, and
+    the level 1 hint quoting their line was thrown away for containing an
+    answer. Nothing is disclosed by reading a page back to the person who
+    wrote it.
+    """
+    parts = [req.student_line or "", req.previous_line or ""]
+    parts.extend(req.working_lines or [])
+    return " ".join(part for part in parts if part)
+
+
 def _finalise(
     req: HintRequest,
     text: str,
@@ -378,7 +442,11 @@ def _finalise(
         safe_text, violation = text, None
     else:
         safe_text, violation = redact_or_fallback(
-            text, vault, fallback, allow_near_answer=allow_near_answer
+            text,
+            vault,
+            fallback,
+            allow_near_answer=allow_near_answer,
+            also_visible=_student_page(req),
         )
 
     if violation:
@@ -444,13 +512,27 @@ _CHEMISTRY_LEVEL_1_PROMPT = (
     "twenty words, split it.\n"
     "- Name the actual substances and numbers on their page. A sentence "
     "that would fit any problem is not worth sending.\n"
+    "- Point at the place by quoting what is written there, not by "
+    "numbering it. 'Where you wrote minus 2 on the oxygen' tells them "
+    "where to look; 'line 3' makes them count rows first, and on a page "
+    "where they laid the working out themselves our numbering is not "
+    "theirs. Never say 'line 3', 'the third line', or 'step 2'.\n"
     "Never do:\n"
     "- No em dashes, ever. Use a comma or a full stop.\n"
     "- No markdown, no headings, no lists, no bold.\n"
     "- No 'Great question', 'Let's', 'Remember that', 'It looks like', "
     "'It seems', 'I notice', 'Don't worry'.\n"
     "- Never state a corrected value, a corrected formula, or the answer.\n"
+    "- Every number you write must already appear in the problem or in "
+    "their working. You are diagnosing, not calculating: do not multiply, "
+    "add, or divide anything yourself, and do not say what a quantity "
+    "should come to. Naming the quantity is the hint; giving it is not.\n"
     "- Never do the step for them.\n"
+    "- If their line is a drawn structure it reaches you as SMILES. That is "
+    "our own code for what the recogniser read, the student has never seen "
+    "it, and writing it back at them tells them nothing. Never put a SMILES "
+    "string in the hint. Describe the drawing instead: how long the chain "
+    "is, which atom carries what, where a group sits.\n"
     "Good: 'You balanced the hydrogens, but that changed the nitrogen count "
     "on the right. Count the nitrogens on each side and compare.'\n"
     "Bad: 'The student attempted to balance the equation by adding "
@@ -471,6 +553,8 @@ _MATH_LEVEL_1_PROMPT = (
     "- Be warm, brief, and matter of fact.\n"
     "- Name the actual expressions, operations, signs, or numbers on their page.\n"
     "- Explain the mistake they made, not the entire solution method.\n"
+    "- Point at the place by quoting what is written there rather than by "
+    "numbering it. Never say 'line 3', 'the third line', or 'step 2'.\n"
     "Never do:\n"
     "- No markdown, headings, lists, or bold.\n"
     "- No filler such as 'Great question', 'Let's', 'Don't worry', or "
@@ -484,9 +568,151 @@ _MATH_LEVEL_1_PROMPT = (
 )
 
 
+def _working_block(req: HintRequest) -> str:
+    """The student's whole page, when they wrote one.
+
+    On the numeric topics the working is laid out however the student likes
+    and no single row is a claim on its own, so a hint written from one line
+    can only ever say "this number is wrong". Given the whole page the model
+    can say which step of their method went wrong, which is the difference
+    between a useful hint and a restatement of the verdict.
+    """
+    lines = [line.strip() for line in (req.working_lines or []) if line.strip()]
+    if not lines:
+        return ""
+    numbered = "\n".join(f"  {index + 1}. {line}" for index, line in enumerate(lines))
+    return (
+        "\nTheir whole working, as they wrote it. Read all of it before "
+        "deciding what went wrong. It will not be tidy, and the steps may "
+        "be in an order you would not have chosen, which is fine and is not "
+        "itself a mistake:\n" + numbered + "\n"
+    )
+
+
+# Appended on the one retry a rejected hint gets. Each names the rule that
+# was broken rather than repeating the whole prompt, because the first
+# attempt is usually fluent and on topic and fails on exactly one thing.
+_RETRY_LEAK = (
+    "\n\nYour first attempt at this hint was thrown away because it stated a "
+    "value the student is supposed to work out for themselves. Write it "
+    "again without that. Every number in your hint must already appear in "
+    "the problem or in their working above. Name which quantity is wrong "
+    "and what to compare it against, and stop there."
+)
+_RETRY_POSITION = (
+    "\n\nYour first attempt pointed at a row by its position. Write it again "
+    "and point by quoting what is written there instead. The student laid "
+    "this page out themselves, so 'the first line' and 'step 2' are our "
+    "count and not theirs, and they have to go looking before they can even "
+    "start. Quote three or four words of what they actually wrote."
+)
+
+# Positional pointing, in the shapes a model reaches for. Deterministic, so
+# it can be checked before the hint is sent rather than hoped for in the
+# prompt: five hints in sixty said "step 2" or "the first line" with the
+# instruction not to sitting directly above them in the prompt.
+_POSITION_RE = re.compile(
+    r"\b(?:line|step|row)\s*(?:number\s*)?\d"
+    r"|\b(?:first|second|third|fourth|fifth|next|last|final)\s+(?:line|row|step)\b",
+    re.IGNORECASE,
+)
+
+_RETRY_SMILES = (
+    "\n\nYour first attempt wrote the SMILES string out in the hint. The "
+    "student drew a picture. SMILES is our own code for what the recogniser "
+    "read and they have never seen it, so it tells them nothing. Write it "
+    "again describing the drawing in words: how long the chain is, which "
+    "atom carries what, where a group sits. Never put a SMILES string in a "
+    "hint."
+)
+
+# Topics where the student's line is a drawing that reaches us as SMILES.
+_STRUCTURE_TOPICS = frozenset({"structure", "organic"})
+
+
+def _points_by_position(text: str) -> bool:
+    return bool(_POSITION_RE.search(text or ""))
+
+
+def _shows_smiles(text: str, req: HintRequest) -> bool:
+    """Whether a hint writes our internal notation out at a person.
+
+    Found live on the structure topics: the student drew a five carbon
+    chain, the recogniser read it as CCCCC, and the hint said "You drew
+    CCCCC". They never wrote that and would not recognise it, which is the
+    standing rule that SMILES is for the machine and the right panel and
+    never for the page.
+
+    Checked against their own line rather than by pattern, because a general
+    SMILES detector fires on H2SO4 and on [OH-], and both of those are just
+    chemistry.
+    """
+    line = (req.student_line or "").strip()
+    if len(line) < 2 or (req.topic or "") not in _STRUCTURE_TOPICS:
+        return False
+    return (
+        re.search(
+            r"(?<![A-Za-z0-9])" + re.escape(line) + r"(?![A-Za-z0-9])", text or ""
+        )
+        is not None
+    )
+
+
+def _retried_once(
+    generate: Callable[..., tuple[str, int] | None],
+    first: tuple[str, int],
+    level: int,
+    *,
+    broken: Callable[[str], bool],
+    note: str,
+    why: str,
+) -> tuple[str, int]:
+    """One more ask when a hint breaks a rule we can check, then take what we get.
+
+    Deliberately not a fallback to the template: "in the first line you wrote
+    53.96" is worse than quoting the work and much better than a sentence
+    that would fit any problem. The retry is worth one call; giving up the
+    whole hint is not.
+    """
+    if not broken(first[0]):
+        return first
+    logger.warning("level %d %s, asking once more", level, why)
+    again = generate(retry=note)
+    if again is not None and again[0] and not broken(again[0]):
+        return again
+    return first
+
+
+def _cleaned_up(
+    generate: Callable[..., tuple[str, int] | None],
+    first: tuple[str, int],
+    level: int,
+    req: HintRequest,
+) -> tuple[str, int]:
+    """Both rules we can check on the text itself, before it is sent."""
+    result = _retried_once(
+        generate,
+        first,
+        level,
+        broken=lambda text: _shows_smiles(text, req),
+        note=_RETRY_SMILES,
+        why="wrote a SMILES at the student",
+    )
+    return _retried_once(
+        generate,
+        result,
+        level,
+        broken=_points_by_position,
+        note=_RETRY_POSITION,
+        why="pointed by position",
+    )
+
+
 def _generate_level_1(
     req: HintRequest,
     session: ProblemSession,
+    *,
+    retry: str | None = None,
 ) -> tuple[str, int] | None:
     base_prompt = (
         _CHEMISTRY_LEVEL_1_PROMPT
@@ -496,10 +722,13 @@ def _generate_level_1(
 
     prompt = (
         base_prompt
+        + (retry or "")
+        + coaching_for(req.problem_type, req.topic or session.topic)
         + f"\n\nTopic: {req.topic or session.topic}"
         + f"\nProblem: {req.problem or session.problem}"
         + f"\nThe line before: {req.previous_line or '(this is the first line)'}"
         + f"\nThe flagged line (line {req.line_number}): {req.student_line}"
+        + _working_block(req)
         + f"\nWhat the checker proved: {req.error_type}"
     )
 
@@ -564,43 +793,79 @@ _MATH_LEVEL_2_PROMPT = (
 )
 
 
+def _numeric_contract(task_inputs: dict, problem_class, answer_note: str) -> str:
+    """Build the `check` contract from the dataclass that has to accept it.
+
+    Hand-written, these two drifted. The stoichiometry list was missing
+    `molecular_formula` entirely and the solutions list was missing
+    `titrant_concentration_m`, `titrant_volume_l`, `analyte_volume_l`,
+    `protons` and `hydroxides`, so on those tasks the model was asked to
+    describe its own problem in a vocabulary that had no words for it, and
+    the example it invented failed verification every time. That was five of
+    the twenty level 2 fallbacks in a live run of all thirty concepts.
+
+    Deriving it means a task or a field added to the judge cannot silently
+    become a task level 2 can never verify.
+    """
+    lines = "\n".join(
+        f"  {task}: {', '.join(inputs)}" for task, inputs in task_inputs.items()
+    )
+    return (
+        '"check": {"task": "<the task>", "params": {<its inputs>}, '
+        '"answer": <' + answer_note + ">}\n"
+        "Pick the task your invented problem actually is, and give exactly "
+        "the params it takes. Nothing else is read, and a param belonging to "
+        "a different task is not a substitute for the one this task needs.\n"
+        + lines
+        + "\nEvery value in `params` is a plain JSON number with no unit and "
+        "no quotes, except formula, element, equation and product, which are "
+        "strings. `amounts` and `composition` map a formula to a plain "
+        'number: {"N2": 28.0, "H2": 6.0}, never to an object and never to a '
+        "string. Volumes are in litres and masses in grams."
+    )
+
+
+# `smiles` is parsed by RDKit and rejected if it does not parse, and the
+# common failure was a condensed formula written where a SMILES was asked
+# for: CC(Cl)CH2Cl is how a person writes it and is not a SMILES, so RDKit
+# refused it and the student got the static floor. The example spells out
+# the difference rather than trusting the word "SMILES" to carry it.
+_STRUCTURE_CONTRACT = (
+    '"check": {"smiles": "<the answer structure as a valid SMILES string>", '
+    '"group": "<the functional group it contains, or null>"}\n'
+    "`smiles` must be real SMILES that a parser accepts, not a condensed "
+    "formula. 1,2-dichloropropane is CC(Cl)CCl, never CC(Cl)CH2Cl. Ethanol "
+    "is CCO, never CH3CH2OH. It is read by a machine and never shown to the "
+    "student, so write it for the parser and keep the condensed formulas "
+    "for the steps, where a person will read them."
+)
+
+
 _CHEMISTRY_CHECK_CONTRACTS = {
     "balancing": (
+        "If your problem is to balance an equation:\n"
         '"check": {"unbalanced": "<your equation, coefficients omitted>", '
-        '"balanced": "<the same equation, fully balanced>"}'
+        '"balanced": "<the same equation, fully balanced>"}\n'
+        "If your problem is to write a net ionic equation:\n"
+        '"check": {"molecular": "<your full molecular equation>", '
+        '"net_ionic": "<the net ionic form of it>"}\n'
+        "Use the shape that matches the question you invented, and make the "
+        "last step of your working state the same equation the check does."
     ),
-    "stoichiometry": (
-        '"check": {"task": "<one of: molar_mass, percent_composition, '
-        'moles_from_mass, mass_from_moles, empirical_formula, '
-        'limiting_reagent, theoretical_yield, percent_yield>", '
-        '"params": {<the inputs your problem gives, using the field names '
-        'formula, element, mass_g, moles, equation, amounts, product, '
-        'actual_yield_g, composition, target_molar_mass>}, '
-        '"answer": <the final numeric answer, or the formula as a string>}'
+    "stoichiometry": _numeric_contract(
+        _STOICHIOMETRY_INPUTS,
+        _StoichiometryProblem,
+        "the final numeric answer, or the formula or species as a string",
     ),
-    "solutions": (
-        '"check": {"task": "<one of: molarity, dilution, ph_from_concentration, '
-        'strong_acid_ph, strong_base_ph, weak_acid_ph, weak_base_ph, buffer_ph, '
-        'titration_concentration, percent_by_mass>", '
-        '"params": {<the inputs your problem gives, using the field names '
-        'moles, mass_g, formula, volume_l, concentration_m, ka, kb, pka, '
-        'acid_concentration_m, base_concentration_m, initial_concentration_m, '
-        'initial_volume_l, final_volume_l, final_concentration_m, '
-        'hydrogen_concentration_m, solute_mass_g, solution_mass_g>}, '
-        '"answer": <the final numeric answer>}'
+    "solutions": _numeric_contract(
+        _SOLUTIONS_INPUTS, _SolutionsProblem, "the final numeric answer"
     ),
     "redox": (
         '"check": {"formula": "<the species>", "element": "<element symbol>", '
         '"answer": <the oxidation state as a number>}'
     ),
-    "structure": (
-        '"check": {"smiles": "<the answer structure as SMILES>", '
-        '"group": "<the functional group it contains, or null>"}'
-    ),
-    "organic": (
-        '"check": {"smiles": "<the answer structure as SMILES>", '
-        '"group": "<the functional group it contains, or null>"}'
-    ),
+    "structure": _STRUCTURE_CONTRACT,
+    "organic": _STRUCTURE_CONTRACT,
 }
 
 
@@ -609,10 +874,12 @@ def _level_2_prompt(
     topic: str,
     problem: str,
     error_type: str | None,
+    problem_type: str | None = None,
 ) -> str:
     if subject == "math":
         return (
             _MATH_LEVEL_2_PROMPT
+            + analogue_for(problem_type, topic)
             + f"\n\nTopic: {topic}"
             + f"\nThe student's problem, which must NOT be reused: {problem}"
             + f"\nThe mistake they made: {error_type}\n\n"
@@ -630,6 +897,7 @@ def _level_2_prompt(
 
     return (
         _CHEMISTRY_LEVEL_2_PROMPT
+        + analogue_for(problem_type, topic)
         + f"\nTopic: {topic}"
         + f"\nThe student's problem (for structure only, do not reuse it): {problem}"
         + f"\nThe mistake they made: {error_type}\n\n"
@@ -656,21 +924,27 @@ def _verify_example(subject: str,topic: str, payload: dict, student_problem: str
     raw_steps = payload.get("steps") or []
     check = payload.get("check") or {}
     if not problem or not technique or not isinstance(raw_steps, list):
+        logger.warning("level 2 rejected: the payload has no problem, technique or steps")
         return None
     steps = [str(step).strip() for step in raw_steps if str(step).strip()]
     if not 1 <= len(steps) <= 20 or not isinstance(check, dict):
+        logger.warning(
+            "level 2 rejected: %d steps and check is %s",
+            len(steps),
+            type(check).__name__,
+        )
         return None
 
     # The similarity guard, asserted mechanically rather than requested in
     # the prompt: an analogue that reuses the student's numbers is the
     # student's problem wearing a hat.
     if not numbers_differ(problem, student_problem):
-        logger.info("level 2 rejected: analogue reuses the student's numbers")
+        logger.warning("level 2 rejected: analogue reuses the student's numbers")
         return None
 
     if subject == "math":
         if topic != "algebra":
-            logger.info(
+            logger.warning(
                 "level 2 rejected: no deterministic math verifier for topic %s",
                 topic,
             )
@@ -693,7 +967,41 @@ def _verify_example(subject: str,topic: str, payload: dict, student_problem: str
             if subject == "chemistry"
             else []
         ),
+        quantities=[_step_quantity(step) for step in steps],
+        # Only where the answer genuinely is a molecule. Taken from the
+        # machine-checkable spec the model returned and which our own judge
+        # has just verified, never from the prose.
+        structure=(
+            str(check.get("smiles") or "").strip() or None
+            if topic in ("structure", "organic")
+            else None
+        ),
     )
+
+
+def _step_quantity(step: str):
+    """The single quantity a worked step states, or None.
+
+    Same argument as `_step_equation`: our parser, not the client's regex.
+    A step with two numbers in it is working rather than a claim, and
+    `parse_quantity` refuses it, which is exactly the answer we want here.
+    """
+    from judge.quantities import QuantityParseError, format_quantity, parse_quantity
+    from schemas import ExampleQuantity
+
+    text = step.split(":")[-1].strip() if ":" in step else step
+    for candidate in (text, step):
+        try:
+            quantity = parse_quantity(candidate)
+        except QuantityParseError:
+            continue
+        return ExampleQuantity(
+            value=quantity.value,
+            unit=quantity.unit,
+            label=quantity.name,
+            text=format_quantity(quantity),
+        )
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -791,6 +1099,7 @@ def _verify_math_example(problem: str, steps: list[str]) -> bool:
     from schemas import Step
 
     if not problem or not steps:
+        logger.warning("level 2 rejected: the example has no problem or no steps")
         return False
 
     judge = AlgebraJudge()
@@ -806,13 +1115,26 @@ def _verify_math_example(problem: str, steps: list[str]) -> bool:
     verdicts = judge.check(problem, check_steps)
 
     if not verdicts:
+        logger.warning("level 2 rejected: the algebra judge returned nothing")
         return False
 
     # line 0 means the generated problem itself could not be safely judged.
     if verdicts[0].line_number == 0:
+        logger.warning(
+            "level 2 rejected: the generated problem itself is %s",
+            verdicts[0].error_type,
+        )
         return False
 
-    return all(verdict.valid for verdict in verdicts)
+    wrong = [verdict for verdict in verdicts if not verdict.valid]
+    if wrong:
+        logger.warning(
+            "level 2 rejected: line %d of the worked example is %s",
+            wrong[0].line_number,
+            wrong[0].error_type,
+        )
+        return False
+    return True
 
 
 def _check_is_correct(topic: str, check: dict, steps: list[str]) -> bool:
@@ -828,28 +1150,82 @@ def _check_is_correct(topic: str, check: dict, steps: list[str]) -> bool:
             return _verify_redox(check, steps)
         return _verify_structure(check, steps)
     except Exception as exc:  # any engine failure is a failed verification
-        logger.info("level 2 verification raised, rejecting example: %s", exc)
+        logger.warning("level 2 verification raised, rejecting example: %s", exc)
         return False
+
+
+def _reject(why: str, *args) -> bool:
+    """Say no, and say why.
+
+    Every rejection below used to be a bare `return False`. Level 2 was the
+    most common failure in the ladder and the server could not name a single
+    reason for it: the live audit could see the floor being served on nine
+    questions and the log had one line for one of them. A verifier that
+    cannot explain itself cannot be improved, only guessed at.
+    """
+    logger.warning("level 2 rejected: " + why, *args)
+    return False
+
+
+def _verify_net_ionic(check: dict, steps: list[str]) -> bool:
+    """A net ionic example ends at the net ionic equation, not the molecular one.
+
+    Both problem types live under the balancing topic, so both were being
+    handed to `_verify_balancing`, which demands the last steps restate the
+    balanced *molecular* equation. A correct net ionic example ends at
+    "3Ag^+ + PO4^3- -> Ag3PO4" and was thrown away every time. The check
+    contract only had the balancing shape too, so the model filled
+    `unbalanced` and `balanced` with whatever it had, sometimes the
+    student's own equation.
+    """
+    from judge.net_ionic import net_ionic_equation
+
+    molecular = str(check.get("molecular", "")).strip()
+    claimed = str(check.get("net_ionic", "")).strip()
+    if not molecular or not claimed:
+        return _reject("the check gave no molecular or no net ionic equation")
+
+    result = net_ionic_equation(molecular)
+    if result.no_reaction:
+        return _reject("%r has no net ionic equation, everything cancels", molecular)
+    if not _same_equation(claimed, result.net_ionic):
+        return _reject(
+            "the example calls %r the net ionic form of %r, we get %r",
+            claimed,
+            molecular,
+            result.net_ionic,
+        )
+    if not any(_same_equation(step, result.net_ionic) for step in steps[-3:]):
+        return _reject("the last steps never arrive at %r", result.net_ionic)
+    return True
 
 
 def _verify_balancing(check: dict, steps: list[str]) -> bool:
     from judge.chemistry_equations import balance_coefficients, is_balanced, parse_equation
 
+    # Net ionic problems share this topic and are a different question.
+    if check.get("net_ionic") or check.get("molecular"):
+        return _verify_net_ionic(check, steps)
+
     unbalanced = str(check.get("unbalanced", "")).strip()
     balanced = str(check.get("balanced", "")).strip()
     if not unbalanced or not balanced:
-        return False
+        return _reject("the check gave no unbalanced or no balanced equation")
     if not is_balanced(balanced):
-        return False
+        return _reject("the equation it calls balanced is not balanced: %r", balanced)
     # The balanced form must be the balanced form *of that equation*, not of
     # some other reaction the model drifted into.
     left, right = parse_equation(balanced)
     correct_left, correct_right = balance_coefficients(unbalanced)
     written = [c for c, _ in left + right]
     if written != correct_left + correct_right:
-        return False
+        return _reject(
+            "the coefficients %s are not the ones %r balances to", written, unbalanced
+        )
     # And the worked steps must actually end at it.
-    return any(_same_equation(step, balanced) for step in steps[-3:])
+    if not any(_same_equation(step, balanced) for step in steps[-3:]):
+        return _reject("the last steps never arrive at %r", balanced)
+    return True
 
 
 _ARROWS = ("->", "→", "⟶", "⇒", "=>", "➔", "-->")
@@ -894,16 +1270,33 @@ def _candidate_equations(text: str):
 
 
 def _equation_tally(equation: str):
-    from judge.chemistry_equations import EquationParseError, parse_equation
+    """One equation reduced to what is on each side, chemically.
+
+    By composition and charge rather than by the string the formula was
+    written as. "Ba2+" and "Ba^2+" are the same ion, and comparing the text
+    threw away a correct net ionic worked example for writing the charge
+    the way a person writes it. Same reasoning as comparing S2O3 with O3S2
+    by element counts.
+    """
+    from judge.chemistry_equations import (
+        EquationParseError,
+        parse_equation,
+        parse_formula,
+    )
+
+    def side(terms):
+        tally: dict[tuple, int] = {}
+        for coefficient, formula in terms:
+            atoms, charge = parse_formula(formula)
+            key = (tuple(sorted(atoms.items())), charge)
+            tally[key] = tally.get(key, 0) + coefficient
+        return tuple(sorted(tally.items()))
 
     try:
         left, right = parse_equation(equation)
+        return side(left), side(right)
     except EquationParseError:
         return None
-    return (
-        tuple(sorted((f, c) for c, f in left)),
-        tuple(sorted((f, c) for c, f in right)),
-    )
 
 
 def _same_equation(text: str, reference: str) -> bool:
@@ -921,7 +1314,7 @@ def _verify_numeric(solution, check: dict, steps: list[str]) -> bool:
 
     expected = check.get("answer")
     if not isinstance(expected, (int, float)):
-        return False
+        return _reject("the check answer is not a number: %r", expected)
     # Any member of the answer group counts: a pH problem's answer is as
     # legitimately stated as pOH or [H+], and the generated example is
     # allowed to end on whichever the question it invented asked for.
@@ -929,7 +1322,11 @@ def _verify_numeric(solution, check: dict, steps: list[str]) -> bool:
         values_match(step.quantity.value, float(expected), sig_figs=3)
         for step in solution.answer_steps
     ):
-        return False
+        return _reject(
+            "the example answers %s, our solver gets %s",
+            expected,
+            [round(step.quantity.value, 4) for step in solution.answer_steps],
+        )
 
     # Every numeric line of the generated working is checked against our own
     # solution. The rule used to be "reject anything we did not produce",
@@ -955,8 +1352,7 @@ def _verify_numeric(solution, check: dict, steps: list[str]) -> bool:
             for candidate in solution.steps
         )
         if contradicts:
-            logger.info("level 2 rejected: step %r contradicts our solution", step)
-            return False
+            return _reject("step %r contradicts our solution", step)
     return True
 
 
@@ -969,9 +1365,20 @@ def _verify_stoichiometry(check: dict, steps: list[str]) -> bool:
         StoichiometryProblem(task=task, **_filtered(params, StoichiometryProblem))
     )
     if solution.formula_answer or solution.species_answer:
+        from judge.stoichiometry import _formula_matches
+
         expected = str(check.get("answer", "")).strip()
         symbolic = solution.formula_answer or solution.species_answer
-        return bool(expected) and expected.replace(" ", "") == symbolic
+        # By element counts, the way the student's own answer is compared.
+        # A string compare rejected an example answering S2O3 because our
+        # solver writes O3S2, which is the same compound spelled the other
+        # way round. The student was never held to that and neither should
+        # a worked example be.
+        if not expected or not _formula_matches(expected, symbolic):
+            return _reject(
+                "the example answers %r, our solver gets %r", expected, symbolic
+            )
+        return True
     return _verify_numeric(solution, check, steps)
 
 
@@ -993,38 +1400,111 @@ def _verify_redox(check: dict, steps: list[str]) -> bool:
     element = str(check.get("element", ""))
     expected = check.get("answer")
     if not formula or not element or not isinstance(expected, (int, float)):
-        return False
-    return float(oxidation_state(formula, element)) == float(expected)
+        return _reject(
+            "the check needs a formula, an element and a numeric answer, got %r",
+            check,
+        )
+    actual = float(oxidation_state(formula, element))
+    if actual != float(expected):
+        return _reject(
+            "the example says %s for %s in %s, we get %s",
+            expected, element, formula, actual,
+        )
+    return True
 
 
 def _verify_structure(check: dict, steps: list[str]) -> bool:
     from judge.chemistry import (
-        _FUNCTIONAL_GROUP_PATTERNS,
         _parse_smiles,
         _support_reason,
+        group_pattern,
     )
 
     smiles = str(check.get("smiles", "")).strip()
     if not smiles:
-        return False
+        return _reject("the check carries no structure")
     molecule = _parse_smiles(smiles)
-    if _support_reason(molecule):
-        return False
+    reason = _support_reason(molecule)
+    if reason:
+        return _reject("we cannot read %r as a structure: %s", smiles, reason)
     group = check.get("group")
     if group:
-        pattern = _FUNCTIONAL_GROUP_PATTERNS.get(str(group))
-        if pattern is None or not molecule.HasSubstructMatch(pattern):
-            return False
+        pattern = group_pattern(str(group))
+        if pattern is None:
+            return _reject("we have no pattern for the group %r", group)
+        if not molecule.HasSubstructMatch(pattern):
+            return _reject("%r does not contain a %s", smiles, group)
     return True
 
 
+def _as_number(value):
+    """A number out of whatever shape the model wrote it in, or None.
+
+    Accepts "28.0", "28.0 g", and {"mass_g": 28.0}, because all three mean
+    twenty eight grams and none of them are worth throwing a worked example
+    away over. Found live, and it was invisible: the verifier crashed on
+    `'<' not supported between instances of 'dict' and 'dict'` and on
+    `unsupported operand type(s) for /: 'str' and 'float'`, both of which
+    were caught as "verification failed" and served the student the floor.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        match = re.search(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", value)
+        return float(match.group(0)) if match else None
+    if isinstance(value, dict):
+        for candidate in value.values():
+            number = _as_number(candidate)
+            if number is not None:
+                return number
+    return None
+
+
+# Fields whose value is a mapping of species to an amount, rather than one
+# number. The values inside need the same coercion as everything else.
+_MAPPING_FIELDS = ("amounts", "composition")
+
+
 def _filtered(params: dict, model_class) -> dict:
+    """Keep the fields the dataclass has, in the types it can actually use.
+
+    Forgiving on purpose. The check object describes the *example's* own
+    problem, so a number written as a string is a JSON style difference and
+    nothing more; being strict about it costs a student their hint and
+    protects nobody.
+    """
     allowed = {
         field
         for field in model_class.__dataclass_fields__  # type: ignore[attr-defined]
         if field != "task"
     }
-    return {key: value for key, value in params.items() if key in allowed}
+    cleaned: dict = {}
+    for key, value in params.items():
+        if key not in allowed:
+            continue
+        if key in _MAPPING_FIELDS:
+            if not isinstance(value, dict):
+                continue
+            mapped = {
+                str(species): _as_number(amount)
+                for species, amount in value.items()
+            }
+            cleaned[key] = {
+                species: amount
+                for species, amount in mapped.items()
+                if amount is not None
+            }
+            continue
+        if isinstance(value, str) and key not in ("formula", "element",
+                                                  "equation", "product"):
+            number = _as_number(value)
+            if number is not None:
+                cleaned[key] = number
+                continue
+        cleaned[key] = value
+    return cleaned
 
 
 def _generate_level_2(
@@ -1042,6 +1522,7 @@ def _generate_level_2(
                         topic,
                         problem,
                         req.error_type,
+                        req.problem_type,
                     )
                 ],
             )
@@ -1057,7 +1538,7 @@ def _generate_level_2(
         )
         if example is not None:
             return example, total_latency
-        logger.info("level 2 example failed verification, attempt %d", attempt + 1)
+        logger.warning("level 2 example failed verification, attempt %d", attempt + 1)
     return None
 
 
@@ -1075,6 +1556,8 @@ _CHEMISTRY_LEVEL_3_PROMPT = (
     "- Warm, direct, unhurried. No praise, no apology, no filler.\n"
     "- Short sentences. Name the actual substances and numbers on their "
     "page rather than talking in general terms.\n"
+    "- Refer to their working by quoting it back, never by row number. "
+    "They laid the page out themselves and our numbering is not theirs.\n"
     "Never do:\n"
     "- No em dashes, ever. Use a comma or a full stop.\n"
     "- No markdown, no headings, no lists, no bold.\n"
@@ -1102,6 +1585,8 @@ _CHEMISTRY_LEVEL_3_PROMPT_OPEN = (
     "- Warm, direct, unhurried. No praise, no apology, no filler.\n"
     "- Short sentences. Name the actual substances and numbers on their "
     "page rather than talking in general terms.\n"
+    "- Refer to their working by quoting it back, never by row number. "
+    "They laid the page out themselves and our numbering is not theirs.\n"
     "- Finish the step. Show the value or the line it comes out at, and say "
     "in one clause why that is the result.\n"
     "Never do:\n"
@@ -1109,6 +1594,11 @@ _CHEMISTRY_LEVEL_3_PROMPT_OPEN = (
     "- No markdown, no headings, no lists, no bold.\n"
     "- No 'Great question', 'Let's dive in', 'Remember that', 'Don't "
     "worry', 'As you can see'.\n"
+    "- If their line is a drawn structure it reaches you as SMILES. That is "
+    "our own code for what the recogniser read, the student has never seen "
+    "it, and 'you drew CCCCC' means nothing to someone who drew a chain of "
+    "five carbons. Never put a SMILES string in the hint. Describe the "
+    "drawing instead.\n"
     "- Do this one step. Do not solve the rest of the problem for them.\n"
     "Length: three to five sentences.\n"
     'Reply with JSON: {"hint": "<three to five sentences>", "declined": false}'
@@ -1144,7 +1634,12 @@ _MATH_LEVEL_3_PROMPT_OPEN = (
 )
 
 
-def _generate_level_3(req: HintRequest, session: ProblemSession) -> tuple[str, int] | None:
+def _generate_level_3(
+    req: HintRequest,
+    session: ProblemSession,
+    *,
+    retry: str | None = None,
+) -> tuple[str, int] | None:
     if req.subject == "chemistry":
         base_prompt = (
             _CHEMISTRY_LEVEL_3_PROMPT
@@ -1160,10 +1655,13 @@ def _generate_level_3(req: HintRequest, session: ProblemSession) -> tuple[str, i
 
     prompt = (
         base_prompt
+        + (retry or "")
+        + coaching_for(req.problem_type, req.topic or session.topic)
         + f"\n\nTopic: {req.topic or session.topic}"
         + f"\nProblem: {req.problem or session.problem}"
         + f"\nThe line before: {req.previous_line or '(this is the first line)'}"
         + f"\nTheir line (line {req.line_number}): {req.student_line}"
+        + _working_block(req)
         + f"\nWhat the checker proved: {req.error_type}"
     )
 
@@ -1216,8 +1714,30 @@ def generate_hint(req: HintRequest) -> HintResponse:
             return _finalise(
             req, _template_hint(req), session=session, resource=resource, trusted=True
         )
-        text, latency = generated
-        return _finalise(req, text, session=session, source="model", latency_ms=latency)
+        text, latency = _cleaned_up(
+            lambda retry: _generate_level_1(req, session, retry=retry),
+            generated,
+            1,
+            req,
+        )
+        answer = _finalise(
+            req, text, session=session, source="model", latency_ms=latency
+        )
+        if answer.source == "model":
+            return answer
+        # Redaction threw it away, which means the model stated a value it
+        # was told not to state. The filter did its job and the student is
+        # now looking at the static floor for a reason that has nothing to do
+        # with them. Level 2 already regenerates once when verification
+        # fails; this is the same trade on the same grounds.
+        retried = _generate_level_1(req, session, retry=_RETRY_LEAK)
+        if retried is None:
+            return answer
+        text, latency = retried
+        second = _finalise(
+            req, text, session=session, source="model", latency_ms=latency
+        )
+        return second if second.source == "model" else answer
 
     if req.level == 2:
         generated = _generate_level_2(req, session)
@@ -1273,7 +1793,12 @@ def generate_hint(req: HintRequest) -> HintResponse:
         return _finalise(
             req, _template_hint(req), session=session, resource=resource, trusted=True
         )
-    text, latency = generated
+    text, latency = _cleaned_up(
+        lambda retry: _generate_level_3(req, session, retry=retry),
+        generated,
+        3,
+        req,
+    )
     return _finalise(
         req,
         text,

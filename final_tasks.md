@@ -2655,3 +2655,478 @@ Still open:
       structure asks "is this the right molecule", organic asks "does it have
       this group" or "is this the right product". Worth saying so in the blurbs,
       because from the outside they look like the same topic twice.
+
+---
+
+# Walkthrough, session 4 (Aug 12): the worksheet
+
+Written the night before the demo, from a session on the tablet. **This
+section supersedes section 15's "labelled write-in slots on the page", which
+it implements, and it reverses line-by-line judging on numeric topics.**
+
+## 16. The slots were never wired in
+
+`ProblemSlotOverlay.jsx` and `problemSlots.js` shipped in PR #26 with their
+tests, and **nothing imported the overlay**. The commit message said the
+problem was filled in on the page; the page had no boxes on it. Worth
+recording because the tests all passed and the module was correct: a pure
+module with a full test file and no call site reads exactly like a finished
+feature from the inside, and nothing in CI can tell the difference.
+
+## 17. Chemistry is not math, and line-by-line judging was the wrong shape
+
+**What happened.** *"Is there any calculation involved in this? We have to
+multiply and divide. This is not like math where you just have a working and
+you can check line by line. In chemistry, especially for a question like
+molar mass, you can't do that."*
+
+Correct, and the two failures fall straight out of it:
+
+1. **A row with two numbers in it is a `parse_error`.** `2(26.98) + 96.20 +
+   191.99` is what molar-mass working looks like, and `parse_quantity`
+   refuses it by design, because guessing which number is the claim is the
+   confident-wrong behaviour the product must not have.
+2. **An intermediate written as the final answer was `valid`.** The standing
+   finding in this file -- "the numeric judges mark a line valid when it
+   matches *any* quantity in the correct working ... nothing marks a line as
+   the final answer" -- with molar mass named as one of its cases.
+
+Both are the same mistake: treating a numeric chemistry page as a chain of
+steps that each follow from the one above. It is not one. It is a lookup,
+some arithmetic laid out however the student likes, and one answer.
+
+## 18. The worksheet, and what it decides
+
+Numeric topics now render as a worksheet on the page, not a panel to type
+into. Top to bottom: labelled question boxes, one per field; a working area;
+one answer box with the unit printed outside it.
+
+| Zone | Read? | Judged? |
+|---|---|---|
+| Question boxes | yes, and each fills its own field | no |
+| Working | **no, never sent** | **no** |
+| Answer box | yes | yes, and it is the only thing judged |
+
+**The working is deliberately not read.** Not a shortcut and not a cost
+saving. Everybody arranges arithmetic differently, that arrangement is
+exactly what recognition is worst at, and a confident wrong verdict on
+correct scribble is the fatal row in this file's own failure taxonomy. The
+student's own words: *"every person does multiplication and addition
+separately, so there's no point in checking that."*
+
+**Knowing which line is the answer closes the fatal hole.** `answers_only`
+on `StoichiometryRequest` narrows the comparison to the answer steps, so
+`53.96` in the answer box on `Al2(SO4)3` is now "that is a quantity from the
+working, not the final answer" instead of a green tick. The flag defaults
+false, so every existing caller keeps the step-chain behaviour, where an
+intermediate is exactly what a student should be writing.
+
+**The unit is printed outside the box.** Which closes the third standing
+finding, "units are optional and ignored in every numeric topic", from the
+front rather than by tightening a parser against handwriting.
+
+### Built
+
+- `frontend/src/chemistry/worksheet.js` — zones, layout, the growing working
+  box, all pure, 15 tests
+- `frontend/src/chemistry/WorksheetOverlay.jsx` — the boxes, drawn under the
+  ink so writing in one is writing on the page
+- `useChemistry` — working rows are never queued for recognition, a question
+  box fills its own field with no popover to tap, the answer box is the only
+  step sent, and the verdict colours the box on the page
+- `judge/numeric.py`, `judge/stoichiometry.py`, `schemas.py`, `main.py` —
+  the `answers_only` mode, 7 tests
+- The working box grows under the pen and freezes once the answer box has
+  ink in it, because moving a box a student is writing in is worse than a
+  box that is a row short
+
+### Still open
+
+- [ ] **Solutions, acids and bases** gets the same worksheet for free (it is
+      the other `input: "numeric"` topic and already renders one), but its
+      fourteen tasks have not been walked through by hand. `answers_only` is
+      **not** wired to `/chemistry/solutions` yet, so the pH-versus-pOH
+      family is still judged against every quantity
+- [ ] **The multi-field types are untested on a tablet.** Percent yield
+      lays out four question boxes; only molar mass has been driven end to
+      end
+- [ ] **Balancing and structure keep the row-by-row path**, which is right
+      for them -- a balancing line really is a step -- but it means two
+      interaction models exist and a student meets both
+- [ ] **Hint level 1 no longer sees the working**, because we no longer read
+      it. It diagnoses from the answer alone. Sending the working as hint
+      context without judging it is the obvious next move and was not built
+
+## 19. Why the working is not checked, and what would change that
+
+Recorded because it is a **retreat from the product promise**, and a retreat
+that is not written down gets quietly forgotten and then contradicted on
+stage.
+
+The promise, from the top of this file: *"which line broke, why that kind of
+thing breaks"*, checked line by line against the line above. On the numeric
+topics we are not doing that any more. We check the answer.
+
+**It is not a judge problem.** `judge_quantity_steps` will happily judge
+every line, and does, on every other topic. It is a reading problem, and it
+has two halves:
+
+1. **Layout.** People do not write molar mass down the page one claim per
+   row. They write `2 x 26.98 = 53.96` beside `3 x 32.06`, or run the whole
+   sum across one line, or work it in their head and write the total. Row
+   segmentation assumes a row is a claim, and here it is not.
+2. **A line of working is often not a claim at all.** `2(26.98) + 96.20 +
+   191.99` is three numbers and no assertion, and `parse_quantity` refuses
+   it deliberately, because guessing which number is the claim is the
+   confident-wrong behaviour this file bans everywhere else.
+
+**What would actually fix it**, in the order they are worth doing:
+
+- [ ] **A recogniser that reads a region rather than a row.** Hand the model
+      the whole working area as one image and ask for the arithmetic it
+      contains as structured claims, rather than reading each row blind. The
+      model is capable of this; the current prompt is not asked to do it,
+      and the 128-token row-shaped call is the wrong shape for a page
+- [ ] **Verify the claims it extracts, do not trust them.** Each extracted
+      claim goes through the same deterministic comparison the answer does.
+      The generator can be loose because the verifier is exact, which is the
+      argument this file already makes for level 2 hints
+- [ ] **Only then flag a working line**, and only where the extraction is
+      confident. An `unsupported` on a line we could not read is honest; an
+      `invalid` on a line we misread is the fatal row in our own taxonomy
+- [ ] Until that exists, **say so out loud in the demo** rather than letting
+      a judge assume we check every line on every topic. We check every line
+      on balancing, redox and structure, where a line genuinely is a step
+
+The student's own framing, which is the right one: *"it's really impossible
+to check each line because it's hard for it to actually understand, and we
+need a stronger model."* That is the honest position, and it belongs in the
+demo script rather than in a footnote.
+
+---
+
+# The hint pass, Aug 12: what was actually wrong
+
+## 20. Seven problem types opened no session
+
+The finding that explains why hints felt broken on some topics and fine on
+others. `topics.js` returned `null` from `session()` for oxidation state,
+cell potential, both isomer types, the formula-structure type, naming from a
+name, and reaction prediction. No session means no vault, and
+`generate_hint` serves the static template floor whenever the vault is
+missing, by design, because a vault is the redaction reference and
+generating against no reference is the leak this file exists to prevent.
+
+So the ladder was working exactly as written and the hints were still
+generic, and nothing anywhere logged a problem. **A feature that degrades
+silently to a worse version of itself is the hardest kind to notice.**
+
+Three vaults already existed and were simply never called:
+`vault_for_oxidation_state`, `vault_for_cell_potential`,
+`vault_for_net_ionic`. Net ionic was worse than missing: it sent its
+molecular equation as `reference_equation`, so the vault held the *balanced*
+equation and guarded the wrong answer.
+
+`vault_for_formula_structure` is new and closes the "the vault would have to
+hold any of these" note. It guards the **formula**, not the set of
+acceptable structures, which is right: the question asked for the formula.
+
+- [x] Every problem type opens a session
+- [x] `tests/test_hint_coverage.py` asserts it, per type
+
+## 21. Hints were keyed by topic, which is one level too coarse
+
+Level 1 received the subject and the topic. So every stoichiometry hint was
+written against the same coaching whether the student was finding a molar
+mass or a percent yield, and a hint keyed only by the topic can never be
+more specific than the topic. That is the same ceiling the static templates
+had, one rung up.
+
+`backend/hint_rules.py` gives all thirty concepts their own entry: what a
+level 1 hint must point at, the errors that actually happen on that concept
+in the order a teacher expects them, and what a level 2 analogue must
+preserve. A molar mass analogue keeps the bracket. An empirical formula
+analogue keeps a half-integer ratio. A strong base analogue keeps two
+hydroxides. Without those constraints the "parallel problem" drifts to an
+easier problem than the one the student is stuck on, which teaches nothing.
+
+The model is told to decide which known error it is **before** writing, and
+to describe what the student actually did if it is none of them. Forcing a
+known error onto work that does not fit it is worse than a general hint.
+
+- [x] `problem_type` on `HintRequest`, additive
+- [x] Rules for all thirty concepts, no two coaching identically
+- [x] Hints point at the place by quoting it, never by row number, because
+      on a worksheet the student laid the page out and our numbering is not
+      theirs
+
+## 22. The working now reaches the hint layer
+
+Section 19 said the working is not read. It still is not *judged*, and that
+call stands. But a hint that has never seen the working can only say "this
+number is wrong", so `working_lines` is read once, lazily, at the moment a
+hint is asked for, and passed to levels 1 and 3.
+
+Row by row through the prompt already known to work, rather than as one
+block through a prompt written for a single line. Failures are swallowed: a
+hint without the working beats no hint.
+
+## 23. Level 2 animates on every topic now, and plays
+
+Balancing already animated. The other two families did not, and structure is
+the worst place to show prose, because the thing being taught is a picture.
+
+| Family | What moves |
+|---|---|
+| Balancing, net ionic, half-reactions | Coefficients pop, atom tally goes green per element |
+| Numeric | A quantity card lands per step, building the working |
+| Structure, organic | The molecule is drawn at the last step |
+
+`equations`, `quantities` and `structure` all come from **our** parsers, not
+from the client reading prose. That distinction already ended one class of
+bug where the client tallied the word "Balance" as an element.
+
+A Play control walks the steps at 2.6s each and stops at the end. Off by
+default: a panel that starts moving under the student is the complaint that
+closed the old one.
+
+## 24. What the suite now covers, and the one gap left
+
+900 backend tests and 311 frontend. New this pass: thirty concepts x three
+levels, plus three tests proving the animation payload arrives, plus the
+guard that a wrong worked example is still thrown away whole.
+
+Those three matter more than they look. **The suite tested only that
+verification rejects bad examples, never that it accepts good ones**, which
+is exactly how three bugs that each rejected a correct example shipped
+together. That asymmetry is now fixed in both directions.
+
+**The gap: none of this has run against a live model in this pass.** The ADC
+token expired mid-session, so every assertion above is against a mocked
+model. What is proven is our own code: sessions open, vaults build, prompts
+carry the concept, verification accepts and rejects correctly, and the
+payloads the animations need arrive. What is not proven is hint quality,
+which needs:
+
+```powershell
+gcloud auth application-default login
+.\backend\venv\Scripts\python.exe backend\scripts\student_walkthrough.py
+```
+
+- [ ] Run the walkthrough live and record level 1, 2, 3 generation rates
+- [ ] Re-check the three strong-acid and strong-base questions that fell
+      back in both runs on Aug 10. They now have concept rules naming the
+      pOH-for-pH trap directly, which is the most likely cause
+
+## 25. Every concept, run against the live model, and what it found
+
+Aug 12. `backend/scripts/live_hint_audit.py` and `live_questions.py`: thirty
+concepts, two real questions each, all three levels, against Gemini through
+the actual API. 180 live hints per run. Each one is graded on the rules this
+file and CLAUDE.md already state, so a run either passes or names the rule
+it broke.
+
+It is not part of pytest and it costs money. That is the point: the mocked
+suite proves our code and cannot prove hint quality, and hint quality was
+the untested claim.
+
+### What it graded
+
+- a correct answer judged valid, and a wrong one judged invalid
+- the answer to the student's own problem in a level 1 or 2 hint
+- a SMILES reaching a student, on any level, on any topic
+- an unverified worked example rendering
+- the static floor served with the model available, which means a bug in
+  our code rather than a design decision
+- an em dash, a row number, an empty hint
+- the animation payload arriving for the right family
+
+### Run 1: the state it was actually in
+
+| | |
+|---|---|
+| level 1 generated | 43/60 (72%) |
+| level 2 generated | 40/60 (67%) |
+| level 3 generated | 59/60 (98%) |
+| judging failures | 6 |
+| questions with findings | 40/60 |
+
+Six judging failures, four of them the same bug and the worst kind:
+
+**A wrong answer judged correct.** pH, pOH, [H+] and [OH-] are one answer
+group, so that a hint cannot hand over one while withholding another. The
+answer box was matching a bare number against the whole group. 0.010 M HCl
+has a pH of 2.00 and a pOH of 12.00, so a student writing the 12.00 that the
+classic mix-up produces was told they were right. On the most common mistake
+in the topic.
+
+The group stays. An unlabelled number in the answer box is now held to the
+quantity the question named, and labelling it reopens the family, because
+"pOH = 12.00" is chemistry and not a mistake.
+
+The other two: `FeO1.5` was `parse_error`, which the UI is forbidden to
+render as a student mistake, so the one line they got wrong was the one line
+with no mark on it. And `pH: 2.00` and `pH 2.00` did not parse at all,
+because only an equals sign separated a label from its value.
+
+### Why hints fell back, which was three separate bugs
+
+**Redaction was blocking the question.** Seventeen level 1 fallbacks, all
+the same shape. "H2" is the answer to a limiting reagent question and one of
+the two species the question names, so "compare the moles of N2 with the
+moles of H2" was thrown away. "C2H6O" is the answer to "draw a structure
+with the formula C2H6O". "ester" is the answer to "draw a molecule
+containing an ester group". The net ionic vault holds the complete ionic
+equation, the student had written the complete ionic equation, and quoting
+their own line back at them counted as stating the answer.
+
+Nothing printed on their page is a secret from them. The assignment shapes
+are untouched and a new one covers species and formulas, which have no
+number for the numeric check to find.
+
+**The hint job was truncating.** Thinking tokens come out of the same budget
+as the answer on Gemini 2.5, so a level 3 hint that reads a long working ran
+out mid-JSON. It surfaced as "model did not return valid JSON", which reads
+as "the model wrote prose" and means something else entirely.
+
+**The level 2 contract had drifted from the engine that verifies it.** The
+stoichiometry contract never mentioned `molecular_formula`; the solutions
+one had no words for `titrant_concentration_m`, `titrant_volume_l`,
+`analyte_volume_l`, `protons` or `hydroxides`. The model was asked to
+describe its own worked example in a vocabulary with no term for half of it.
+Derived from `TASKS` and the dataclass fields now, with a test per topic.
+
+And the reason none of this was visible: **every level 2 rejection logged at
+INFO**, below the level uvicorn configures. The most common failure in the
+ladder left no trace at all. With the logs turned up, the rest were two
+crashes inside the verifier, both from the model writing `"28.0"` or
+`{"mass_g": 28.0}` where the dataclass wanted `28.0`.
+
+### Three runs
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| level 1 generated | 43/60 (72%) | 55/60 (92%) | 54/60 (90%) |
+| level 2 generated | 40/60 (67%) | 37/60 (62%) | **51/60 (85%)** |
+| level 3 generated | 59/60 (98%) | 60/60 (100%) | **60/60 (100%)** |
+| judging failures | 6 | **0** | **0** |
+| questions with findings | 40/60 | 36/60 | **22/60** |
+
+Run 2 measures the judging and redaction fixes; level 2 is unchanged there
+because run 2 predates the contract fix, which run 3 measures.
+
+Every correct answer accepted and every wrong one caught, on all sixty, in
+both runs since the pOH fix.
+
+### The rule the hints were breaking on the structure topics
+
+Run 3 turned up one more, and it is one of the standing rules rather than a
+subtlety. On both formula structure questions and on an isomer one, the hint
+said:
+
+> You drew CCCCC, which is five carbons.
+
+They drew a chain of five carbons. `CCCCC` is what our recogniser wrote
+down. **SMILES is the internal representation and the right hand panel,
+never the page**, and four hints in the run put it on the page.
+
+Both structure prompts say so now, and it is checked on the generated text
+before it is sent, against the student's own line rather than by pattern: a
+general SMILES detector fires on H2SO4 and on [OH-], which are chemistry a
+student reads every day.
+
+### What the hints read like
+
+Not a metric, so here are four, verbatim, from the run:
+
+> Where you wrote O 4 x 16.00 = 64.00, you counted four oxygen atoms.
+> Remember to apply the subscript 3 outside the parenthesis to the oxygen
+> atoms in SO4.
+
+> Where you wrote 0.34 + (-0.76), you added the two potentials. You should
+> subtract the anode potential from the cathode potential.
+
+> Where you wrote pH = 14 - 2.00 = 12.00, you calculated the pOH. Compare
+> the value you found in the previous step with the pH.
+
+> You wrote 'each Cr goes from +6 to +3 so 3 electrons'. This correctly
+> identifies the change for one chromium atom. However, you have two
+> chromium atoms in Cr2O7^2- that are changing oxidation state.
+
+Every one of them says where by quoting the work. That rule had been in all
+four prompts for a while and five hints in sixty broke it anyway, so it is a
+regex now, checked before the hint is sent, with one more ask when it fires.
+If the second attempt is no better we send the first one: "on the third line
+you used the wrong concentration" still says what they did, and the floor
+says nothing at all.
+
+### Why the nine remaining level 2 fallbacks remained
+
+The honest first answer was that we could not tell. Eleven rejection sites
+in the verification block, **two of them logged**. The audit could see the
+static floor being served on nine questions and the server had one line of
+explanation for one of them. Same failure as the INFO-level logging above,
+one layer down: a verifier that cannot explain itself can only be guessed
+at.
+
+Every rejection names itself now and carries the values that disagreed, and
+a test walks the source and fails if a bare `return False` comes back. With
+that in place the nine turned out to be seven distinct bugs, and **in every
+one of them the model was right and we were wrong**:
+
+1. **Net ionic was verified as a balancing problem.** Both live under the
+   balancing topic, so `_verify_balancing` demanded the worked steps end at
+   the balanced *molecular* equation. A net ionic example correctly ends at
+   `3Ag^+ + PO4^3- -> Ag3PO4`. Every correct one was thrown away.
+
+2. **A charge written without a caret broke the oxidation state solver.**
+   `MnO4-` parsed as MnO carrying a charge of minus four, so Mn came out at
+   -2 instead of +7. `SO42-` gave -40 for sulfur, `NH4+` gave +3 for
+   nitrogen. **This reached students**: the formula box takes whatever they
+   write, nobody writes the caret on paper, and the answer vault was built
+   from the same wrong number.
+
+3. **A charge written without a caret also broke term splitting.**
+   `Ag+ + Cl- -> AgCl` split into `Ag` and `(aq)` and came back as "has an
+   empty term". Also student-facing, and the same root cause one function
+   over.
+
+4. **The functional group table had eight groups and no alkene.** Nor
+   alkyne, arene, phenol, nitrile, thiol, alkyl halide or nitro. The lookup
+   was case and spacing sensitive too, so "Alcohol" was an unknown group
+   while "alcohol" was fine.
+
+5. **Hydrates were a parse error.** `CuSO4.5H2O` is on every molar mass
+   sheet. A student could not ask the question, and the demo script carried
+   "no hydrates" as a thing to avoid on stage.
+
+6. **Formulas were compared as strings.** An example answering `S2O3` was
+   rejected because our solver writes `O3S2`. The student's own answer was
+   never held to that: `_formula_matches` has compared element counts all
+   along.
+
+7. **The check contract offered every field for every task.** So the model
+   reached for `initial_concentration_m` on a weak acid question and the
+   solver said "this task needs an initial concentration". Each task now
+   lists what it takes, from a `TASK_INPUTS` table next to the solver, with
+   a test that solves every task from its own entry.
+
+Three of those seven were student-facing bugs, not level 2 bugs. That is
+the argument for the audit existing: **the level 2 verifier is a second
+opinion on our own engines, and when it disagrees with a competent model it
+is worth finding out which of the two is wrong.**
+
+### Still open
+
+- [ ] The audit's own leak check is looser than the backend's on purpose,
+      and both now allow a hint to repeat a number the student wrote in
+      their working. That is right when they wrote the answer and converted
+      it one step too far, which is the common case. It is worth re-reading
+      if withholding is ever re-armed.
+- [ ] A level 2 worked example can still state, as an intermediate of its
+      own different problem, a number equal to the student's answer. Seen
+      once in sixty. With `WITHHOLD_ANSWER` off, examples are deliberately
+      not redacted; with it on, they are.
+- [ ] Naming a target molecule is caught by resolving the name back to a
+      structure, which needs Java for OPSIN. The container has none, so the
+      check does not fire in production.

@@ -170,3 +170,71 @@ def test_an_unknown_half_reaction_reports_line_zero():
 
     assert verdicts[0].line_number == 0
     assert verdicts[0].error_type == "unsupported"
+
+
+# ---------------------------------------------------------------------------
+# A charge written the ordinary way, without a caret
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "formula,element,expected",
+    [
+        # The caret form was always right. These are the same ions written
+        # the way a student writes them on paper.
+        ("MnO4-", "Mn", 7),
+        ("MnO4^-", "Mn", 7),
+        ("NO3-", "N", 5),
+        ("NH4+", "N", -3),
+        ("SO42-", "S", 6),
+        ("SO4^2-", "S", 6),
+        ("Cr2O72-", "Cr", 6),
+        ("PO43-", "P", 5),
+        ("ClO4-", "Cl", 7),
+        # One element takes the whole run as its charge: Fe3+ is iron three
+        # plus, not three irons sharing one charge.
+        ("Fe3+", "Fe", 3),
+        ("Cu2+", "Cu", 2),
+        ("O2-", "O", -2),
+    ],
+)
+def test_a_charge_without_a_caret_is_read_correctly(formula, element, expected):
+    """Found by the live audit, and it reached students.
+
+    `MnO4-` parsed as MnO carrying a charge of minus four, because the
+    trailing subscript was being eaten as the charge magnitude. The
+    oxidation state of Mn came back as -2 instead of +7, with no error and
+    no warning, and the answer vault was built from the same wrong number.
+    """
+    from judge.redox import oxidation_state
+
+    assert float(oxidation_state(formula, element)) == float(expected)
+
+
+@pytest.mark.parametrize(
+    "formula,atoms,charge",
+    [
+        ("MnO4-", {"Mn": 1, "O": 4}, -1),
+        ("SO42-", {"S": 1, "O": 4}, -2),
+        ("NH4+", {"N": 1, "H": 4}, 1),
+        ("Fe3+", {"Fe": 1}, 3),
+        ("H2O", {"H": 2, "O": 1}, 0),
+        ("(NH4)2SO4", {"N": 2, "H": 8, "S": 1, "O": 4}, 0),
+    ],
+)
+def test_the_formula_parser_splits_the_charge_where_it_belongs(
+    formula, atoms, charge
+):
+    from judge.chemistry_equations import parse_formula
+
+    assert parse_formula(formula) == (atoms, charge)
+
+
+def test_the_caret_form_is_untouched():
+    """The rules only fire when there is no caret, so anything that was
+    already unambiguous keeps reading exactly as it did."""
+    from judge.chemistry_equations import parse_formula
+
+    assert parse_formula("Cr2O7^2-") == ({"Cr": 2, "O": 7}, -2)
+    assert parse_formula("Fe^3+") == ({"Fe": 1}, 3)
+    assert parse_formula("e-") == ({}, -1)

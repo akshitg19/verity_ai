@@ -146,3 +146,66 @@ def test_a_naming_problem_with_no_target_reports_line_zero():
 
     assert verdicts[0].line_number == 0
     assert verdicts[0].error_type == "unsupported"
+
+
+# ---------------------------------------------------------------------------
+# One at a time
+# ---------------------------------------------------------------------------
+
+
+def test_opsin_calls_are_serialised():
+    """py2opsin shells out to Java and is not safe to call concurrently.
+
+    Under six parallel requests it handed back another call's structure and
+    "methyl acetate" was judged wrong_name against methyl acetate. That is
+    the top row of this product's failure taxonomy, a confident wrong
+    verdict on a correct answer, and it was reachable by two students
+    naming a molecule at the same time.
+    """
+    import threading
+    from unittest.mock import patch
+
+    import judge.naming as naming_module
+
+    overlapped = []
+    inside = threading.Semaphore(0)
+
+    def slow_convert(text):
+        overlapped.append(threading.current_thread().name)
+        # Long enough that a second caller would overlap if nothing stopped it.
+        inside.acquire(timeout=0.2)
+        return "CCO"
+
+    with patch.object(naming_module, "_opsin", return_value=slow_convert):
+        threads = [
+            threading.Thread(target=naming_module.name_to_smiles, args=("ethanol",))
+            for _ in range(4)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=5)
+
+    assert len(overlapped) == 4, "every call still ran"
+
+
+def test_a_name_that_resolves_to_the_target_is_valid_under_load():
+    """The regression this guards: the same name, resolved many times over,
+    must give the same verdict every time."""
+    import concurrent.futures
+
+    if not opsin_available():
+        pytest.skip("naming needs a Java runtime")
+
+    judge = NamingJudge(None)
+
+    def once():
+        return judge.check(
+            "CC(=O)OC",
+            [ChemistryStep(line_number=1, smiles="methyl acetate")],
+        )[0].status
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        statuses = list(pool.map(lambda _: once(), range(12)))
+
+    assert set(statuses) == {"valid"}, statuses

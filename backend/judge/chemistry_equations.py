@@ -29,6 +29,9 @@ COEFFICIENT_RE = re.compile(r"^(\d*)(.*)$", re.DOTALL)
 # A "+" is a charge sign rather than a term separator exactly when the text
 # before it is the caret charge marker, e.g. the first "+" in "Fe^3+ + e-".
 CHARGE_SIGN_CONTEXT_RE = re.compile(r"\^\d*$")
+# The dot in a hydrate, however the keyboard produced it.
+_HYDRATE_SPLIT_RE = re.compile(r"[·⋅•∙.*]")
+MAX_HYDRATE_PARTS = 6
 
 ELEMENT_SYMBOLS = frozenset(
     """
@@ -53,17 +56,55 @@ def _strip_state_symbols(text: str) -> str:
 
 
 def _split_charge(text: str) -> tuple[str, int]:
-    """Split a trailing charge such as "^3+" or "2-" off a formula."""
+    """Split a trailing charge such as "^3+" or "2-" off a formula.
+
+    With a caret there is nothing to decide: "Cr2O7^2-" says which digits
+    are the charge. Without one the digits are shared between the last
+    subscript and the charge, and reading all of them as the charge is
+    wrong in the common case. "MnO4-" was parsed as MnO with a charge of
+    minus four, which made the oxidation state of Mn come out at -2 instead
+    of +7, silently, with no error. Every ion a student writes the ordinary
+    way was affected: SO42- gave -40 for sulfur and NH4+ gave +3 for
+    nitrogen.
+
+    Two rules resolve it, and between them they cover how ions are actually
+    written:
+
+    * A body that is one element symbol takes the whole run as its charge.
+      Fe3+ is iron three plus, not three irons carrying one charge.
+    * Otherwise the last digit is the charge and the rest is the subscript
+      it was written next to. SO42- is sulfate, MnO4- is permanganate.
+
+    Neither rule fires when a caret is present, so nothing that was already
+    unambiguous changes.
+    """
     match = CHARGE_SUFFIX_RE.search(text)
     if not match:
         return text, 0
 
     digits, sign = match.groups()
+    body = text[: match.start()]
+
+    if digits and "^" not in text and not _is_single_element(body):
+        if len(digits) == 1:
+            # One digit after a multi-element body is that element's
+            # subscript, and the charge is a single unit: MnO4-, NO3-, NH4+.
+            body, digits = body + digits, ""
+        else:
+            # Two or more: the last is the charge, the rest is the
+            # subscript it was written next to. SO42-, Cr2O72-, PO43-.
+            body, digits = body + digits[:-1], digits[-1]
+
     magnitude = int(digits) if digits else 1
     if magnitude > MAX_SUBSCRIPT:
         raise EquationParseError(f"charge is too large in {text!r}")
     charge = magnitude if sign == "+" else -magnitude
-    return text[: match.start()], charge
+    return body, charge
+
+
+def _is_single_element(body: str) -> bool:
+    """Whether the body is one element symbol and nothing else."""
+    return body in ELEMENT_SYMBOLS
 
 
 def _parse_atoms(text: str) -> dict[str, int]:
@@ -142,16 +183,78 @@ def parse_formula(formula: str) -> tuple[dict[str, int], int]:
     if body in ELECTRON_TOKENS:
         return {}, charge
 
-    return _parse_atoms(body), charge
+    return _parse_hydrate(body), charge
+
+
+def _parse_hydrate(body: str) -> dict[str, int]:
+    """Expand a hydrate, where a dot means "and this many of these too".
+
+    CuSO4.5H2O is copper sulfate pentahydrate and is one of the standard
+    molar mass questions on any sheet. It was a parse error, which meant a
+    student could not ask it and a worked example could not use it, and the
+    demo script carried "no hydrates" as a thing to avoid on stage.
+
+    The separator is written as a middle dot, a bullet, or a full stop
+    depending on the keyboard, and the part after it usually carries a
+    multiplier: 5H2O is five waters.
+    """
+    parts = [part for part in _HYDRATE_SPLIT_RE.split(body) if part]
+    if len(parts) == 1:
+        return _parse_atoms(body)
+    if len(parts) > MAX_HYDRATE_PARTS:
+        raise EquationParseError(f"formula {body!r} has too many parts")
+
+    total: dict[str, int] = {}
+    for part in parts:
+        digits, remainder = COEFFICIENT_RE.match(part).groups()
+        multiplier = int(digits) if digits else 1
+        if multiplier > MAX_SUBSCRIPT:
+            raise EquationParseError(f"subscript is too large in {body!r}")
+        if not remainder:
+            raise EquationParseError(f"could not read {body!r} as a formula")
+        for symbol, count in _parse_atoms(remainder).items():
+            total[symbol] = total.get(symbol, 0) + count * multiplier
+    return total
+
+
+def _is_charge_sign(before: str, side: str, index: int) -> bool:
+    """Whether the "+" at `index` belongs to the ion rather than separating terms."""
+    if CHARGE_SIGN_CONTEXT_RE.search(before):
+        return True  # "Fe^3+", unambiguous and always was
+    if not before or before[-1].isspace():
+        return False  # nothing to attach to, so it joins what comes next
+    after = side[index + 1:]
+    # It ends the ion: a space, a state symbol, or the end of the side.
+    return not after or after[0].isspace() or after[0] == "("
 
 
 def _split_terms(side: str) -> list[str]:
-    """Split one side on "+", leaving charge signs attached to their ion."""
+    """Split one side on "+", leaving charge signs attached to their ion.
+
+    Telling the two apart used to need a caret: the "+" in "Fe^3+" was a
+    charge and every other "+" was a separator. So "Ag+ + Cl- -> AgCl",
+    which is how the equation is written on paper and how a student writes
+    it, split into "Ag" and "(aq)" and came back as "has an empty term".
+    Live, it threw away four correct net ionic worked examples, and it would
+    have done the same to a student.
+
+    A charge sign is written against the ion it belongs to and finishes it:
+    what follows is a space, a state symbol, or the end of the side. A
+    separator joins two formulas, so what follows it starts one, which means
+    a digit or a capital letter. "Ag+ + Cl-" is one of each, and "2H2+O2",
+    written with no spaces at all, is still a separator because O begins a
+    formula. The caret rule stays as well, so anything that parsed before
+    still parses.
+    """
     terms: list[str] = []
     current: list[str] = []
-    for character in side:
-        if character == "+" and not CHARGE_SIGN_CONTEXT_RE.search("".join(current)):
-            terms.append("".join(current))
+    for index, character in enumerate(side):
+        if character == "+":
+            joined = "".join(current)
+            if _is_charge_sign(joined, side, index):
+                current.append(character)
+                continue
+            terms.append(joined)
             current = []
             continue
         current.append(character)

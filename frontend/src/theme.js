@@ -19,6 +19,16 @@ export const COLORS = {
 // Paper, sidebar, and the two subject accents. Chemistry gets its own tint
 // so the two subjects read as different spaces rather than one surface with
 // a toggle on it.
+// Printed on the paper rather than on a themed surface. The paper stays
+// light in both themes, so these stay dark in both themes.
+export const PAPER = {
+  ink: "var(--v-paper-ink)",
+  muted: "var(--v-paper-muted)",
+  line: "var(--v-paper-line)",
+  fill: "var(--v-paper-fill)",
+  card: "var(--v-paper-card)",
+};
+
 export const SURFACES = {
   paper: "var(--v-paper)",
   sidebar: "var(--v-sidebar)",

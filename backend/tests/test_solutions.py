@@ -6,6 +6,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 
 from judge.solutions import (
+    TASK_INPUTS,
+    TASKS,
     SolutionsError,
     SolutionsJudge,
     SolutionsProblem,
@@ -246,3 +248,68 @@ def test_an_unknown_label_still_matches_on_value_alone():
     )
 
     assert solution.match(parse_quantity("n = 0.010")) is not None
+
+
+# ---------------------------------------------------------------------------
+# TASK_INPUTS is the contract the level 2 prompt is built from
+# ---------------------------------------------------------------------------
+
+
+_SAMPLE_VALUES = {
+    "formula": "NaCl",
+    "moles": 0.5,
+    "mass_g": 5.85,
+    "volume_l": 0.5,
+    "concentration_m": 0.1,
+    "initial_concentration_m": 2.0,
+    "initial_volume_l": 0.05,
+    "final_volume_l": 0.5,
+    "final_concentration_m": 0.2,
+    "hydrogen_concentration_m": 0.001,
+    "hydroxide_concentration_m": 0.001,
+    "ph": 3.0,
+    "ka": 1.8e-5,
+    "kb": 1.8e-5,
+    "pka": 4.74,
+    "acid_concentration_m": 0.1,
+    "base_concentration_m": 0.2,
+    "protons": 1,
+    "hydroxides": 1,
+    "titrant_concentration_m": 0.1,
+    "titrant_volume_l": 0.025,
+    "analyte_volume_l": 0.02,
+    "solute_mass_g": 5.0,
+    "solution_mass_g": 100.0,
+}
+
+
+def test_every_task_has_an_input_list():
+    assert set(TASK_INPUTS) == set(TASKS)
+
+
+def test_every_named_input_is_a_field_the_problem_has():
+    from dataclasses import fields
+
+    known = {field.name for field in fields(SolutionsProblem)}
+    for task, inputs in TASK_INPUTS.items():
+        for name in inputs:
+            # "a or b" means either satisfies the task.
+            for option in name.split(" or "):
+                assert option in known, f"{task} names {option!r}"
+
+
+@pytest.mark.parametrize("task", sorted(TASK_INPUTS))
+def test_the_listed_inputs_are_enough_to_solve_the_task(task):
+    """The table is the contract the level 2 prompt is built from, so an
+    entry that does not actually solve is a prompt that asks the model for
+    the wrong thing. Live, the flat field list invited the model to send
+    `initial_concentration_m` on a weak acid question and the solver came
+    back with "this task needs an initial concentration"."""
+    params = {}
+    for name in TASK_INPUTS[task]:
+        chosen = name.split(" or ")[0]
+        params[chosen] = _SAMPLE_VALUES[chosen]
+
+    solution = solve_solutions(SolutionsProblem(task=task, **params))
+
+    assert solution.steps, f"{task} solved to nothing"

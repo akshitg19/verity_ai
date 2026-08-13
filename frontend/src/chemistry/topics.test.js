@@ -122,10 +122,25 @@ describe("isProblemReady", () => {
   });
 
   it("does not require a field marked optional in its label", () => {
+    // Percent composition was the example until its element became
+    // required. The rule still holds; nothing ships marked optional today.
+    const type = {
+      fields: [
+        { name: "formula", label: "Formula", type: "text" },
+        { name: "note", label: "Note (optional)", type: "text" },
+      ],
+    };
+    expect(isProblemReady(type, { formula: "C6H12O6" })).toBe(true);
+  });
+
+  it("requires the element on percent composition", () => {
     const percent = TOPIC_BY_ID.stoichiometry.types.find(
       (t) => t.id === "percent_composition"
     );
-    expect(isProblemReady(percent, { formula: "C6H12O6" })).toBe(true);
+    expect(isProblemReady(percent, { formula: "C6H12O6" })).toBe(false);
+    expect(isProblemReady(percent, { formula: "C6H12O6", element: "C" })).toBe(
+      true
+    );
   });
 
   it("does not require the value a dilution problem solves for", () => {

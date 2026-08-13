@@ -43,6 +43,19 @@ FUNCTIONAL_GROUP_SMARTS: dict[str, str] = {
     "carboxylic_acid": "[CX3](=[OX1])[OX2H1]",
     "amine": "[NX3;H0,H1,H2;!$([NX3][CX3]=[OX1]);!$([NX3+])]",
     "amide": "[NX3][CX3](=[OX1])",
+    # The hydrocarbon families and the rest of a first-year sheet. Missing
+    # entirely until the live audit: a level 2 example about an addition
+    # reaction says "alkene", we had no pattern for it, verification
+    # rejected the example, and the student got the static floor. Three
+    # times in one run, on three different questions.
+    "alkene": "[CX3]=[CX3]",
+    "alkyne": "[CX2]#[CX2]",
+    "arene": "c1ccccc1",
+    "phenol": "[OX2H][c]",
+    "nitrile": "[NX1]#[CX2]",
+    "thiol": "[#6][SX2H]",
+    "alkyl_halide": "[#6][F,Cl,Br,I]",
+    "nitro": "[NX3](=[OX1])[OX1-,OX1]",
 }
 _FUNCTIONAL_GROUP_PATTERNS: dict[str, Chem.Mol] = {
     name: Chem.MolFromSmarts(smarts)
@@ -90,6 +103,27 @@ if _UNCOMPILED_GENERIC:
     raise RuntimeError(
         "invalid generic functional group SMARTS: " + ", ".join(_UNCOMPILED_GENERIC)
     )
+
+
+def canonical_group(name: str) -> str | None:
+    """The table's name for a group, however it was written.
+
+    "Alcohol", "carboxylic acid" and "CARBOXYLIC_ACID" all name the same
+    group, and a lookup that only accepts one spelling was rejecting a
+    worked example for a group we have a pattern for. Returns None when we
+    genuinely have no pattern, which is a different thing and should be
+    reported as one.
+    """
+    if not isinstance(name, str):
+        return None
+    key = name.strip().lower().replace(" ", "_").replace("-", "_")
+    return key if key in FUNCTIONAL_GROUP_SMARTS else None
+
+
+def group_pattern(name: str) -> Chem.Mol | None:
+    """The compiled pattern for a group name, however it was written."""
+    key = canonical_group(name)
+    return _FUNCTIONAL_GROUP_PATTERNS[key] if key else None
 
 
 class ChemistryParseError(ValueError):
@@ -316,14 +350,18 @@ class FunctionalGroupJudge(Judge[str, ChemistryStep, ChemistryLineVerdict]):
         target_group: str,
         steps: list[ChemistryStep],
     ) -> list[ChemistryLineVerdict]:
-        pattern = _FUNCTIONAL_GROUP_PATTERNS.get(target_group)
-        if pattern is None:
+        # However it was written: "Alcohol" and "carboxylic acid" name
+        # groups we have patterns for, and rejecting them for their spelling
+        # would be measuring typing rather than chemistry.
+        key = canonical_group(target_group)
+        if key is None:
             supported = ", ".join(sorted(FUNCTIONAL_GROUP_SMARTS))
             raise ValueError(
                 f"unknown functional group {target_group!r}; supported groups "
                 f"are: {supported}"
             )
-        generic_pattern = _GENERIC_PATTERNS[target_group]
+        pattern = _FUNCTIONAL_GROUP_PATTERNS[key]
+        generic_pattern = _GENERIC_PATTERNS[key]
 
         verdicts: list[ChemistryLineVerdict] = []
         for step in steps:

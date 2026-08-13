@@ -394,6 +394,8 @@ export default function WorkspaceToolbar({
           <span style={{ fontSize: 13, color: chemistry.ready ? COLORS.text : COLORS.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {chemistry.ready
               ? chemistry.problemText
+              : chemistry.worksheet
+              ? "Fill in the boxes on the page"
               : chemistry.inputMode === "numeric"
               ? "Set up the problem in Feedback"
               : "Write the question at the top of the page"}

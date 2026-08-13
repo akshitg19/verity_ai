@@ -40,7 +40,7 @@ const MAX_PAIR_ROWS = 8;
 
 // A unit written into a field label, e.g. "Mass (g)" -> "g". Declared units
 // win; this only saves repeating what the label already says.
-function unitFromLabel(label = "") {
+export function unitFromLabel(label = "") {
   const match = label.match(/\(([^)]+)\)\s*$/);
   if (!match) return null;
   const inner = match[1].trim();
@@ -50,7 +50,7 @@ function unitFromLabel(label = "") {
 }
 
 // The label with any unit stripped off, since the unit is rendered separately.
-function labelWithoutUnit(label = "", unit) {
+export function labelWithoutUnit(label = "", unit) {
   if (!unit) return label;
   return label.replace(/\s*\([^)]*\)\s*$/, "").trim() || label;
 }

@@ -27,7 +27,7 @@ function EmptyPageHint({ mode }) {
   );
 }
 
-export default function CanvasSurface({ canvas, mode, children }) {
+export default function CanvasSurface({ canvas, mode, hideEmptyHint = false, children }) {
   const surfaceRef = useRef(null);
   const {
     staticCanvasRef,
@@ -119,7 +119,9 @@ export default function CanvasSurface({ canvas, mode, children }) {
           cursor: activeTool === "eraser" ? "none" : "crosshair",
         }}
       />
-      {strokes.length === 0 && <EmptyPageHint mode={mode} />}
+      {/* A worksheet already labels every box, so this would be a second set
+          of instructions printed on top of the first one. */}
+      {strokes.length === 0 && !hideEmptyHint && <EmptyPageHint mode={mode} />}
 
       {/* Anything anchored to ink -- the question prompt -- renders here so it
           can use canvas coordinates directly. */}
