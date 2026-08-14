@@ -7,6 +7,7 @@ from google.auth.exceptions import RefreshError
 from transcription import (
     TranscriptionInputError,
     TranscriptionServiceError,
+    _create_client,
     _decode_png,
     transcribe_line,
 )
@@ -28,6 +29,16 @@ def test_decode_png_accepts_png_signature() -> None:
     value = base64.b64encode(b"\x89PNG\r\n\x1a\ncontent").decode("ascii")
 
     assert _decode_png(value) == b"\x89PNG\r\n\x1a\ncontent"
+
+
+@patch("transcription.genai.Client")
+def test_create_client_is_reused(mock_client) -> None:
+    _create_client.cache_clear()
+    try:
+        assert _create_client() is _create_client()
+        mock_client.assert_called_once()
+    finally:
+        _create_client.cache_clear()
 
 
 @patch("transcription._create_client")

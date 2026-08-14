@@ -2,6 +2,7 @@ import base64
 import binascii
 import os
 import re
+from functools import lru_cache
 
 from google import genai
 from google.auth.exceptions import GoogleAuthError
@@ -80,6 +81,7 @@ class TranscriptionServiceError(RuntimeError):
     """The external transcription service could not complete the request."""
 
 
+@lru_cache(maxsize=1)
 def _create_client() -> genai.Client:
     return genai.Client(
         vertexai=True,

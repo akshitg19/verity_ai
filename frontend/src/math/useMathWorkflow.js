@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { checkSteps, getHint, transcribeLine } from "../api";
-import { renderLineToPng } from "../canvas/render";
+import { checkSteps, getHint } from "../api";
 import { buildMathCheckInput } from "./lineModel";
 import useMathSession from "./useMathSession";
 import { MATH_TOPIC_BY_ID } from "./topics";
+import { defaultMathRecognizer } from "../recognition/recognitionConfig";
 import {
   deserializeWorkflowSnapshot,
   serializeWorkflowSnapshot,
   workflowProblemFingerprint,
 } from "../notebook/workflowSnapshot";
 
-export default function useMathWorkflow({ pageId = null } = {}) {
+export default function useMathWorkflow({
+  pageId = null,
+  recognizer = defaultMathRecognizer,
+} = {}) {
   const [topicId, setTopicId] = useState("algebra");
   const [problem, setProblem] = useState("");
   const problemRef = useRef("");
@@ -197,19 +200,15 @@ export default function useMathWorkflow({ pageId = null } = {}) {
       const requestId = ++transcriptionRequestId.current;
       transcriptionRowRef.current = row;
       try {
-        const dataUrl = await renderLineToPng([...strokes]);
-        if (
-          requestId !== transcriptionRequestId.current ||
-          rowPageId !== undefined && rowPageId !== pageScopeRef.current ||
-          rowVersionsRef.current.get(row) !== version
-        ) {
-          return;
-        }
-
         setLastResult(null);
         const abortController = new AbortController();
         transcriptionAbortRef.current = abortController;
-        const data = await transcribeLine(dataUrl.split(",")[1], {
+        const data = await recognizer.recognize({
+          strokes: [...strokes],
+          expressionId: row,
+          expressionVersion: version,
+          pageId: rowPageId,
+          topic: topicId,
           signal: abortController.signal,
         });
         if (
@@ -244,7 +243,7 @@ export default function useMathWorkflow({ pageId = null } = {}) {
         }
       }
     },
-    [recheck]
+    [recognizer, recheck, topicId]
   );
 
   const runRowQueue = useCallback(async () => {
