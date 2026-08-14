@@ -1,7 +1,8 @@
 # Handwriting v2 Implementation Plan
 
-**Status:** Phases 0–2 implemented on `feat/handwriting-architecture-v2`; Phase
-3 is blocked on provider/corpus preconditions
+**Status:** Phases 0–2 merged to `origin/main` in PR #31 (`cfa06e0`); Phase A/B
+measurement tooling is implemented on `feat/handwriting-completion`; Phase 3
+still requires licensing/privacy and approved-corpus evidence
 **Rule:** One phase per reviewable change unless scope expansion is explicit
 
 ## Phase 0 — Source of truth and safe workspace
@@ -24,7 +25,7 @@ Complete. No production code changes are included in this phase.
 
 ## Phase 1 — Recognition foundation
 
-**Status:** Complete and reviewed on `feat/handwriting-architecture-v2`.
+**Status:** Complete and merged to `origin/main` through PR #31.
 
 ### Scope
 
@@ -257,6 +258,32 @@ event. No target-tablet p50/p95 or billed live-provider corpus run is claimed.
 Known risks: Gemini remains the only configured provider; the 750ms/350ms
 values are hypotheses; matrices/radicals need real fixtures; the required
 300–500 consented raw-stroke corpus does not exist yet.
-Next action: obtain MyScript credentials/licensing approval, choose backend
-secret storage, and build the consented corpus before Phase 3.
+Historical next action at merge time: obtain MyScript credentials/licensing
+approval, choose backend secret storage, and build the consented corpus before
+Phase 3. Account credentials and GCP secret storage were subsequently completed;
+licensing/privacy evidence and the approved corpus remain.
+```
+
+```text
+Date: 2026-08-14
+Branch/commit: feat/handwriting-completion / c784605..6f3a972
+Phase: A and B
+Implemented: re-verified the merged Phase 0–2 baseline; added an internal-only,
+scheduling-only Gemini comparison between 1500ms/one worker and 750ms/two
+workers; added the fixed 12-task panel, content-free JSON export, aggregation,
+privacy gates, and baseline/A-B documentation.
+Tests and results: pre-change frontend 368 passed across 38 files; after tooling
+375 passed across 40 files; lint, normal build, production build,
+production-build inspection, and App.jsx line cap passed; backend 1185 passed
+with 3 expected xfails and 3 existing OPSIN warnings. Local browser smoke passed
+for legacy, current, and query-free math routes; task save/advance worked and no
+browser console error was recorded.
+Measured metrics: lifecycle stages and aggregation are verified
+deterministically. No target tablet was available, so no device p50/p95 or
+perceived-improvement claim is made.
+Known risks: the 3–5 teammate/device exports are an external evidence gate; the
+preview requires existing `verity-ai2` Vercel team access; the internal query
+variant must be cleaned up after the comparison.
+Next action: use the documented PR #32 preview to collect paired target-device
+exports, then continue provider-readiness and corpus-harness work.
 ```

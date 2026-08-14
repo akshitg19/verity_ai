@@ -14,6 +14,10 @@ for implementation decisions.
   reviewable phases with acceptance criteria.
 - [Evaluation plan](evaluation-plan.md) defines the corpus and the measurements
   used to compare recognizers.
+- [Phase A baseline](baseline-report-2026-08-14.md) records the re-verified test
+  baseline, lifecycle coverage, and the outstanding target-device evidence.
+- [Internal A/B comparison](internal-ab-comparison.md) defines the consented
+  Gemini scheduling comparison and content-free export workflow.
 - [Fixture schema](fixtures/fixture.schema.json) defines the machine-readable
   test-case format.
 - [Example fixtures](fixtures/cases.example.jsonl) show valid JSONL records. They
@@ -21,16 +25,22 @@ for implementation decisions.
 
 ## Status
 
-- Architecture status: implemented through Phase 2 on the handwriting branch.
+- Architecture status: implemented through Phase 2 on `origin/main` by PR #31
+  (`cfa06e0`); Phase A/B tooling is under review on
+  `feat/handwriting-completion`.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: not integrated.
-- Recommended vector POC: MyScript iink, pending credentials and evaluation.
+- Recommended vector POC: MyScript iink. The developer application, local
+  credential file, GCP secrets, and runtime-service-account secret access are
+  complete; backend integration, deployment mapping, licensing/privacy review,
+  and evaluation remain.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
-- Next gate: MyScript credentials/licensing, backend secret storage, and a
-  consented raw-stroke corpus before Phase 3.
+- Next gates: target-device Phase A/B exports; current provider/licensing and
+  privacy evidence; backend secret-to-environment mapping; and an approved,
+  consented raw-stroke corpus before live Phase 3 evaluation.
 
 ## Working agreement for AI-assisted changes
 

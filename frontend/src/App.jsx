@@ -19,6 +19,7 @@ import useWorkspaceNavigation from "./useWorkspaceNavigation";
 import { SURFACES } from "./theme";
 import useRoutedSubject from "./useRoutedSubject";
 import { IMAGE_FINALIZATION_POLICY } from "./recognition/finalizationPolicy";
+import HandwritingExperiencePanel from "./components/HandwritingExperiencePanel";
 
 const SIDEBAR_WIDTH = 288;
 
@@ -248,6 +249,7 @@ export default function App({ theme: themeFromRoute, subject }) {
         onCreatePage={workspace.createNewPageForQuestion}
         onKeepInk={workspace.keepInkAndResetProblem}
       />
+      <HandwritingExperiencePanel />
     </div>
   );
 }

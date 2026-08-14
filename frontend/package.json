@@ -10,6 +10,7 @@
     "test": "vitest run",
     "check:app-lines": "node scripts/check-app-lines.mjs",
     "check:production-build": "node scripts/check-production-build.mjs",
+    "handwriting:aggregate": "node scripts/aggregate-handwriting-experiment.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -11,6 +11,8 @@ import {
   createRecognitionLifecycleTrace,
   emitRecognitionMetric,
 } from "../recognition/recognitionMetrics";
+import { resolveHandwritingExperienceExperiment } from
+  "../recognition/handwritingExperienceExperiment";
 import {
   deserializeWorkflowSnapshot,
   serializeWorkflowSnapshot,
@@ -30,7 +32,7 @@ function waitForNextPaint() {
 export default function useMathWorkflow({
   pageId = null,
   recognizer = defaultMathRecognizer,
-  maxRecognitionConcurrency = 2,
+  maxRecognitionConcurrency,
   emitRecognitionLifecycleMetric = emitRecognitionMetric,
 } = {}) {
   const [topicId, setTopicId] = useState("algebra");
@@ -57,9 +59,24 @@ export default function useMathWorkflow({
   const checkAbortRef = useRef(null);
   const hintAbortRef = useRef(null);
   const pageScopeRef = useRef(pageId);
+  const experienceExperiment = useMemo(
+    () => resolveHandwritingExperienceExperiment(),
+    []
+  );
+  const recognitionConcurrency = maxRecognitionConcurrency ??
+    experienceExperiment.maxRecognitionConcurrency;
   const recognitionPolicy = useMemo(
-    () => finalizationPolicyForRecognizer(recognizer),
-    [recognizer]
+    () => {
+      const policy = finalizationPolicyForRecognizer(recognizer);
+      if (!experienceExperiment.enabled || policy.inputMode !== "image") {
+        return policy;
+      }
+      return Object.freeze({
+        ...policy,
+        quietPeriodMs: experienceExperiment.quietPeriodMs,
+      });
+    },
+    [experienceExperiment, recognizer]
   );
 
   const handleSessionFailure = useCallback((error) => {
@@ -301,7 +318,7 @@ export default function useMathWorkflow({
       onCommit: commitRecognizedRows,
       onError: handleRecognitionError,
       onActivityChange: setTranscribing,
-      maxConcurrent: maxRecognitionConcurrency,
+      maxConcurrent: recognitionConcurrency,
     });
     recognitionCoordinatorRef.current = coordinator;
     return () => {
@@ -315,7 +332,7 @@ export default function useMathWorkflow({
     handleProvisionalResult,
     handleRecognitionError,
     isRecognitionJobCurrent,
-    maxRecognitionConcurrency,
+    recognitionConcurrency,
     recognizeJob,
   ]);
 
@@ -656,6 +673,7 @@ export default function useMathWorkflow({
     transcribing,
     provisionalByLine,
     recognitionPolicy,
+    experienceExperiment,
     lastResult,
     session,
     queueRow,
