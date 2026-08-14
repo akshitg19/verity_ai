@@ -1,16 +1,16 @@
 # VerityAI Handwriting v2 — Complete Handoff
 
 **Handoff date:** 2026-08-14  
-**Status:** Architecture documentation and recognition foundation implemented
-and reviewed; provider-aware finalization and vector-provider POC remain  
+**Status:** Architecture foundation and provider-aware finalization implemented;
+vector-provider POC and target-device measurement remain
 **Working branch:** `feat/handwriting-architecture-v2`  
 **Base:** `origin/main` at `786f4b6`  
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-v2`
 
 ## 1. Executive summary
 
-VerityAI currently captures good digital ink data but uses it through a slow
-image pipeline:
+Before Phase 2, VerityAI captured good digital ink data but used it through a
+slow image pipeline:
 
 ```text
 raw strokes {x,y,t,p}
@@ -37,15 +37,16 @@ If vector recognition cannot produce usable transcription:
   -> same normalizer and deterministic judge
 ```
 
-The recognition abstraction and Gemini-compatible foundation have been
-implemented. Default behavior remains Gemini-only, so the refactor is intended
-to be production-compatible. MyScript and GPT-5.6 Luna are candidates, not
-working integrations yet.
+The recognition abstraction, Gemini-compatible foundation, and Phase 2
+finalization/concurrency work are implemented. Default behavior remains
+Gemini-only and now uses a named 750ms batch-image quiet period. A future
+incremental vector provider receives a 350ms finalization policy and may produce
+per-stroke provisional output that never reaches the judge.
 
-The remaining user-visible latency work begins with Phase 2: replacing the two
-fixed 1500ms timers with provider-aware finalization and adding bounded
-recognition concurrency. The current branch intentionally does not claim that
-latency has already improved.
+The branch removes the fixed 1500ms gate and serial recognition queue, but it
+does not claim a measured 300–500ms result. Target-device latency and live
+corpus measurements remain outstanding. MyScript and GPT-5.6 Luna are
+candidates, not working integrations yet.
 
 ## 2. Workspace and Git state
 
@@ -79,15 +80,15 @@ tracking: origin/main
 base commit: 786f4b6
 ```
 
-The Phase 0/1 handwriting work is contained in the first handwriting-v2 commit:
+The Phase 0/1 handwriting work is committed separately:
 
 ```text
-M  backend/tests/test_transcription.py
-M  backend/transcription.py
-M  frontend/src/math/useMathWorkflow.js
-?? docs/handwriting/
-?? frontend/src/recognition/
+317dee3 Build handwriting recognition adapter foundation
 ```
+
+Phase 2 is the following reviewable change. It modifies the canvas, math
+workflow, recognition policies/metrics, and their tests without changing the
+backend API or adding a provider credential.
 
 The obsolete `verity_ai-frontend-polish` worktree was removed on 2026-08-14
 after verifying that it was clean and its branch was already an ancestor of
@@ -210,9 +211,10 @@ an image fallback, but there is no VerityAI handwriting evidence that it is
 better than Gemini. Benchmark it on difficult fallback samples rather than
 assuming model-family superiority.
 
-## 4. Verified current code state on latest main
+## 4. Verified baseline and Phase 2 branch state
 
-The following facts were verified directly against `origin/main`:
+The following baseline facts were verified directly against `origin/main` at
+`786f4b6`:
 
 - `frontend/src/canvas/useCanvas.js` captures points as `{x, y, t, p}`.
 - `useCanvas.js` still contains two 1500ms `rowIdleTimerRef` paths.
@@ -225,6 +227,19 @@ The following facts were verified directly against `origin/main`:
 - Notebook persistence retains stroke objects and supports legacy strokes with
   only finite x/y points.
 - The backend already includes SymPy, RDKit, and py2opsin.
+
+On the handwriting branch after Phase 2:
+
+- the two 1500ms literals are removed from the readiness path;
+- Gemini/image recognition uses the named 750ms policy;
+- an incremental vector recognizer may use a 350ms final quiet period and
+  receive immediate per-stroke provisional requests;
+- recognition runs with at most two workers;
+- one concurrent wave is committed in row order and judged from one final-only
+  snapshot;
+- edits, undo/redo, clear, and page navigation invalidate or abort stale work;
+- lifecycle metrics span pointer-up, readiness, recognition, judge, and the
+  next painted frame without including content or page identifiers.
 
 ## 5. Documentation created
 
@@ -370,7 +385,8 @@ IMAGE_QUIET_PERIOD_MS = 750
 DEFAULT_RECOGNITION_TIMEOUT_MS = 3000
 ```
 
-The quiet-period values are not wired into `useCanvas` yet; that is Phase 2.
+The values are wired into `useCanvas` through a provider-derived finalization
+policy. Gemini remains the image-policy default.
 
 ### 6.7 Privacy-safe recognition metrics
 
@@ -389,7 +405,9 @@ transcription_received
 normalization_finished
 ```
 
-Pointer and judge lifecycle metrics still need Phase 2 integration.
+Phase 2 additionally records pointer-up, expression-ready, recognition start
+and finish, judge start and finish, and result-painted stages. Both trace
+creation and the browser event boundary enforce the content-free allowlist.
 
 ### 6.8 Math workflow refactor
 
@@ -412,6 +430,27 @@ line updates, and deterministic recheck behavior remain.
 The shared client is reused by transcription and the existing model helper while
 keeping tests able to patch/clear it.
 
+### 6.10 Provider-aware finalization
+
+`frontend/src/recognition/finalizationPolicy.js` owns the named image and vector
+quiet periods. Canvas timers are row-scoped, are cancelled on edits/navigation,
+and are flushed immediately by Enter, Check Line, or Read Page. Starting a
+lower row still finalizes the prior row without waiting for its timer.
+
+### 6.11 Bounded recognition coordinator
+
+`frontend/src/recognition/RecognitionCoordinator.js` runs at most two jobs,
+supersedes stale versions, separates provisional results from final commits,
+and batches a concurrent final-recognition wave into one row-sorted judge
+snapshot. A page change or clear aborts all active jobs.
+
+### 6.12 Two-dimensional grouping and provisional UI
+
+The structured-expression height ceiling now accommodates tested fractions,
+superscripts, and subscripts without removing stable row identity. Provisional
+text is held separately from finalized `lines`, displayed as reading progress,
+and never passed to `checkSteps`.
+
 ## 7. Tests added
 
 New recognition tests cover:
@@ -429,16 +468,24 @@ New recognition tests cover:
 - shadow candidate isolation;
 - privacy allowlisting for metrics;
 - backend Gemini client reuse.
+- 350ms vector and 750ms image finalization policies;
+- two-worker concurrency with both completion orders;
+- one ordered judge snapshot per concurrent wave;
+- provisional output isolation from finalized lines and judgment;
+- stale recognition and judge abort on edit/page navigation;
+- Enter finalization and timer cancellation;
+- fraction, superscript, subscript, erase, undo, and redo invalidation behavior.
 
 ## 8. Validation evidence
 
 Frontend:
 
 ```text
-34 test files passed
-348 tests passed
+38 test files passed
+368 tests passed
 ESLint passed
 Vite production build passed
+App.jsx line cap passed (254/260)
 ```
 
 Backend:
@@ -452,7 +499,7 @@ Backend:
 Documentation and fixtures:
 
 ```text
-5 Markdown files validated for relative links
+6 Markdown files validated for relative links
 fixture schema JSON parsed
 3 JSONL examples parsed and checked for required fields
 git diff --check passed for tracked changes
@@ -464,11 +511,12 @@ upgrades are outside this handwriting change and can be breaking.
 
 ## 9. What is deliberately not finished
 
-### User-visible latency is not improved yet
+### Target-device latency is not measured yet
 
-The two 1500ms timer paths remain in `useCanvas.js`. The recognition adapter
-refactor is architectural preparation. Do not report 300–500ms latency until it
-is measured on a working vector path.
+The fixed 1500ms gate is gone and the Gemini batch policy is now 750ms, but no
+claim should be made about end-to-end p50/p95 improvement until the lifecycle
+events are measured on target tablets. The 300–500ms target still requires a
+working vector provider.
 
 ### No MyScript integration
 
@@ -480,26 +528,29 @@ normalizer, or measured result. A clean adapter boundary exists for the POC.
 GPT-5.6 Luna remains an image-fallback benchmark candidate. No OpenAI API key,
 request path, prompt, or production dependency was added.
 
-### No recognition concurrency change
+### No provider benchmark corpus
 
-Math row processing remains serial. Bounded concurrency belongs in Phase 2 and
-must retain ordered judgment and stale-version safety.
+The repository has legacy PNG samples and three schema examples, but not the
+required 300–500 consented raw-stroke fixtures. No live Gemini corpus or device
+benchmark was run as part of the deterministic Phase 2 validation.
 
-### No row-model rewrite
+### No general row-model rewrite
 
-Stable row grouping remains unchanged. Fractions, scripts, radicals, matrices,
-and out-of-order editing need fixtures before relaxing row-height rules.
+Stable row grouping remains. The height ceiling was relaxed only enough for
+tested fractions and scripts; matrices, radicals, and out-of-order editing still
+need real fixtures before broader grouping changes.
 
 ### No chemistry routing change
 
 Written chemistry and molecular structures still use their existing paths.
 They require separate recognition evaluation.
 
-## 10. Next implementation phase: provider-aware finalization
+## 10. Phase 2 completion and next phase
 
-Phase 2 should be a separate reviewable change.
+Phase 2 is implemented as a separate reviewable change after the Phase 0/1
+commit.
 
-### Required work
+### Completed work
 
 1. Replace both 1500ms literals with named, provider-aware policies.
 2. Preserve immediate previous-row finalization when writing moves to a new row.
@@ -534,15 +585,21 @@ image quiet period: 750ms
 
 Tune these with real metrics rather than treating them as final product truth.
 
-### Phase 2 acceptance
+### Phase 2 acceptance evidence
 
 - No unexplained 1500ms literal remains.
-- Existing Gemini corpus accuracy does not regress.
+- The Gemini adapter contract and all existing deterministic suites remain
+  green; a billed live corpus rerun is still an explicit measurement task.
 - No stale recognition can paint after edit/navigation.
 - No expression version is judged more than once.
 - Bounded recognition concurrency cannot reorder judge input.
 - Frontend tests, lint, and build pass.
-- Backend suite remains green if backend code changes.
+- The backend contract is unchanged and the complete backend suite remains
+  green.
+
+The next implementation phase is Phase 3, the MyScript vector POC. It cannot
+start responsibly until credentials/licensing, backend secret storage, and a
+consented fixture corpus are available.
 
 ## 11. MyScript POC after Phase 2
 
@@ -629,14 +686,8 @@ Review the work:
 ```bash
 cd /Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-v2
 git status --short --branch
-git diff -- backend/transcription.py backend/tests/test_transcription.py \
-  frontend/src/math/useMathWorkflow.js
-```
-
-New untracked files can be reviewed with:
-
-```bash
-find docs/handwriting frontend/src/recognition -type f -print | sort
+git show --stat 317dee3
+git diff HEAD -- frontend/src
 ```
 
 ## 14. Recommended AI-assisted workflow
@@ -672,17 +723,16 @@ feat/handwriting-architecture-v2.
 
 Read docs/handwriting/HANDOFF.md, README.md, architecture-v2.md,
 implementation-plan.md, and evaluation-plan.md. Inspect the current code and
-tests. Implement only Phase 2: provider-aware finalization, provisional
-recognition hooks, bounded two-row recognition concurrency, and end-to-end
-latency stages.
+tests. Confirm the Phase 3 preconditions before writing provider code: approved
+MyScript credentials/licensing, a backend secret-storage decision, and a
+consented raw-stroke fixture corpus. If any are absent, report that blocker and
+work only on obtaining or specifying the missing precondition.
 
-Preserve stable row/expression identity, version guards, cancellation, ordered
-deterministic judgment, Gemini compatibility, unrelated work, and privacy
-boundaries. Do not integrate MyScript or GPT-5.6 Luna in this phase. Add tests
-for timer policies, edits, erase/undo, page navigation, fractions/scripts, stale
-responses, ordering, and duplicate judgment. Run frontend tests, lint, build,
-and relevant backend tests. Update implementation-plan.md with evidence and
-remaining risks. Do not claim latency improvement without measurements.
+Once all preconditions exist, implement only the internal linear-equation
+MyScript POC. Preserve the existing canvas, stable expression identity,
+version/cancellation guards, deterministic judgment, Gemini fallback boundary,
+and privacy rules. Do not claim provider accuracy or latency until the frozen
+corpus and target devices have been measured.
 ```
 
 ## 15. Reference links
@@ -711,6 +761,10 @@ Safe to review now:
 - math workflow is provider-decoupled;
 - Gemini remains the safe default;
 - hybrid and shadow routing are tested;
+- provider-aware finalization and two-worker recognition are tested;
+- provisional output is isolated from deterministic judgment;
+- stale recognition and judge responses are rejected;
+- pointer-to-paint lifecycle stages are locally observable;
 - client reuse is implemented;
 - all current frontend/backend validation passes.
 
@@ -718,10 +772,10 @@ Not safe to claim yet:
 
 - MyScript works;
 - PNG is no longer used;
-- the 1.5-second delay is gone;
 - final handwriting latency is 300–500ms;
+- live Gemini accuracy or target-device p95 improved by a measured amount;
 - Luna is better than Gemini;
 - complex chemistry or full undergraduate math is supported.
 
-The next change should implement Phase 2 separately before starting the
-MyScript POC.
+The next change is the MyScript POC only after its credentials, licensing,
+secret-storage, and consented-corpus preconditions are met.

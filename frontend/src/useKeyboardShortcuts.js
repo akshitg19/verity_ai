@@ -9,14 +9,25 @@ import { useEffect } from "react";
 //
 // Ignored while a field has focus, so ctrl+Z inside a transcription box is the
 // browser's undo on that text and not an undo of the last pen stroke.
-export default function useKeyboardShortcuts({ onUndo, onRedo, onToggleNotebook }) {
+export default function useKeyboardShortcuts({
+  onUndo,
+  onRedo,
+  onFinishLine,
+  onToggleNotebook,
+}) {
   useEffect(() => {
     const onKey = (event) => {
-      const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(
-        event.target?.tagName
-      );
+      const interactive = ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"]
+        .includes(event.target?.tagName) || event.target?.isContentEditable;
       const chord = event.metaKey || event.ctrlKey;
-      if (!chord || typing) return;
+      if (interactive) return;
+
+      if (event.key === "Enter" && !chord && !event.altKey) {
+        event.preventDefault();
+        onFinishLine();
+        return;
+      }
+      if (!chord) return;
 
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
@@ -32,5 +43,5 @@ export default function useKeyboardShortcuts({ onUndo, onRedo, onToggleNotebook 
     };
     globalThis.addEventListener("keydown", onKey);
     return () => globalThis.removeEventListener("keydown", onKey);
-  }, [onUndo, onRedo, onToggleNotebook]);
+  }, [onFinishLine, onUndo, onRedo, onToggleNotebook]);
 }

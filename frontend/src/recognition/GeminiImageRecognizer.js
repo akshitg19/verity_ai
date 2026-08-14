@@ -1,7 +1,10 @@
 import { transcribeLine } from "../api";
 import { renderLineToPng } from "../canvas/render";
 import RecognizerAdapter from "./RecognizerAdapter";
-import { createRecognitionTrace } from "./recognitionMetrics";
+import {
+  createRecognitionTrace,
+  emitRecognitionMetric,
+} from "./recognitionMetrics";
 import {
   normalizeRecognitionResult,
   RecognitionError,
@@ -25,9 +28,9 @@ export default class GeminiImageRecognizer extends RecognizerAdapter {
     render = renderLineToPng,
     transcribe = transcribeLine,
     now,
-    emitMetric,
+    emitMetric = emitRecognitionMetric,
   } = {}) {
-    super("gemini");
+    super("gemini", { inputMode: "image", supportsProvisional: false });
     this.render = render;
     this.transcribe = transcribe;
     this.now = now;
@@ -78,4 +81,3 @@ export default class GeminiImageRecognizer extends RecognizerAdapter {
 }
 
 export { pngPayload };
-

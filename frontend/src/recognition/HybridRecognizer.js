@@ -60,8 +60,12 @@ async function recognizeWithTimeout(recognizer, request, timeoutMs) {
 
 export default class HybridRecognizer extends RecognizerAdapter {
   constructor({ primary, fallback, primaryTimeoutMs = 0 } = {}) {
-    super("hybrid");
-    this.primary = assertRecognizer(primary, "primary recognizer");
+    const checkedPrimary = assertRecognizer(primary, "primary recognizer");
+    super("hybrid", {
+      inputMode: checkedPrimary.inputMode ?? "image",
+      supportsProvisional: Boolean(checkedPrimary.supportsProvisional),
+    });
+    this.primary = checkedPrimary;
     this.fallback = assertRecognizer(fallback, "fallback recognizer");
     this.primaryTimeoutMs = primaryTimeoutMs;
   }

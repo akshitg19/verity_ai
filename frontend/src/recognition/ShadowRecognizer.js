@@ -3,8 +3,12 @@ import { normalizeRecognitionResult, throwIfAborted } from "./recognitionTypes";
 
 export default class ShadowRecognizer extends RecognizerAdapter {
   constructor({ control, candidate, onCandidateResult = null } = {}) {
-    super("shadow");
-    this.control = assertRecognizer(control, "control recognizer");
+    const checkedControl = assertRecognizer(control, "control recognizer");
+    super("shadow", {
+      inputMode: checkedControl.inputMode ?? "image",
+      supportsProvisional: Boolean(checkedControl.supportsProvisional),
+    });
+    this.control = checkedControl;
     this.candidate = assertRecognizer(candidate, "candidate recognizer");
     this.onCandidateResult = onCandidateResult;
   }
@@ -28,4 +32,3 @@ export default class ShadowRecognizer extends RecognizerAdapter {
     );
   }
 }
-

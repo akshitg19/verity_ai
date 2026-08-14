@@ -1,6 +1,14 @@
 import GeminiImageRecognizer from "./GeminiImageRecognizer";
 import HybridRecognizer from "./HybridRecognizer";
 import ShadowRecognizer from "./ShadowRecognizer";
+import {
+  IMAGE_FINALIZATION_POLICY,
+  VECTOR_FINALIZATION_POLICY,
+} from "./finalizationPolicy";
+export {
+  IMAGE_FINALIZATION_POLICY,
+  VECTOR_FINALIZATION_POLICY,
+};
 
 export const HANDWRITING_MODES = Object.freeze({
   GEMINI: "gemini",
@@ -8,8 +16,8 @@ export const HANDWRITING_MODES = Object.freeze({
   HYBRID: "hybrid",
 });
 
-export const VECTOR_QUIET_PERIOD_MS = 350;
-export const IMAGE_QUIET_PERIOD_MS = 750;
+export const VECTOR_QUIET_PERIOD_MS = VECTOR_FINALIZATION_POLICY.quietPeriodMs;
+export const IMAGE_QUIET_PERIOD_MS = IMAGE_FINALIZATION_POLICY.quietPeriodMs;
 export const DEFAULT_RECOGNITION_TIMEOUT_MS = 3_000;
 
 export function resolveHandwritingMode(value) {
@@ -41,4 +49,3 @@ export function createConfiguredRecognizer({
 }
 
 export const defaultMathRecognizer = createConfiguredRecognizer();
-

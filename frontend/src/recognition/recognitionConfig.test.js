@@ -21,17 +21,25 @@ describe("recognition configuration", () => {
 
   it("only constructs hybrid or shadow modes when a primary exists", () => {
     const gemini = provider("gemini", "x = 1");
-    const primary = provider("vector", "x = 1");
-    expect(createConfiguredRecognizer({
+    const primary = {
+      ...provider("vector", "x = 1"),
+      inputMode: "vector",
+      supportsProvisional: true,
+    };
+    const hybrid = createConfiguredRecognizer({
       mode: HANDWRITING_MODES.HYBRID,
       gemini,
       primary,
-    })).toBeInstanceOf(HybridRecognizer);
-    expect(createConfiguredRecognizer({
+    });
+    expect(hybrid).toBeInstanceOf(HybridRecognizer);
+    expect(hybrid).toMatchObject({ inputMode: "vector", supportsProvisional: true });
+    const shadow = createConfiguredRecognizer({
       mode: HANDWRITING_MODES.SHADOW,
       gemini,
       primary,
-    })).toBeInstanceOf(ShadowRecognizer);
+    });
+    expect(shadow).toBeInstanceOf(ShadowRecognizer);
+    expect(shadow.inputMode).toBe("image");
     expect(createConfiguredRecognizer({
       mode: HANDWRITING_MODES.HYBRID,
       gemini,
@@ -54,4 +62,3 @@ describe("recognition configuration", () => {
     expect(reports[0].result.text).toBe("candidate disagrees");
   });
 });
-

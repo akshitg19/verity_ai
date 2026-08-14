@@ -1,6 +1,7 @@
 # Handwriting Recognition Architecture v2
 
-**Status:** Proposed source of truth  
+**Status:** Source of truth; implemented through Phase 2 on
+`feat/handwriting-architecture-v2`
 **Last updated:** 2026-08-14  
 **Applies to:** VerityAI `origin/main` at and after `786f4b6`
 
@@ -49,9 +50,9 @@ Provider responsibilities:
 SymPy, RDKit, OPSIN, and the existing topic-specific judges remain in place.
 Replacing them is not part of the handwriting-latency project.
 
-## 3. Verified current state
+## 3. Verified baseline and implemented branch state
 
-The current code on `origin/main` has these properties:
+The baseline code on `origin/main` at `786f4b6` has these properties:
 
 - `frontend/src/canvas/useCanvas.js` captures point coordinates, event time, and
   pressure as `{x, y, t, p}`.
@@ -85,6 +86,18 @@ pointer events
 The current row identity is used by recognition snapshots, verdict maps, edits,
 undo, notebook persistence, and stale-response protection. It must not be
 removed as part of eliminating PNG segmentation.
+
+The handwriting branch now implements the target foundation through Phase 2:
+
+- recognizer, hybrid fallback, and shadow-control adapters;
+- named provider-aware 350ms vector and 750ms image finalization policies;
+- per-stroke provisional hooks that cannot mutate finalized judge state;
+- at most two recognition jobs with one row-ordered final snapshot per wave;
+- edit, erase, undo/redo, clear, and navigation invalidation;
+- content-free pointer-to-paint lifecycle events.
+
+Gemini image recognition remains the only configured provider, so the vector
+primary and its measured service objectives remain future work.
 
 ## 4. Target architecture
 

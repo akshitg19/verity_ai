@@ -21,12 +21,16 @@ for implementation decisions.
 
 ## Status
 
-- Architecture status: proposed and ready for implementation review.
+- Architecture status: implemented through Phase 2 on the handwriting branch.
 - Production recognizer: Gemini image transcription.
+- Finalization: 750ms image policy; 350ms vector hypothesis with provisional
+  support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: not integrated.
 - Recommended vector POC: MyScript iink, pending credentials and evaluation.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
+- Next gate: MyScript credentials/licensing, backend secret storage, and a
+  consented raw-stroke corpus before Phase 3.
 
 ## Working agreement for AI-assisted changes
 

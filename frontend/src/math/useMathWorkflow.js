@@ -1,19 +1,37 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { checkSteps, getHint } from "../api";
 import { buildMathCheckInput } from "./lineModel";
 import useMathSession from "./useMathSession";
 import { MATH_TOPIC_BY_ID } from "./topics";
 import { defaultMathRecognizer } from "../recognition/recognitionConfig";
+import RecognitionCoordinator from "../recognition/RecognitionCoordinator";
+import { finalizationPolicyForRecognizer } from "../recognition/finalizationPolicy";
+import {
+  createRecognitionLifecycleTrace,
+  emitRecognitionMetric,
+} from "../recognition/recognitionMetrics";
 import {
   deserializeWorkflowSnapshot,
   serializeWorkflowSnapshot,
   workflowProblemFingerprint,
 } from "../notebook/workflowSnapshot";
 
+function waitForNextPaint() {
+  return new Promise((resolve) => {
+    if (typeof globalThis.requestAnimationFrame === "function") {
+      globalThis.requestAnimationFrame(() => resolve());
+      return;
+    }
+    setTimeout(resolve, 0);
+  });
+}
+
 export default function useMathWorkflow({
   pageId = null,
   recognizer = defaultMathRecognizer,
+  maxRecognitionConcurrency = 2,
+  emitRecognitionLifecycleMetric = emitRecognitionMetric,
 } = {}) {
   const [topicId, setTopicId] = useState("algebra");
   const [problem, setProblem] = useState("");
@@ -29,12 +47,9 @@ export default function useMathWorkflow({
   const [hintLoading, setHintLoading] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [lastResult, setLastResult] = useState(null);
+  const [provisionalByLine, setProvisionalByLine] = useState(new Map());
 
-  const transcriptionRequestId = useRef(0);
-  const transcriptionAbortRef = useRef(null);
-  const transcriptionRowRef = useRef(null);
-  const rowQueueRef = useRef([]);
-  const queueRunningRef = useRef(false);
+  const recognitionCoordinatorRef = useRef(null);
   const rowVersionsRef = useRef(new Map());
   const dirtyRowsRef = useRef(new Set());
   const checkRequestId = useRef(0);
@@ -42,6 +57,10 @@ export default function useMathWorkflow({
   const checkAbortRef = useRef(null);
   const hintAbortRef = useRef(null);
   const pageScopeRef = useRef(pageId);
+  const recognitionPolicy = useMemo(
+    () => finalizationPolicyForRecognizer(recognizer),
+    [recognizer]
+  );
 
   const handleSessionFailure = useCallback((error) => {
     setHintError(error.message);
@@ -96,6 +115,8 @@ export default function useMathWorkflow({
       ++checkRequestId.current;
       checkAbortRef.current?.abort();
       checkAbortRef.current = null;
+      recognitionCoordinatorRef.current?.clear();
+      setProvisionalByLine(new Map());
 
       setTopicId(nextTopicId);
       setVerdictsByLine(new Map());
@@ -104,14 +125,6 @@ export default function useMathWorkflow({
     },
     [cancelSession, clearHints, topicId]
   );
-
-  const cancelTranscriptionForRow = useCallback((row) => {
-    if (transcriptionRowRef.current !== row) return;
-    ++transcriptionRequestId.current;
-    transcriptionAbortRef.current?.abort();
-    transcriptionAbortRef.current = null;
-    transcriptionRowRef.current = null;
-  }, []);
 
   const recheck = useCallback(
     async (lineArr, problemText = problemRef.current, changedRow = null) => {
@@ -188,109 +201,192 @@ export default function useMathWorkflow({
     [clearHints, topicId]
   );
 
-  const processRow = useCallback(
-    async ({ row, strokes, version, onProcessed, pageId: rowPageId }) => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      if (
-        !strokes?.length ||
-        rowPageId !== undefined && rowPageId !== pageScopeRef.current ||
-        rowVersionsRef.current.get(row) !== version
-      ) return;
+  const isRecognitionJobCurrent = useCallback((job) => (
+    job.pageId === pageScopeRef.current &&
+    rowVersionsRef.current.get(job.row) === job.version
+  ), []);
 
-      const requestId = ++transcriptionRequestId.current;
-      transcriptionRowRef.current = row;
-      try {
-        setLastResult(null);
-        const abortController = new AbortController();
-        transcriptionAbortRef.current = abortController;
-        const data = await recognizer.recognize({
-          strokes: [...strokes],
-          expressionId: row,
-          expressionVersion: version,
-          pageId: rowPageId,
-          topic: topicId,
-          signal: abortController.signal,
-        });
-        if (
-          requestId !== transcriptionRequestId.current ||
-          rowPageId !== undefined && rowPageId !== pageScopeRef.current ||
-          rowVersionsRef.current.get(row) !== version
-        ) {
-          return;
-        }
-
-        const nextLines = [
-          ...linesRef.current.filter((line) => line.row !== row),
-          {
-            row,
-            text: data.unreadable ? "" : data.text ?? "",
-            unreadable: Boolean(data.unreadable),
-          },
-        ].sort((left, right) => left.row - right.row);
-        linesRef.current = nextLines;
-        setLines(nextLines);
-        dirtyRowsRef.current.delete(row);
-        onProcessed?.();
-        await recheck(nextLines, problemRef.current, row);
-      } catch (error) {
-        if (requestId !== transcriptionRequestId.current) return;
-        if (error.name === "AbortError") return;
-        setLastResult({ error: error.message });
-      } finally {
-        if (transcriptionRowRef.current === row) {
-          transcriptionRowRef.current = null;
-          transcriptionAbortRef.current = null;
-        }
-      }
-    },
-    [recognizer, recheck, topicId]
-  );
-
-  const runRowQueue = useCallback(async () => {
-    if (queueRunningRef.current) return;
-    queueRunningRef.current = true;
+  const recognizeJob = useCallback(async (job, { signal, onProvisional }) => {
+    job.trace.mark("recognition_start");
     try {
-      while (rowQueueRef.current.length > 0) {
-        await processRow(rowQueueRef.current.shift());
-      }
-    } finally {
-      queueRunningRef.current = false;
-      transcriptionRowRef.current = null;
-      setTranscribing(false);
-    }
-  }, [processRow]);
-
-  const queueRow = useCallback(
-    ({ row, strokes, onProcessed }) => {
-      if (row === null || row === undefined || !strokes?.length) return;
-      if (pageId !== undefined && pageId !== pageScopeRef.current) return;
-      const alreadyTranscribed = linesRef.current.some((line) => line.row === row);
-      if (alreadyTranscribed && !dirtyRowsRef.current.has(row)) return;
-
-      rowQueueRef.current = rowQueueRef.current.filter((entry) => entry.row !== row);
-      rowQueueRef.current.push({
-        row,
-        strokes: [...strokes],
-        version: rowVersionsRef.current.get(row) ?? 0,
-        onProcessed,
-        pageId,
+      return await recognizer.recognize({
+        strokes: [...job.strokes],
+        expressionId: job.row,
+        expressionVersion: job.version,
+        pageId: job.pageId,
+        topic: topicId,
+        previousText: linesRef.current.find((line) => line.row === job.row)?.text,
+        signal,
+        onProvisional,
       });
-      setTranscribing(true);
-      void runRowQueue();
-    },
-    [pageId, runRowQueue]
-  );
+    } finally {
+      job.trace.mark("recognition_finished");
+      if (job.provisional) job.trace.finish({
+        outcome: signal.aborted ? "cancelled" : "provisional",
+      });
+      if (signal.aborted && !job.provisional) {
+        job.trace.finish({ outcome: "cancelled" });
+      }
+    }
+  }, [recognizer, topicId]);
+
+  const handleProvisionalResult = useCallback((job, result) => {
+    if (!isRecognitionJobCurrent(job)) return;
+    setProvisionalByLine((current) => {
+      const next = new Map(current);
+      next.set(job.row, {
+        row: job.row,
+        version: job.version,
+        text: result.unreadable ? "" : result.text,
+        unreadable: result.unreadable,
+        source: result.source,
+      });
+      return next;
+    });
+  }, [isRecognitionJobCurrent]);
+
+  const commitRecognizedRows = useCallback(async (entries) => {
+    const current = entries.filter(({ job }) => isRecognitionJobCurrent(job));
+    if (current.length === 0) return;
+    const committedRows = new Set(current.map(({ job }) => job.row));
+    const nextLines = [
+      ...linesRef.current.filter((line) => !committedRows.has(line.row)),
+      ...current.map(({ job, result }) => ({
+        row: job.row,
+        text: result.unreadable ? "" : result.text ?? "",
+        unreadable: Boolean(result.unreadable),
+        version: job.version,
+      })),
+    ].sort((left, right) => left.row - right.row);
+    linesRef.current = nextLines;
+    setLines(nextLines);
+    setProvisionalByLine((provisional) => new Map(
+      [...provisional].filter(([row]) => !committedRows.has(row))
+    ));
+    for (const { job } of current) {
+      dirtyRowsRef.current.delete(job.row);
+      job.onProcessed?.();
+      job.trace.mark("judge_start");
+    }
+
+    const changedRow = Math.min(...current.map(({ job }) => job.row));
+    await recheck(nextLines, problemRef.current, changedRow);
+    for (const { job } of current) job.trace.mark("judge_end");
+    await waitForNextPaint();
+    for (const { job, result } of current) {
+      job.trace.mark("result_painted");
+      job.trace.finish({
+        provider: result.source,
+        fallbackUsed: result.fallbackUsed,
+        fallbackReason: result.fallbackReason,
+        outcome: isRecognitionJobCurrent(job) ? "committed" : "stale",
+      });
+    }
+  }, [isRecognitionJobCurrent, recheck]);
+
+  const handleRecognitionError = useCallback((job, error) => {
+    job.trace.finish({ outcome: "error" });
+    if (!isRecognitionJobCurrent(job)) return;
+    setProvisionalByLine((current) => new Map(
+      [...current].filter(([row]) => row !== job.row)
+    ));
+    setLastResult({ error: error.message });
+  }, [isRecognitionJobCurrent]);
+
+  useEffect(() => {
+    const coordinator = new RecognitionCoordinator({
+      recognize: recognizeJob,
+      isCurrent: isRecognitionJobCurrent,
+      onProvisional: handleProvisionalResult,
+      onCommit: commitRecognizedRows,
+      onError: handleRecognitionError,
+      onActivityChange: setTranscribing,
+      maxConcurrent: maxRecognitionConcurrency,
+    });
+    recognitionCoordinatorRef.current = coordinator;
+    return () => {
+      coordinator.dispose();
+      if (recognitionCoordinatorRef.current === coordinator) {
+        recognitionCoordinatorRef.current = null;
+      }
+    };
+  }, [
+    commitRecognizedRows,
+    handleProvisionalResult,
+    handleRecognitionError,
+    isRecognitionJobCurrent,
+    maxRecognitionConcurrency,
+    recognizeJob,
+  ]);
+
+  const queueRow = useCallback(({
+    row,
+    strokes,
+    onProcessed,
+    pageId: rowPageId,
+    provisional = false,
+    timing = {},
+  }) => {
+    if (row === null || row === undefined || !strokes?.length) return;
+    if (rowPageId !== pageScopeRef.current) return;
+    const alreadyTranscribed = linesRef.current.some((line) => line.row === row);
+    if (!provisional && alreadyTranscribed && !dirtyRowsRef.current.has(row)) return;
+
+    const version = rowVersionsRef.current.get(row) ?? 0;
+    const queuedAt = globalThis.performance?.now?.() ?? Date.now();
+    const reportedPointerUpAt = Number.isFinite(timing.pointerUpAt)
+      ? timing.pointerUpAt
+      : queuedAt;
+    const pointerUpAt = Math.abs(reportedPointerUpAt - queuedAt) < 60_000
+      ? reportedPointerUpAt
+      : queuedAt;
+    const trace = createRecognitionLifecycleTrace({
+      provider: recognizer.source ?? "recognizer",
+      mode: recognitionPolicy.inputMode,
+      expressionVersion: version,
+    }, {
+      startedAt: pointerUpAt,
+      emit: emitRecognitionLifecycleMetric,
+    });
+    trace.markAt("pointer_up", pointerUpAt);
+    trace.markAt(
+      "expression_ready",
+      Number.isFinite(timing.expressionReadyAt)
+        ? timing.expressionReadyAt
+        : queuedAt
+    );
+    trace.markAt("recognition_queued", queuedAt);
+    const enqueued = recognitionCoordinatorRef.current?.enqueue({
+      row,
+      strokes: [...strokes],
+      version,
+      onProcessed,
+      pageId: rowPageId,
+      provisional,
+      trace,
+    });
+    if (!enqueued) {
+      trace.finish({ outcome: "ignored" });
+      return;
+    }
+    setLastResult(null);
+  }, [emitRecognitionLifecycleMetric, recognitionPolicy.inputMode, recognizer.source]);
 
   const invalidateRow = useCallback(
     (row) => {
       dirtyRowsRef.current.add(row);
       bumpRowVersion(row);
-      rowQueueRef.current = rowQueueRef.current.filter((entry) => entry.row !== row);
-      cancelTranscriptionForRow(row);
+      recognitionCoordinatorRef.current?.invalidate(row);
+      ++checkRequestId.current;
+      checkAbortRef.current?.abort();
+      checkAbortRef.current = null;
 
       const nextLines = linesRef.current.filter((line) => line.row !== row);
       linesRef.current = nextLines;
       setLines(nextLines);
+      setProvisionalByLine((current) => new Map(
+        [...current].filter(([provisionalRow]) => provisionalRow !== row)
+      ));
       setVerdictsByLine((current) =>
         new Map([...current].filter(([verdictRow]) => verdictRow < row))
       );
@@ -298,7 +394,7 @@ export default function useMathWorkflow({
       clearHints();
       setLastResult(null);
     },
-    [bumpRowVersion, cancelTranscriptionForRow, clearHints]
+    [bumpRowVersion, clearHints]
   );
 
   const handleLineEdit = useCallback(
@@ -459,20 +555,18 @@ export default function useMathWorkflow({
   const clear = useCallback(() => {
     cancelSession();
 
-    ++transcriptionRequestId.current;
     ++checkRequestId.current;
     ++hintRequestId.current;
+    recognitionCoordinatorRef.current?.clear();
     checkAbortRef.current?.abort();
     checkAbortRef.current = null;
     hintAbortRef.current?.abort();
     hintAbortRef.current = null;
-    transcriptionAbortRef.current?.abort();
-    transcriptionAbortRef.current = null;
-    rowQueueRef.current = [];
     rowVersionsRef.current.clear();
     dirtyRowsRef.current.clear();
     linesRef.current = [];
     setLines([]);
+    setProvisionalByLine(new Map());
     setProblem("");
     problemRef.current = "";
     setVerdictsByLine(new Map());
@@ -544,7 +638,6 @@ export default function useMathWorkflow({
   useEffect(() => () => {
     checkAbortRef.current?.abort();
     hintAbortRef.current?.abort();
-    transcriptionAbortRef.current?.abort();
   }, []);
 
   return {
@@ -561,6 +654,8 @@ export default function useMathWorkflow({
     hintError,
     hintLoading,
     transcribing,
+    provisionalByLine,
+    recognitionPolicy,
     lastResult,
     session,
     queueRow,

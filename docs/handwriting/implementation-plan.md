@@ -1,6 +1,7 @@
 # Handwriting v2 Implementation Plan
 
-**Status:** Phase 0 complete in documentation branch  
+**Status:** Phases 0–2 implemented on `feat/handwriting-architecture-v2`; Phase
+3 is blocked on provider/corpus preconditions
 **Rule:** One phase per reviewable change unless scope expansion is explicit
 
 ## Phase 0 — Source of truth and safe workspace
@@ -65,6 +66,9 @@ injection and without changing the `/transcribe` contract.
 - Feature flags have a documented safe default and rollback.
 
 ## Phase 2 — Provider-aware finalization and concurrency
+
+**Status:** Code complete and deterministically verified. Live provider corpus
+and target-device latency measurement remain explicit follow-up evidence.
 
 ### Scope
 
@@ -233,7 +237,26 @@ unsupported-format case was added.
 Measured metrics: architecture is instrumented at adapter stages; production
 latency baseline and device measurements remain Phase 2 work.
 Known risks: no vector provider is configured; default behavior remains Gemini
-image recognition and the existing 1500ms canvas timers remain until Phase 2.
-Next action: review Phase 1, then implement provider-aware finalization in a
-separate change.
+image recognition.
+Next action: implement Phase 2 as a separate change.
+```
+
+```text
+Date: 2026-08-14
+Branch/commit: feat/handwriting-architecture-v2 (Phase 2 commit)
+Phase: 2
+Implemented: named 350ms vector and 750ms image policies, row-scoped timer
+cancellation, Enter/Read Page finalization, provisional isolation, a bounded
+two-worker recognition coordinator, row-ordered final commit batches, stale
+recognition and judge cancellation, pointer-to-paint lifecycle events, and
+taller 2D-expression grouping coverage.
+Tests and results: frontend 368 passed across 38 files; lint, production build,
+and App.jsx line cap passed; backend 1185 passed with 3 expected xfails.
+Measured metrics: lifecycle stages are emitted through a content-free browser
+event. No target-tablet p50/p95 or billed live-provider corpus run is claimed.
+Known risks: Gemini remains the only configured provider; the 750ms/350ms
+values are hypotheses; matrices/radicals need real fixtures; the required
+300–500 consented raw-stroke corpus does not exist yet.
+Next action: obtain MyScript credentials/licensing approval, choose backend
+secret storage, and build the consented corpus before Phase 3.
 ```

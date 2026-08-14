@@ -1,9 +1,11 @@
 import { RecognitionError, throwIfAborted } from "./recognitionTypes";
 
 export default class RecognizerAdapter {
-  constructor(source) {
+  constructor(source, { inputMode = "image", supportsProvisional = false } = {}) {
     if (!source) throw new TypeError("A recognizer source is required.");
     this.source = source;
+    this.inputMode = inputMode;
+    this.supportsProvisional = supportsProvisional;
   }
 
   async recognize({ signal } = {}) {
@@ -21,4 +23,3 @@ export function assertRecognizer(recognizer, label = "recognizer") {
   }
   return recognizer;
 }
-
