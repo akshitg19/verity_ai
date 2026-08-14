@@ -1,11 +1,20 @@
 # VerityAI Handwriting v2 — Complete Handoff
 
-**Handoff date:** 2026-08-14  
-**Status:** Architecture foundation and provider-aware finalization implemented;
-vector-provider POC and target-device measurement remain
-**Working branch:** `feat/handwriting-architecture-v2`  
-**Base:** `origin/main` at `786f4b6`  
-**Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-v2`
+**Handoff date:** 2026-08-14
+
+**Status:** Phases 0–2 merged through PR #31; Phase A/B measurement tooling is
+implemented; vector-provider POC and target-device evidence remain
+
+**Working branch:** `feat/handwriting-completion`
+
+**Base:** `origin/main` at `cfa06e0`
+
+**Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
+
+> Historical note: references below to `feat/handwriting-architecture-v2` and
+> `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-v2` describe the
+> already-merged Phase 0–2 work. That temporary worktree was removed after PR
+> #31 merged and must not be treated as the continuation location.
 
 ## 1. Executive summary
 
@@ -43,7 +52,8 @@ Gemini-only and now uses a named 750ms batch-image quiet period. A future
 incremental vector provider receives a 350ms finalization policy and may produce
 per-stroke provisional output that never reaches the judge.
 
-The branch removes the fixed 1500ms gate and serial recognition queue, but it
+The merged Phase 2 implementation removes the fixed 1500ms gate and serial
+recognition queue, but it
 does not claim a measured 300–500ms result. Target-device latency and live
 corpus measurements remain outstanding. MyScript and GPT-5.6 Luna are
 candidates, not working integrations yet.
@@ -68,10 +78,10 @@ M  frontend/start-frontend.sh
 ?? frontend/src/landing/landing.css
 ```
 
-That branch was also 80 commits behind `origin/main` when inspected. It was not
-modified, stashed, merged, or overwritten.
+That branch was 83 commits behind `origin/main` when re-verified on 2026-08-14.
+It was not modified, stashed, merged, or overwritten.
 
-To isolate handwriting work, a separate worktree was created:
+The Phase 0–2 work used this historical worktree:
 
 ```text
 /Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-v2
@@ -80,15 +90,16 @@ tracking: origin/main
 base commit: 786f4b6
 ```
 
-The Phase 0/1 handwriting work is committed separately:
+The Phase 0/1 handwriting work was committed separately:
 
 ```text
 317dee3 Build handwriting recognition adapter foundation
 ```
 
-Phase 2 is the following reviewable change. It modifies the canvas, math
-workflow, recognition policies/metrics, and their tests without changing the
-backend API or adding a provider credential.
+Phase 2 followed it and both changes were merged by PR #31 at `cfa06e0`. The
+historical worktree was then removed. Current continuation work is isolated in
+`/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal` on
+`feat/handwriting-completion`; the dirty landing-page worktree remains intact.
 
 The obsolete `verity_ai-frontend-polish` worktree was removed on 2026-08-14
 after verifying that it was clean and its branch was already an ancestor of
@@ -518,10 +529,14 @@ claim should be made about end-to-end p50/p95 improvement until the lifecycle
 events are measured on target tablets. The 300–500ms target still requires a
 working vector provider.
 
-### No MyScript integration
+### No MyScript runtime integration
 
-There is no MyScript credential, backend route, REST/WebSocket client, LaTeX/JIIX
-normalizer, or measured result. A clean adapter boundary exists for the POC.
+The MyScript developer application and credentials now exist. The credentials
+remain only in the local ignored secret file and two GCP Secret Manager secrets;
+the Cloud Run runtime service account has accessor permission. There is still no
+backend route, protocol client, Cloud Run secret-to-environment mapping,
+LaTeX/JIIX normalizer, deployed POC, or measured result. A clean frontend adapter
+boundary exists for the POC.
 
 ### No Luna integration
 
@@ -597,16 +612,19 @@ Tune these with real metrics rather than treating them as final product truth.
 - The backend contract is unchanged and the complete backend suite remains
   green.
 
-The next implementation phase is Phase 3, the MyScript vector POC. It cannot
-start responsibly until credentials/licensing, backend secret storage, and a
-consented fixture corpus are available.
+The next implementation phase is Phase 3, the MyScript vector POC. Account and
+secret storage are now complete. Live provider work still requires current
+licensing/privacy approval and an approved consented fixture corpus; the backend
+adapter and Cloud Run secret mapping may be implemented and tested with mocks in
+the meantime.
 
 ## 11. MyScript POC after Phase 2
 
 Preconditions:
 
-- MyScript credentials and licensing review;
-- backend secret-storage decision;
+- MyScript licensing and privacy review (credentials and GCP secret storage are
+  complete);
+- backend secret-to-environment mapping and adapter;
 - consented fixture corpus;
 - normalization contract for LaTeX/JIIX;
 - approved provider privacy policy.
@@ -655,7 +673,7 @@ differences are secondary because fallback traffic should be rare.
 Frontend:
 
 ```bash
-cd /Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-v2/frontend
+cd /Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal/frontend
 npm ci
 npm run dev
 ```
@@ -677,14 +695,14 @@ npm run build
 Backend verification using the existing virtual environment:
 
 ```bash
-cd /Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-v2/backend
+cd /Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal/backend
 /Users/anyixin/Desktop/VerityAI/verity_ai/backend/venv/bin/python -m pytest -q
 ```
 
 Review the work:
 
 ```bash
-cd /Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-v2
+cd /Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal
 git status --short --branch
 git show --stat 317dee3
 git diff HEAD -- frontend/src
@@ -718,8 +736,8 @@ Use a fresh review context to look specifically for:
 Continuation prompt:
 
 ```text
-Work in /Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-v2 on branch
-feat/handwriting-architecture-v2.
+Work in /Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal on the active
+phase branch based on the latest `origin/main`.
 
 Read docs/handwriting/HANDOFF.md, README.md, architecture-v2.md,
 implementation-plan.md, and evaluation-plan.md. Inspect the current code and

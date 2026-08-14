@@ -1,8 +1,9 @@
 # Handwriting Recognition Architecture v2
 
-**Status:** Source of truth; implemented through Phase 2 on
-`feat/handwriting-architecture-v2`
-**Last updated:** 2026-08-14  
+**Status:** Source of truth; implemented through Phase 2 on `origin/main` by
+PR #31 (`cfa06e0`)
+**Last updated:** 2026-08-14
+
 **Applies to:** VerityAI `origin/main` at and after `786f4b6`
 
 ## 1. Objective
@@ -52,7 +53,7 @@ Replacing them is not part of the handwriting-latency project.
 
 ## 3. Verified baseline and implemented branch state
 
-The baseline code on `origin/main` at `786f4b6` has these properties:
+The historical pre-redesign baseline at `786f4b6` had these properties:
 
 - `frontend/src/canvas/useCanvas.js` captures point coordinates, event time, and
   pressure as `{x, y, t, p}`.
@@ -87,7 +88,8 @@ The current row identity is used by recognition snapshots, verdict maps, edits,
 undo, notebook persistence, and stale-response protection. It must not be
 removed as part of eliminating PNG segmentation.
 
-The handwriting branch now implements the target foundation through Phase 2:
+Current `origin/main` at `cfa06e0` implements the target foundation through
+Phase 2:
 
 - recognizer, hybrid fallback, and shadow-control adapters;
 - named provider-aware 350ms vector and 750ms image finalization policies;
