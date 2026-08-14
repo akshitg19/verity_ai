@@ -275,7 +275,9 @@ privacy gates, and baseline/A-B documentation.
 Tests and results: pre-change frontend 368 passed across 38 files; after tooling
 373 passed across 40 files; lint, normal build, production build,
 production-build inspection, and App.jsx line cap passed; backend 1185 passed
-with 3 expected xfails and 3 existing OPSIN warnings.
+with 3 expected xfails and 3 existing OPSIN warnings. Local browser smoke passed
+for legacy, current, and query-free math routes; task save/advance worked and no
+browser console error was recorded.
 Measured metrics: lifecycle stages and aggregation are verified
 deterministically. No target tablet was available, so no device p50/p95 or
 perceived-improvement claim is made.

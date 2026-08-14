@@ -24,12 +24,13 @@ the query there. An absent or unknown query keeps the normal safe behavior.
 
 Local:
 
-- `http://localhost:5173/?hwr_ab=legacy`
-- `http://localhost:5173/?hwr_ab=current`
+- `http://localhost:5173/math?hwr_ab=legacy`
+- `http://localhost:5173/math?hwr_ab=current`
 
 Vercel preview base URL: pending the Phase A/B PR preview. Once available, use
-that same base URL with each query above; do not compare two different code
-revisions or providers.
+that same base URL followed by `/math?hwr_ab=legacy` or
+`/math?hwr_ab=current`; do not compare two different code revisions or
+providers.
 
 ## Fixed 12-task script
 
