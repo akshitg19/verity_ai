@@ -31,7 +31,10 @@ Vercel preview base URL for PR #32:
 `https://verity-ai-git-feat-handwriting-completion-verity-ai2.vercel.app`.
 Use that same base URL followed by `/math?hwr_ab=legacy` or
 `/math?hwr_ab=current`; do not compare two different code revisions or
-providers.
+providers. The preview is protected by Vercel Authentication, so each teammate
+must have access to the `verity-ai2` Vercel team and sign in before the app is
+shown. Teammates without that access should use the local URLs instead; do not
+disable preview protection for this experiment.
 
 ## Fixed 12-task script
 
@@ -58,7 +61,8 @@ identifier.
 
 ## Teammate instructions
 
-1. Open the PR #32 preview link above with one variant query.
+1. Open the PR #32 preview link above with one variant query and complete the
+   existing Vercel team sign-in if prompted.
 2. Confirm the panel heading names the intended variant.
 3. Use the math notebook. Write exactly the displayed expression and wait for
    recognition and verdict painting.

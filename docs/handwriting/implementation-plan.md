@@ -282,7 +282,8 @@ Measured metrics: lifecycle stages and aggregation are verified
 deterministically. No target tablet was available, so no device p50/p95 or
 perceived-improvement claim is made.
 Known risks: the 3–5 teammate/device exports are an external evidence gate; the
-internal query variant must be cleaned up after the comparison.
+preview requires existing `verity-ai2` Vercel team access; the internal query
+variant must be cleaned up after the comparison.
 Next action: use the documented PR #32 preview to collect paired target-device
 exports, then continue provider-readiness and corpus-harness work.
 ```
