@@ -266,14 +266,14 @@ licensing/privacy evidence and the approved corpus remain.
 
 ```text
 Date: 2026-08-14
-Branch/commit: feat/handwriting-completion / c784605
+Branch/commit: feat/handwriting-completion / c784605..6f3a972
 Phase: A and B
 Implemented: re-verified the merged Phase 0–2 baseline; added an internal-only,
 scheduling-only Gemini comparison between 1500ms/one worker and 750ms/two
 workers; added the fixed 12-task panel, content-free JSON export, aggregation,
 privacy gates, and baseline/A-B documentation.
 Tests and results: pre-change frontend 368 passed across 38 files; after tooling
-373 passed across 40 files; lint, normal build, production build,
+374 passed across 40 files; lint, normal build, production build,
 production-build inspection, and App.jsx line cap passed; backend 1185 passed
 with 3 expected xfails and 3 existing OPSIN warnings. Local browser smoke passed
 for legacy, current, and query-free math routes; task save/advance worked and no

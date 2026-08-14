@@ -62,9 +62,10 @@ Commands were run on 2026-08-14 from the clean worktree.
 | `npm run check:production-build` | Passed; one built asset referenced the expected API base |
 | backend full suite | 1185 passed, 3 expected xfailed, 3 existing OPSIN warnings |
 
-After the Phase A/B implementation at `c784605`, the frontend suite increased to
-40 files and 373 passing tests; lint and build also passed. Final PR validation
-is recorded in the implementation-plan change log.
+After the Phase A/B implementation at `c784605` and export-boundary privacy
+hardening at `6f3a972`, the frontend suite increased to 40 files and 374 passing
+tests; lint and build also passed. Final PR validation is recorded in the
+implementation-plan change log.
 
 ## Latency result and evidence gate
 
