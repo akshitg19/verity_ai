@@ -114,8 +114,8 @@ describe("subscripts stay on the line they belong to", () => {
   it("refuses a join that would let one row swallow the page", () => {
     const index = buildInkIndex([glyph, subscript]);
     // Close enough to be a candidate on the gap test, but joining would make
-    // the row 110px tall against a 102.4px ceiling.
-    const tooTall = stroke({ x: 10, y: 88 }, { x: 30, y: 140 });
+    // the row taller than the structured-expression ceiling.
+    const tooTall = stroke({ x: 10, y: 88 }, { x: 30, y: 190 });
 
     expect(addStrokeToInkIndex(index, tooTall)).not.toBe(0);
   });
@@ -125,5 +125,28 @@ describe("subscripts stay on the line they belong to", () => {
 
     expect(findStrokeRow(index, subscript)).toBe(0);
     expect(findStrokeRow(index, stroke({ x: 0, y: 0 }))).toBeNull();
+  });
+});
+
+describe("two-dimensional math stays one logical expression", () => {
+  it("keeps a superscript with its base across a ruled-band boundary", () => {
+    const base = stroke({ x: 20, y: 60 }, { x: 40, y: 92 });
+    const superscript = stroke({ x: 42, y: 38 }, { x: 52, y: 60 });
+    const index = buildInkIndex([base]);
+
+    expect(addStrokeToInkIndex(index, superscript)).toBe(1);
+    expect([...index.rows.keys()]).toEqual([1]);
+  });
+
+  it("keeps numerator, fraction bar, and denominator in one tall row", () => {
+    const numerator = stroke({ x: 30, y: 18 }, { x: 70, y: 42 });
+    const bar = stroke({ x: 20, y: 52 }, { x: 82, y: 52 });
+    const denominator = stroke({ x: 30, y: 62 }, { x: 70, y: 124 });
+    const index = buildInkIndex([numerator]);
+
+    const row = addStrokeToInkIndex(index, bar);
+    expect(addStrokeToInkIndex(index, denominator)).toBe(row);
+    expect(index.rows.get(row)).toEqual([numerator, bar, denominator]);
+    expect([...index.rows.keys()]).toHaveLength(1);
   });
 });

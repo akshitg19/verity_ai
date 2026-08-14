@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  affectedRowsAfterSnapshot,
   completedRowAfterStroke,
   getCanvasDisplaySize,
   shouldAcknowledgeProcessedRow,
@@ -31,5 +32,10 @@ describe("canvas workflow state", () => {
     expect(completedRowAfterStroke(null, 3, 4)).toBe(3);
     expect(completedRowAfterStroke(3, 3, 4)).toBe(3);
     expect(completedRowAfterStroke(null, 4, 3)).toBe(null);
+  });
+
+  it("invalidates every row on either side of undo and redo", () => {
+    expect(affectedRowsAfterSnapshot([1, 2], [1, 3]))
+      .toEqual(new Set([1, 2, 3]));
   });
 });

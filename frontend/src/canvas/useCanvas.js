@@ -20,6 +20,12 @@ import {
   rowsNearBounds,
   strokesNearBounds,
 } from "./inkModel";
+import {
+  cancelAllFinalizations,
+  cancelRowFinalization,
+  IMAGE_FINALIZATION_POLICY,
+  scheduleRowFinalization,
+} from "../recognition/finalizationPolicy";
 
 const NOTEBOOK_ROWS = 24;
 const NOTEBOOK_HEIGHT = NOTEBOOK_ROWS * LINE_HEIGHT;
@@ -49,6 +55,10 @@ export function shouldInvalidateCommittedRow(startRow, committedRow) {
 export function completedRowAfterStroke(queuedRow, previousRow, committedRow) {
   if (queuedRow !== null) return queuedRow;
   return previousRow !== null && committedRow > previousRow ? previousRow : null;
+}
+
+export function affectedRowsAfterSnapshot(rowsBefore, rowsAfter) {
+  return new Set([...(rowsBefore ?? []), ...(rowsAfter ?? [])]);
 }
 
 export function getCanvasDisplaySize(viewportWidth, viewportHeight) {
@@ -111,6 +121,7 @@ export default function useCanvas({
   onStructureStrokeStarted = NOOP,
   onStructureChanged = NOOP,
   onCleared = NOOP,
+  recognitionPolicy = IMAGE_FINALIZATION_POLICY,
 }) {
   const staticCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
@@ -126,6 +137,9 @@ export default function useCanvas({
   const inkIndexRef = useRef(buildInkIndex([]));
   const rowVersionsRef = useRef(new Map());
   const lastReadyVersionRef = useRef(new Map());
+  const lastProvisionalVersionRef = useRef(new Map());
+  const lastPointerUpAtRef = useRef(new Map());
+  const recognitionPolicyRef = useRef(recognitionPolicy);
   const [activeTool, setActiveTool] = useState("pen");
   const [penColor, setPenColor] = useState("#1f2926");
   const [penWidth, setPenWidth] = useState(4);
@@ -158,6 +172,10 @@ export default function useCanvas({
   }, [pageId]);
 
   useEffect(() => {
+    recognitionPolicyRef.current = recognitionPolicy;
+  }, [recognitionPolicy]);
+
+  useEffect(() => {
     eraserRadiusRef.current = eraserRadius;
   }, [eraserRadius]);
 
@@ -169,7 +187,7 @@ export default function useCanvas({
   const strokeStartRowRef = useRef(null);
   const strokePreviousRowRef = useRef(null);
   const rowToQueueAfterStrokeRef = useRef(null);
-  const rowIdleTimerRef = useRef(null);
+  const rowIdleTimersRef = useRef(new Map());
 
   const onRowReadyRef = useRef(onRowReady);
   const onRowEditedRef = useRef(onRowEdited);
@@ -239,22 +257,51 @@ export default function useCanvas({
     setActiveLineNumber(null);
   }, []);
 
-  const notifyRowReady = useCallback((row) => {
+  const notifyRowReady = useCallback((row, { provisional = false } = {}) => {
     if (row === null || row === undefined) return;
     const rowStrokes = inkIndexRef.current.rows.get(row);
     if (!rowStrokes?.length) return;
 
     const version = rowVersionsRef.current.get(row) ?? 0;
-    if (lastReadyVersionRef.current.get(row) === version) return;
-    lastReadyVersionRef.current.set(row, version);
+    const notifiedVersions = provisional
+      ? lastProvisionalVersionRef.current
+      : lastReadyVersionRef.current;
+    if (notifiedVersions.get(row) === version) return;
+    notifiedVersions.set(row, version);
+    const expressionReadyAt = globalThis.performance?.now?.() ?? Date.now();
     onRowReadyRef.current({
       row,
       strokes: [...rowStrokes],
       version,
       pageId: pageIdRef.current,
-      onProcessed: () => acknowledgeProcessedRow(row, version),
+      provisional,
+      timing: {
+        pointerUpAt: lastPointerUpAtRef.current.get(row) ?? expressionReadyAt,
+        expressionReadyAt,
+      },
+      onProcessed: provisional
+        ? undefined
+        : () => acknowledgeProcessedRow(row, version),
     });
   }, [acknowledgeProcessedRow]);
+
+  const cancelRowReadiness = (row) => {
+    if (row === null || row === undefined) return;
+    cancelRowFinalization(rowIdleTimersRef.current, row);
+  };
+
+  const cancelAllReadiness = () => {
+    cancelAllFinalizations(rowIdleTimersRef.current);
+  };
+
+  const scheduleRowReadiness = (row) => {
+    scheduleRowFinalization(
+      rowIdleTimersRef.current,
+      row,
+      recognitionPolicyRef.current,
+      (readyRow) => notifyRowReady(readyRow)
+    );
+  };
 
   const bumpRowVersion = (row) => {
     const nextVersion = (rowVersionsRef.current.get(row) ?? 0) + 1;
@@ -264,6 +311,7 @@ export default function useCanvas({
 
   const notifyRowEdited = (row) => {
     if (row === null || row === undefined) return;
+    cancelRowReadiness(row);
     bumpRowVersion(row);
     onRowEditedRef.current(row, inkIndexRef.current.rows.has(row));
   };
@@ -382,14 +430,16 @@ export default function useCanvas({
     }
     if (activePointerId.current !== null) return;
 
-    if (rowIdleTimerRef.current) {
-      clearTimeout(rowIdleTimerRef.current);
-      rowIdleTimerRef.current = null;
-    }
-
     const canvasRect = canvasRef.current.getBoundingClientRect();
     activeCanvasRectRef.current = canvasRect;
     const firstPoint = getPoint(event, canvasRect);
+    const pendingRow = resolveRowForBounds(inkIndexRef.current, {
+      minX: firstPoint.x,
+      maxX: firstPoint.x,
+      minY: firstPoint.y,
+      maxY: firstPoint.y,
+    });
+    cancelRowReadiness(pendingRow);
 
     // Holding the button on the stylus erases, the way Samsung Notes does,
     // without changing the selected tool. A student who has used the tablet's
@@ -436,12 +486,7 @@ export default function useCanvas({
       // pen lands. The authoritative assignment happens on pointer up, once
       // the stroke has a real bounding box; resolving against the same ink
       // here keeps the two from disagreeing about which line is being edited.
-      const newRow = resolveRowForBounds(inkIndexRef.current, {
-        minX: firstPoint.x,
-        maxX: firstPoint.x,
-        minY: firstPoint.y,
-        maxY: firstPoint.y,
-      });
+      const newRow = pendingRow;
       strokeStartRowRef.current = newRow;
       const previousRow = activeRowRef.current;
       strokePreviousRowRef.current = previousRow;
@@ -561,6 +606,7 @@ export default function useCanvas({
     strokesRef.current = updatedStrokes;
     const row = addStrokeToInkIndex(inkIndexRef.current, finished);
     bumpRowVersion(row);
+    lastPointerUpAtRef.current.set(row, finalPoint.t);
     const startRow = strokeStartRowRef.current;
     strokeStartRowRef.current = null;
     const previousRow = strokePreviousRowRef.current;
@@ -578,11 +624,7 @@ export default function useCanvas({
       // consumer decides which rows are readable and drops the drawing
       // rows, so offering every row here costs nothing and asks for
       // nothing.
-      if (rowIdleTimerRef.current) clearTimeout(rowIdleTimerRef.current);
-      rowIdleTimerRef.current = setTimeout(() => {
-        notifyRowReady(row);
-        rowIdleTimerRef.current = null;
-      }, 1500);
+      scheduleRowReadiness(row);
       return;
     }
 
@@ -603,14 +645,14 @@ export default function useCanvas({
     );
     rowToQueueAfterStrokeRef.current = null;
     if (completedRow !== null && completedRow !== row) {
+      cancelRowReadiness(completedRow);
       notifyRowReady(completedRow);
     }
 
-    if (rowIdleTimerRef.current) clearTimeout(rowIdleTimerRef.current);
-    rowIdleTimerRef.current = setTimeout(() => {
-      notifyRowReady(row);
-      rowIdleTimerRef.current = null;
-    }, 1500);
+    if (recognitionPolicyRef.current.provisionalAfterStroke) {
+      notifyRowReady(row, { provisional: true });
+    }
+    scheduleRowReadiness(row);
   };
 
   // The eraser preview must not be left behind when the pointer leaves.
@@ -657,7 +699,10 @@ export default function useCanvas({
       onStructureChangedRef.current();
       return;
     }
-    const affected = new Set([...rowsBefore, ...inkIndexRef.current.rows.keys()]);
+    const affected = affectedRowsAfterSnapshot(
+      rowsBefore,
+      inkIndexRef.current.rows.keys()
+    );
     for (const row of affected) notifyRowEdited(row);
     reconcileActiveRow([...affected].sort((left, right) => left - right).pop() ?? null);
   };
@@ -673,15 +718,14 @@ export default function useCanvas({
   };
 
   const clearPage = () => {
-    if (rowIdleTimerRef.current) {
-      clearTimeout(rowIdleTimerRef.current);
-      rowIdleTimerRef.current = null;
-    }
+    cancelAllReadiness();
     if (strokesRef.current.length) pushHistory();
     strokesRef.current = [];
     inkIndexRef.current = buildInkIndex([]);
     rowVersionsRef.current.clear();
     lastReadyVersionRef.current.clear();
+    lastProvisionalVersionRef.current.clear();
+    lastPointerUpAtRef.current.clear();
     historyRef.current.future = [];
     syncHistoryDepth();
     erasingRef.current = false;
@@ -706,10 +750,7 @@ export default function useCanvas({
 
   const loadStrokes = useCallback((storedStrokes) => {
     const nextStrokes = storedStrokes ?? [];
-    if (rowIdleTimerRef.current) {
-      clearTimeout(rowIdleTimerRef.current);
-      rowIdleTimerRef.current = null;
-    }
+    cancelAllFinalizations(rowIdleTimersRef.current);
     const pointerId = activePointerId.current;
     if (
       pointerId !== null &&
@@ -721,6 +762,8 @@ export default function useCanvas({
     inkIndexRef.current = buildInkIndex(nextStrokes);
     rowVersionsRef.current.clear();
     lastReadyVersionRef.current.clear();
+    lastProvisionalVersionRef.current.clear();
+    lastPointerUpAtRef.current.clear();
     historyRef.current = { past: [], future: [] };
     setHistoryDepth({ past: 0, future: 0 });
     erasingRef.current = false;
@@ -778,10 +821,7 @@ export default function useCanvas({
 
   const finishActiveRow = () => {
     if (isStructure) return;
-    if (rowIdleTimerRef.current) {
-      clearTimeout(rowIdleTimerRef.current);
-      rowIdleTimerRef.current = null;
-    }
+    cancelAllReadiness();
     for (const row of [...inkIndexRef.current.rows.keys()].sort((left, right) => left - right)) {
       notifyRowReady(row);
     }
@@ -947,7 +987,7 @@ export default function useCanvas({
       if (overlayFrameRequestRef.current !== null) {
         cancelAnimationFrame(overlayFrameRequestRef.current);
       }
-      if (rowIdleTimerRef.current) clearTimeout(rowIdleTimerRef.current);
+      cancelAllFinalizations(rowIdleTimersRef.current);
     },
     []
   );

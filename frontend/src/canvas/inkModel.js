@@ -7,8 +7,10 @@ export const DEFAULT_ROW_JOIN_GAP = 10;
 
 // A row may not grow past this multiple of the ruled height by joining.
 // Without a ceiling every join widens the row's bounds, which makes the next
-// join likelier, and one row eventually swallows the page.
-export const MAX_ROW_HEIGHT_RATIO = 1.6;
+// join likelier, and one row eventually swallows the page. Two and a quarter
+// ruled bands still bounds that growth while leaving room for a tested
+// numerator, fraction bar, and denominator.
+export const MAX_ROW_HEIGHT_RATIO = 2.25;
 export const SPATIAL_CELL_SIZE = 64;
 
 export function getStrokeBounds(stroke) {

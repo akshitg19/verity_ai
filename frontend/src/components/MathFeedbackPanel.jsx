@@ -163,12 +163,15 @@ export default function MathFeedbackPanel({ workflow }) {
     hintData,
     hintError,
     hintLoading,
+    provisionalByLine,
     handleLineEdit,
     handleLineEditDone,
     handleGetHint,
     cancelHint,
   } = workflow;
   const orderedLines = orderedMathLines(lines);
+  const provisionalLines = [...(provisionalByLine ?? new Map()).values()]
+    .sort((left, right) => left.row - right.row);
   const { handwrittenProblemRow, readableLines } = buildMathCheckInput(
     orderedLines,
     problem
@@ -236,6 +239,22 @@ export default function MathFeedbackPanel({ workflow }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <MathTopicPicker topicId={topicId} onChoose={handleTopicChange} />
+
+      {provisionalLines.length > 0 && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            padding: "8px 10px",
+            borderRadius: 10,
+            color: COLORS.muted,
+            background: "var(--v-waiting-bg)",
+            fontSize: 12,
+          }}
+        >
+          Reading: {provisionalLines.map((line) => line.text || "…").join(" · ")}
+        </div>
+      )}
 
       {emptyState}
 

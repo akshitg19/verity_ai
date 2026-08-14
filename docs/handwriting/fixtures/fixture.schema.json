@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verityai.example/schemas/handwriting-fixture-v1.json",
+  "title": "VerityAI handwriting evaluation fixture",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "domain",
+    "topic",
+    "difficulty",
+    "inputs",
+    "expected",
+    "tags",
+    "consent"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "domain": {
+      "enum": ["math", "chemistry_text", "chemistry_structure"]
+    },
+    "topic": {
+      "type": "string",
+      "minLength": 1
+    },
+    "difficulty": {
+      "enum": ["basic", "intermediate", "advanced", "ambiguous"]
+    },
+    "device_group": {
+      "type": "string"
+    },
+    "browser_group": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "strokes": {
+          "type": "string",
+          "pattern": "\\.json$"
+        },
+        "image": {
+          "type": "string",
+          "pattern": "\\.png$"
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "canonical", "unreadable"],
+      "properties": {
+        "format": {
+          "enum": ["ascii", "latex", "jiix", "smiles", "text"]
+        },
+        "canonical": {
+          "type": "string"
+        },
+        "accepted": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "unreadable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "fraction",
+          "nested_fraction",
+          "superscript",
+          "subscript",
+          "matrix",
+          "integral",
+          "limit",
+          "greek",
+          "chemistry_capitalization",
+          "charge",
+          "reaction_arrow",
+          "one-l-i",
+          "zero-o",
+          "x-times",
+          "minus-equals",
+          "decimal_point",
+          "cursive",
+          "cramped",
+          "overwritten",
+          "edited_out_of_order"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reviewer_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "enum": ["draft", "reviewed", "adjudicated"]
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["retention_approved"],
+      "properties": {
+        "retention_approved": {
+          "type": "boolean"
+        },
+        "source": {
+          "enum": ["synthetic", "internal", "consented_user"]
+        }
+      }
+    }
+  }
+}
+

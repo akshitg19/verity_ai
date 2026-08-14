@@ -18,6 +18,7 @@ import WorkspaceActionDialog from "./components/WorkspaceActionDialog";
 import useWorkspaceNavigation from "./useWorkspaceNavigation";
 import { SURFACES } from "./theme";
 import useRoutedSubject from "./useRoutedSubject";
+import { IMAGE_FINALIZATION_POLICY } from "./recognition/finalizationPolicy";
 
 const SIDEBAR_WIDTH = 288;
 
@@ -50,6 +51,8 @@ export default function App({ theme: themeFromRoute, subject }) {
     onRowEdited: mode === "chemistry" ? chemistry.invalidateLine : math.invalidateRow,
     onStructureStrokeStarted: chemistry.invalidateRequests,
     onStructureChanged: chemistry.clearAnswer,
+    recognitionPolicy:
+      mode === "math" ? math.recognitionPolicy : IMAGE_FINALIZATION_POLICY,
     onCleared: () => {
       math.clear();
       chemistry.clearAnswer();
@@ -65,6 +68,7 @@ export default function App({ theme: themeFromRoute, subject }) {
   useKeyboardShortcuts({
     onUndo: canvas.handleUndo,
     onRedo: canvas.handleRedo,
+    onFinishLine: canvas.finishActiveRow,
     onToggleNotebook: () => setShowNotebook((value) => !value),
   });
 
