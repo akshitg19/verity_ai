@@ -74,7 +74,7 @@ does **not** publish a p50/p95, claim that 750ms is perceived as twice as fast,
 or claim that the Phase 2 change meets a production latency SLO. Deterministic
 fake-timer tests prove policy behavior, not device latency.
 
-The content-free export and aggregation workflow in
+The paired-row, content-free export and aggregation workflow in
 [Internal A/B comparison](internal-ab-comparison.md) is the safe measurement
 path. To close the device evidence gate, 3–5 consenting teammates must each run
 both variants on the supported tablet/browser combinations, export both JSON

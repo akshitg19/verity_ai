@@ -90,6 +90,9 @@ export default function HandwritingExperiencePanel() {
 
   if (!experiment.enabled) return null;
   const task = TASKS[taskIndex];
+  const pairStart = taskIndex % 2 === 0;
+  const pairNumber = Math.floor(taskIndex / 2) + 1;
+  const pairedTask = pairStart ? TASKS[taskIndex + 1] : null;
   const recordedTaskIds = new Set(assessments.map((entry) => entry.taskId));
 
   const recordCurrent = () => {
@@ -152,15 +155,28 @@ export default function HandwritingExperiencePanel() {
         Internal handwriting A/B — {experiment.variant}
       </summary>
       <p style={{ fontSize: 12, lineHeight: 1.4 }}>
-        Write the expression exactly, wait for recognition, then rate this task.
-        Use New Question before moving on. No ink or recognized text is exported.
+        {pairStart
+          ? "Write both rows below without waiting between them. Wait for both " +
+            "results, then rate row 1."
+          : "Rate row 2, which you already wrote. After saving it, use New " +
+            "Question before the next pair."}
+        {" "}No ink or recognized text is exported.
       </p>
       <div style={{ fontSize: 12, color: "#51605b" }}>
-        Task {taskIndex + 1}/{TASKS.length} · {recordedTaskIds.size} saved
+        Pair {pairNumber}/6 · task {taskIndex + 1}/{TASKS.length} ·{" "}
+        {recordedTaskIds.size} saved
       </div>
       <div style={{ margin: "8px 0 12px", fontSize: 22, fontWeight: 700 }}>
         {task.prompt}
       </div>
+      {pairedTask && (
+        <div style={{ margin: "-4px 0 12px", fontSize: 12 }}>
+          <div style={{ color: "#51605b", marginBottom: 4 }}>
+            Then, on the next row without waiting:
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{pairedTask.prompt}</div>
+        </div>
+      )}
       <div style={{ display: "grid", gap: 8 }}>
         <label style={fieldStyle}>
           Perceived responsiveness (1 slow–5 instant)
@@ -230,7 +246,11 @@ export default function HandwritingExperiencePanel() {
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
         <button type="button" onClick={nextTask} disabled={!assessment.accuracy}>
-          {taskIndex === TASKS.length - 1 ? "Save task" : "Save & next"}
+          {taskIndex === TASKS.length - 1
+            ? "Save final rating"
+            : pairStart
+            ? "Save row 1 rating"
+            : "Save row 2 & next pair"}
         </button>
         <button
           type="button"

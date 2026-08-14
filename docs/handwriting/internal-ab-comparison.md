@@ -36,9 +36,13 @@ must have access to the `verity-ai2` Vercel team and sign in before the app is
 shown. Teammates without that access should use the local URLs instead; do not
 disable preview protection for this experiment.
 
-## Fixed 12-task script
+## Fixed 12-expression script
 
-Run the tasks in this order for both variants:
+Run the expressions in this order for both variants, as six paired rounds. In
+each pair, write the second row immediately after the first without waiting for
+the first recognition request. Wait for both results only after the second row.
+This makes the comparison exercise both the quiet-period policy and the
+one-worker/two-worker policy.
 
 1. `3x + 2 = 5`
 2. `3x = 3`
@@ -64,16 +68,17 @@ identifier.
 1. Open the PR #32 preview link above with one variant query and complete the
    existing Vercel team sign-in if prompted.
 2. Confirm the panel heading names the intended variant.
-3. Use the math notebook. Write exactly the displayed expression and wait for
-   recognition and verdict painting.
-4. Rate perceived responsiveness, recognition accuracy, confidence,
-   corrections, and any incomplete/flickering transcription.
-5. Select **Save & next**, then use **New Question** before drawing the next
-   task.
-6. After all 12 tasks are saved, export the JSON file.
-7. Repeat on the other variant on the same device/browser. Alternate which
+3. Use the math notebook. For each pair, write row 1 and row 2 exactly as shown,
+   with no pause to wait for recognition between them.
+4. After row 2, wait for both recognition results and verdict painting.
+5. Rate row 1, select **Save row 1 rating**, then rate the already-written row 2
+   without drawing it again.
+6. Select **Save row 2 & next pair**, then use **New Question** before drawing
+   the next pair.
+7. After all 12 expressions are rated, export the JSON file.
+8. Repeat on the other variant on the same device/browser. Alternate which
    variant comes first across teammates to reduce order bias.
-8. Share only the exported JSON files in the approved internal project
+9. Share only the exported JSON files in the approved internal project
    location. Do not add handwriting screenshots or notebook exports.
 
 Participation must be voluntary. These are deliberately synthetic prompts; do
