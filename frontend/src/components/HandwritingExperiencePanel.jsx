@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   HANDWRITING_EXPERIMENT_EXPORT_SCHEMA,
+  sanitizeHandwritingExperimentMetric,
 } from "../recognition/handwritingExperienceReport";
 import {
   resolveHandwritingExperienceExperiment,
@@ -78,10 +79,10 @@ export default function HandwritingExperiencePanel() {
   useEffect(() => {
     if (!experiment.enabled) return undefined;
     const capture = (event) => {
-      metricsRef.current.push({
-        taskId: taskIdRef.current,
-        ...event.detail,
-      });
+      metricsRef.current.push(sanitizeHandwritingExperimentMetric(
+        event.detail,
+        taskIdRef.current
+      ));
     };
     globalThis.addEventListener(RECOGNITION_METRIC_EVENT, capture);
     return () => globalThis.removeEventListener(RECOGNITION_METRIC_EVENT, capture);

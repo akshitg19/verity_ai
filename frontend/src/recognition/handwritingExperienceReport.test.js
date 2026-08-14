@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   aggregateHandwritingExperimentRuns,
   percentile,
+  sanitizeHandwritingExperimentMetric,
 } from "./handwritingExperienceReport";
 
 function run(variant, offset = 0) {
@@ -59,5 +60,23 @@ describe("handwriting experience report", () => {
       correctionCount: 1,
       meanResponsiveness: 4,
     });
+  });
+
+  it("sanitizes untrusted browser events again before export", () => {
+    const metric = sanitizeHandwritingExperimentMetric({
+      provider: "gemini",
+      pageId: "private-page",
+      text: "private answer",
+      strokes: [{ points: [{ x: 1, y: 2 }] }],
+      totalMs: 12,
+      stages: { recognition_start: 2, private_stage: 3 },
+    }, "linear-01");
+    expect(metric).toEqual({
+      taskId: "linear-01",
+      provider: "gemini",
+      totalMs: 12,
+      stages: { recognition_start: 2 },
+    });
+    expect(JSON.stringify(metric)).not.toContain("private");
   });
 });

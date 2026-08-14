@@ -1,4 +1,22 @@
+import {
+  RECOGNITION_LIFECYCLE_STAGES,
+  RECOGNITION_STAGES,
+} from "./recognitionMetrics";
+
 export const HANDWRITING_EXPERIMENT_EXPORT_SCHEMA = 1;
+
+const SAFE_METRIC_META = Object.freeze([
+  "provider",
+  "mode",
+  "expressionVersion",
+  "fallbackUsed",
+  "fallbackReason",
+  "outcome",
+]);
+const SAFE_METRIC_STAGES = new Set([
+  ...RECOGNITION_STAGES,
+  ...RECOGNITION_LIFECYCLE_STAGES,
+]);
 
 const LATENCY_FIELDS = Object.freeze({
   pointerUpToReadyMs: ["pointer_up", "expression_ready"],
@@ -43,6 +61,23 @@ function average(values) {
   return safe.length
     ? safe.reduce((total, value) => total + value, 0) / safe.length
     : null;
+}
+
+export function sanitizeHandwritingExperimentMetric(detail, taskId) {
+  const metric = { taskId };
+  for (const key of SAFE_METRIC_META) {
+    const value = detail?.[key];
+    if (["string", "number", "boolean"].includes(typeof value)) {
+      metric[key] = value;
+    }
+  }
+  if (Number.isFinite(detail?.totalMs)) metric.totalMs = detail.totalMs;
+  metric.stages = Object.fromEntries(
+    Object.entries(detail?.stages ?? {}).filter(([stage, value]) =>
+      SAFE_METRIC_STAGES.has(stage) && Number.isFinite(value)
+    )
+  );
+  return metric;
 }
 
 export function validateHandwritingExperimentRun(run) {
