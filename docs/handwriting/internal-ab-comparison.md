@@ -27,8 +27,9 @@ Local:
 - `http://localhost:5173/math?hwr_ab=legacy`
 - `http://localhost:5173/math?hwr_ab=current`
 
-Vercel preview base URL: pending the Phase A/B PR preview. Once available, use
-that same base URL followed by `/math?hwr_ab=legacy` or
+Vercel preview base URL for PR #32:
+`https://verity-ai-git-feat-handwriting-completion-verity-ai2.vercel.app`.
+Use that same base URL followed by `/math?hwr_ab=legacy` or
 `/math?hwr_ab=current`; do not compare two different code revisions or
 providers.
 
@@ -57,7 +58,7 @@ identifier.
 
 ## Teammate instructions
 
-1. Obtain the preview link from the Phase A/B PR and open one variant.
+1. Open the PR #32 preview link above with one variant query.
 2. Confirm the panel heading names the intended variant.
 3. Use the math notebook. Write exactly the displayed expression and wait for
    recognition and verdict painting.
