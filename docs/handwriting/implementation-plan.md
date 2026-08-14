@@ -273,7 +273,7 @@ scheduling-only Gemini comparison between 1500ms/one worker and 750ms/two
 workers; added the fixed 12-task panel, content-free JSON export, aggregation,
 privacy gates, and baseline/A-B documentation.
 Tests and results: pre-change frontend 368 passed across 38 files; after tooling
-374 passed across 40 files; lint, normal build, production build,
+375 passed across 40 files; lint, normal build, production build,
 production-build inspection, and App.jsx line cap passed; backend 1185 passed
 with 3 expected xfails and 3 existing OPSIN warnings. Local browser smoke passed
 for legacy, current, and query-free math routes; task save/advance worked and no

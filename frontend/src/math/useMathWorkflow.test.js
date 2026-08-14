@@ -52,6 +52,7 @@ describe("useMathWorkflow recognition lifecycle", () => {
   };
 
   beforeEach(() => {
+    window.history.replaceState({}, "", "/math");
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -91,6 +92,42 @@ describe("useMathWorkflow recognition lifecycle", () => {
     ]);
     expect(checkSteps).toHaveBeenCalledTimes(1);
     expect(checkSteps.mock.calls[0][2]).toEqual([{ line_number: 1, latex: "x = 1" }]);
+  });
+
+  it("wires the internal legacy query to 1500ms and one recognition worker", async () => {
+    window.history.replaceState({}, "", "/math?hwr_ab=legacy");
+    const calls = [];
+    const recognizer = recognizerFrom(() => {
+      const call = deferred();
+      calls.push(call);
+      return call.promise;
+    });
+    await renderWorkflow({
+      pageId: "page-1",
+      recognizer,
+      emitRecognitionLifecycleMetric: vi.fn(),
+    });
+
+    expect(workflow.experienceExperiment).toMatchObject({
+      enabled: true,
+      variant: "legacy",
+      quietPeriodMs: 1500,
+      maxRecognitionConcurrency: 1,
+    });
+    expect(workflow.recognitionPolicy.quietPeriodMs).toBe(1500);
+
+    act(() => {
+      workflow.invalidateRow(1);
+      workflow.invalidateRow(2);
+      workflow.queueRow({ row: 1, pageId: "page-1", strokes: [{}] });
+      workflow.queueRow({ row: 2, pageId: "page-1", strokes: [{}] });
+    });
+    expect(recognizer.recognize).toHaveBeenCalledTimes(1);
+
+    await act(async () => calls[0].resolve({ text: "x + 1 = 2" }));
+    await vi.waitFor(() => expect(recognizer.recognize).toHaveBeenCalledTimes(2));
+    await act(async () => calls[1].resolve({ text: "x = 1" }));
+    await settle();
   });
 
   it("keeps provisional output out of finalized lines and judge input", async () => {
