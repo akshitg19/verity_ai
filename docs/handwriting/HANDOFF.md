@@ -2,13 +2,14 @@
 
 **Handoff date:** 2026-08-14
 
-**Status:** Phases 0–2 merged through PR #31 and Phase A/B tooling merged
-through PR #32; provider-readiness evidence and offline evaluation tooling are
-implemented; live vector-provider POC and target-device evidence remain
+**Status:** Phases 0–2, Phase A/B, and provider-readiness/offline evaluation are
+merged through PRs #31–#33; a disabled MyScript backend adapter and deploy
+mapping are implemented; live vector-provider POC and target-device evidence
+remain
 
-**Working branch:** `feat/handwriting-provider-readiness`
+**Working branch:** `feat/handwriting-myscript-adapter`
 
-**Base:** `origin/main` at `156d724`
+**Base:** `origin/main` at `e01d28e`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
@@ -56,10 +57,11 @@ per-stroke provisional output that never reaches the judge.
 The merged Phase 2 implementation removes the fixed 1500ms gate and serial
 recognition queue, but it
 does not claim a measured 300–500ms result. Target-device latency and live
-corpus measurements remain outstanding. MyScript and GPT-5.6 Luna are
-candidates, not working integrations yet. MyScript account/key/secret setup is
-complete; `provider-readiness.md` records the contractual and privacy blockers
-that prevent student traffic.
+corpus measurements remain outstanding. MyScript now has a mock-tested backend
+adapter and disabled internal route, but no live or frontend integration;
+GPT-5.6 Luna remains only a candidate. MyScript account/key/secret setup is
+complete, and `provider-readiness.md` records the contractual and privacy
+blockers that prevent student traffic.
 
 ## 2. Workspace and Git state
 
@@ -101,9 +103,11 @@ The Phase 0/1 handwriting work was committed separately:
 
 Phase 2 followed it and both changes were merged by PR #31 at `cfa06e0`. The
 historical worktree was then removed. Current continuation work is isolated in
-`/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal` on
-`feat/handwriting-provider-readiness`; Phase A/B was merged by PR #32 at
-`156d724`. The dirty landing-page worktree remains intact.
+`/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`; Phase A/B was
+merged by PR #32 at `156d724`, and provider readiness/offline evaluation was
+merged by PR #33 at `e01d28e`. Current work is on
+`feat/handwriting-myscript-adapter`. The dirty landing-page worktree remains
+intact.
 
 The obsolete `verity_ai-frontend-polish` worktree was removed on 2026-08-14
 after verifying that it was clean and its branch was already an ancestor of
@@ -533,15 +537,17 @@ claim should be made about end-to-end p50/p95 improvement until the lifecycle
 events are measured on target tablets. The 300–500ms target still requires a
 working vector provider.
 
-### No MyScript runtime integration
+### No live MyScript runtime integration
 
-The MyScript developer application and credentials now exist. The credentials
-remain only in the local ignored secret file and two GCP Secret Manager secrets;
-the Cloud Run runtime service account has accessor permission. There is still no
-backend route, protocol client, Cloud Run secret-to-environment mapping,
-LaTeX/JIIX normalizer, deployed POC, or measured result. A clean frontend adapter
-boundary exists for the POC. Provider/legal evidence and an offline evaluation
-harness now exist in `provider-readiness.md` and `fixtures/README.md`.
+The MyScript developer application and credentials exist. The credentials remain
+only in the local ignored secret file and two GCP Secret Manager secrets; the
+Cloud Run runtime service account has accessor permission. A backend protocol
+client, typed route, shared normalizer, and Cloud Run secret mapping now exist,
+but both provider and route flags are false. No frontend adapter, external call,
+deployed-revision metadata proof, POC corpus run, or measured result exists. The
+route additionally requires the existing API access-control header before it can
+open. Provider/legal evidence and the offline evaluation harness are in
+`provider-readiness.md` and `fixtures/README.md`.
 
 ### No Luna integration
 
@@ -805,7 +811,9 @@ Not safe to claim yet:
 - Luna is better than Gemini;
 - complex chemistry or full undergraduate math is supported.
 
-The next safe change is the disabled-by-default, mock-tested MyScript backend
-adapter and Cloud Run secret mapping. Live POC calls remain blocked on the
-written licensing/privacy answers and approved corpus recorded in
+The current safe change is the disabled-by-default, mock-tested MyScript backend
+adapter and Cloud Run secret mapping. After it merges, verify the new revision's
+false flags and secret references without reading values, then add only an
+internal frontend adapter that remains unreachable by default. Live POC calls
+remain blocked on the written licensing/privacy answers and approved corpus in
 `provider-readiness.md`.

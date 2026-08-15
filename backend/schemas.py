@@ -2,6 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     StringConstraints,
     computed_field,
@@ -273,6 +274,76 @@ class TranscribeResponse(BaseModel):
     # how a correct line gets flagged as wrong.
     confidence: Literal["high", "low"] = "high"
     latency_ms: int | None = None
+
+
+class HandwritingPoint(BaseModel):
+    """One bounded point in the versioned vector-recognition request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    x: Annotated[float, Field(ge=-1000, le=11000, allow_inf_nan=False)]
+    y: Annotated[float, Field(ge=-1000, le=11000, allow_inf_nan=False)]
+    t: Annotated[float, Field(ge=0, le=9e15, allow_inf_nan=False)] | None = None
+    p: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)] | None = None
+
+
+class HandwritingStroke(BaseModel):
+    """A raw stroke; presentation fields are intentionally not accepted."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=80,
+            pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
+        ),
+    ] | None = None
+    pointer_type: Literal["pen", "touch", "mouse", "synthetic"] | None = None
+    points: Annotated[list[HandwritingPoint], Field(min_length=1, max_length=4096)]
+
+    @model_validator(mode="after")
+    def timestamps_are_monotonic(self):
+        timestamps = [point.t for point in self.points if point.t is not None]
+        if timestamps != sorted(timestamps):
+            raise ValueError("stroke timestamps must be non-decreasing")
+        return self
+
+
+class MyScriptRecognizeRequest(BaseModel):
+    """Internal, versioned request for the disabled-by-default MyScript POC."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[1] = 1
+    profile: Literal["linear-equation-v1"] = "linear-equation-v1"
+    strokes: Annotated[list[HandwritingStroke], Field(min_length=1, max_length=512)]
+    dpi_x: Annotated[float, Field(ge=36, le=600, allow_inf_nan=False)] = 96
+    dpi_y: Annotated[float, Field(ge=36, le=600, allow_inf_nan=False)] = 96
+
+    @model_validator(mode="after")
+    def point_count_is_bounded(self):
+        points = [point for stroke in self.strokes for point in stroke.points]
+        if len(points) > 50_000:
+            raise ValueError("recognition input cannot exceed 50000 points")
+        if (
+            max(point.x for point in points) - min(point.x for point in points) > 10_000
+            or max(point.y for point in points) - min(point.y for point in points) > 10_000
+        ):
+            raise ValueError("recognition input span cannot exceed 10000 pixels")
+        return self
+
+
+class MyScriptRecognizeResponse(BaseModel):
+    text: Annotated[str, StringConstraints(max_length=10_000)]
+    unreadable: bool = False
+    format: Literal["ascii"] = "ascii"
+    source: Literal["myscript"] = "myscript"
+    provisional: Literal[False] = False
+    candidates: Annotated[list[str], Field(max_length=20)] = Field(default_factory=list)
+    latency_ms: Annotated[int, Field(ge=0, le=600_000)]
 
 
 class StructureTranscribeRequest(BaseModel):

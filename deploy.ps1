@@ -70,7 +70,8 @@ gcloud services enable `
     run.googleapis.com `
     cloudbuild.googleapis.com `
     artifactregistry.googleapis.com `
-    aiplatform.googleapis.com
+    aiplatform.googleapis.com `
+    secretmanager.googleapis.com
 Assert-Ok "enabling APIs"
 
 Write-Host "`nEnsuring the runtime service account exists..." -ForegroundColor Yellow
@@ -94,6 +95,26 @@ gcloud projects add-iam-policy-binding $PROJECT `
     --condition=None | Out-Null
 Assert-Ok "granting roles/aiplatform.user"
 Write-Host "Granted." -ForegroundColor Green
+
+# MyScript credentials are already provisioned in Secret Manager. This block
+# deliberately verifies names and IAM only; it never reads or prints a secret
+# version's value and never asks a person to paste one into the terminal.
+$MYSCRIPT_SECRETS = @(
+    "verity-myscript-application-key",
+    "verity-myscript-hmac-key"
+)
+Write-Host "`nVerifying MyScript secret metadata and runtime access..." -ForegroundColor Yellow
+foreach ($secret in $MYSCRIPT_SECRETS) {
+    gcloud secrets describe $secret --project $PROJECT --format="value(name)" 2>&1 | Out-Null
+    Assert-Ok "finding Secret Manager secret $secret"
+    gcloud secrets add-iam-policy-binding $secret `
+        --project $PROJECT `
+        --member "serviceAccount:$SA_EMAIL" `
+        --role "roles/secretmanager.secretAccessor" `
+        --condition=None 2>&1 | Out-Null
+    Assert-Ok "granting runtime access to Secret Manager secret $secret"
+}
+Write-Host "Secret metadata and runtime access are ready; values were not read." -ForegroundColor Green
 
 Write-Host "`nEnsuring the image repository exists..." -ForegroundColor Yellow
 $repo = gcloud artifacts repositories list --location $REGION --filter="name~/$REPO`$" --format="value(name)"

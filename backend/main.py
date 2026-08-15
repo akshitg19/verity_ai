@@ -73,7 +73,10 @@ from schemas import (
     TranscribeResponse,
     MathSessionRequest,
     MathSessionResponse,
+    MyScriptRecognizeRequest,
+    MyScriptRecognizeResponse,
 )
+from myscript_recognition import MyScriptRecognitionError, get_myscript_recognizer
 from sessions import SESSIONS
 from structure_recognition import transcribe_chemistry_line, transcribe_structure
 from transcription import (
@@ -644,6 +647,79 @@ def transcribe(req: TranscribeRequest):
             detail="Transcription is temporarily unavailable",
         ) from exc
     return TranscribeResponse(text=text, unreadable=unreadable)
+
+
+@app.post(
+    "/handwriting/myscript/recognize",
+    response_model=MyScriptRecognizeResponse,
+)
+async def recognize_myscript(req: MyScriptRecognizeRequest):
+    """Internal linear-equation POC route; disabled in every shipped revision."""
+
+    if not _myscript_poc_route_is_enabled():
+        raise HTTPException(
+            status_code=404,
+            detail="MyScript recognition is disabled",
+        )
+
+    try:
+        result = await get_myscript_recognizer().recognize(req)
+    except MyScriptRecognitionError as exc:
+        if exc.code == "disabled":
+            raise HTTPException(
+                status_code=404,
+                detail="MyScript recognition is disabled",
+            ) from exc
+
+        logger.warning(
+            "MyScript recognition unavailable code=%s retryable=%s",
+            exc.code,
+            exc.retryable,
+        )
+        if exc.code in {
+            "provider_rejected_input",
+            "provider_payload_too_large",
+            "request_body_too_large",
+            "unsupported_provider_output",
+        }:
+            raise HTTPException(
+                status_code=422,
+                detail="Handwriting input is not supported",
+            ) from exc
+        if exc.code in {
+            "provider_quota_exhausted",
+            "provider_rate_limited",
+            "request_cap_exhausted",
+        }:
+            raise HTTPException(
+                status_code=429,
+                detail="Vector recognition budget is unavailable",
+            ) from exc
+        if exc.code == "provider_timeout":
+            raise HTTPException(
+                status_code=504,
+                detail="Vector recognition timed out",
+            ) from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Vector recognition is temporarily unavailable",
+        ) from exc
+
+    return MyScriptRecognizeResponse(
+        text=result.text,
+        unreadable=result.unreadable,
+        candidates=[] if result.unreadable else [result.text],
+        latency_ms=result.latency_ms,
+    )
+
+
+def _myscript_poc_route_is_enabled() -> bool:
+    route_enabled = os.getenv("MYSCRIPT_POC_ROUTE_ENABLED", "false").strip().lower()
+    # The existing shared header is only a speed bump, but requiring it still
+    # prevents an unauthenticated Cloud Run URL from becoming a quota-spending
+    # POC endpoint after one accidental flag change. A real rollout needs real
+    # user authentication and a separate review.
+    return route_enabled == "true" and bool(API_SECRET)
 
 
 @app.post("/chemistry/transcribe", response_model=StructureTranscribeResponse)
