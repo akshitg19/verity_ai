@@ -163,6 +163,25 @@ then, the HTTP route fails closed unless VerityAI's existing API access-control
 header is also configured. That shared header is not real user authentication;
 student rollout requires a separate authentication review.
 
+### 4.4 Frontend POC gates
+
+The frontend adapter is direct vector-only and ships unreachable. It requires
+both of these build-time settings:
+
+```text
+VITE_HANDWRITING_MODE=myscript-poc
+VITE_MYSCRIPT_POC_ENABLED=true
+```
+
+Either setting alone resolves to the current Gemini recognizer. The POC mode
+sends only ordered x/y and valid optional t/p point fields, allowed pointer type,
+fixed schema/profile, and CSS-pixel DPI to VerityAI's backend route. It omits
+local stroke IDs, page/expression IDs, previous transcription, pen color, width,
+images, and Base64 data. It does not contain or reference the provider
+application/HMAC keys. It also has no automatic Gemini fallback, so vector-only
+measurements cannot silently include PNG work. See `rollout-runbook.md` before
+changing any gate.
+
 ## 5. Privacy and licensing findings
 
 ### 5.1 MyScript
@@ -260,6 +279,7 @@ Rules:
 | GCP secret storage and runtime IAM | Complete | User-verified 2026-08-14 |
 | Backend REST adapter with mock tests | Implemented; live call blocked | Fixed HMAC vector, exact-body mock, timeout/error/retry/cap tests, bounded schemas, content-safe logging |
 | Cloud Run secret-to-environment mapping | Implemented in deploy config; runtime verification pending | Revision metadata showing both mappings and both false flags, never values |
+| Direct frontend POC adapter | Implemented in PR #35 | Dual-gate config tests, ordered vector payload, no-PNG/no-local-metadata assertion, cancellation and safe-error tests, production-bundle secret scan |
 | Synthetic/internal smoke corpus (30–50) | Blocked | Approved sources, two-reviewer truth for decision cases, schema validation |
 | Frozen external corpus (300–500) | Blocked | Consent/provenance, restricted store, retention/deletion policy, target devices |
 | MyScript trial data-use clarification | Blocked | Written answer reconciling trial research access with DPA transient processing |

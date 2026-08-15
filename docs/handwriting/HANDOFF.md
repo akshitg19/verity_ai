@@ -3,13 +3,13 @@
 **Handoff date:** 2026-08-14
 
 **Status:** Phases 0–2, Phase A/B, and provider-readiness/offline evaluation are
-merged through PRs #31–#33; a disabled MyScript backend adapter and deploy
-mapping are implemented; live vector-provider POC and target-device evidence
-remain
+implemented through PRs #31–#35; the disabled MyScript backend adapter and
+deploy mapping are merged, and PR #35 adds unreachable-by-default frontend
+wiring; live vector-provider POC and target-device evidence remain
 
-**Working branch:** `feat/handwriting-myscript-adapter`
+**Working branch:** `feat/handwriting-myscript-frontend`
 
-**Base:** `origin/main` at `e01d28e`
+**Base:** `origin/main` at `949e1ea`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
@@ -58,7 +58,8 @@ The merged Phase 2 implementation removes the fixed 1500ms gate and serial
 recognition queue, but it
 does not claim a measured 300–500ms result. Target-device latency and live
 corpus measurements remain outstanding. MyScript now has a mock-tested backend
-adapter and disabled internal route, but no live or frontend integration;
+adapter and disabled internal route. Direct vector-only frontend wiring is being
+added behind two independent frontend gates, but there is no live integration;
 GPT-5.6 Luna remains only a candidate. MyScript account/key/secret setup is
 complete, and `provider-readiness.md` records the contractual and privacy
 blockers that prevent student traffic.
@@ -105,9 +106,9 @@ Phase 2 followed it and both changes were merged by PR #31 at `cfa06e0`. The
 historical worktree was then removed. Current continuation work is isolated in
 `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`; Phase A/B was
 merged by PR #32 at `156d724`, and provider readiness/offline evaluation was
-merged by PR #33 at `e01d28e`. Current work is on
-`feat/handwriting-myscript-adapter`. The dirty landing-page worktree remains
-intact.
+merged by PR #33 at `e01d28e`. The backend adapter was merged by PR #34 at
+`949e1ea`; current work is on `feat/handwriting-myscript-frontend`. The dirty
+landing-page worktree remains intact.
 
 The obsolete `verity_ai-frontend-polish` worktree was removed on 2026-08-14
 after verifying that it was clean and its branch was already an ancestor of
@@ -542,12 +543,14 @@ working vector provider.
 The MyScript developer application and credentials exist. The credentials remain
 only in the local ignored secret file and two GCP Secret Manager secrets; the
 Cloud Run runtime service account has accessor permission. A backend protocol
-client, typed route, shared normalizer, and Cloud Run secret mapping now exist,
-but both provider and route flags are false. No frontend adapter, external call,
-deployed-revision metadata proof, POC corpus run, or measured result exists. The
-route additionally requires the existing API access-control header before it can
-open. Provider/legal evidence and the offline evaluation harness are in
-`provider-readiness.md` and `fixtures/README.md`.
+client, typed route, shared normalizer, and Cloud Run secret mapping are merged,
+but both provider and route flags are false. A direct vector-only frontend POC
+adapter is implemented behind two additional false-by-default frontend gates;
+it has no automatic image fallback. No external call, deployed-revision metadata
+proof, POC corpus run, or measured result exists. The route additionally requires
+the existing API access-control header before it can open. Provider/legal
+evidence, offline evaluation harness, and rollback procedure are in
+`provider-readiness.md`, `fixtures/README.md`, and `rollout-runbook.md`.
 
 ### No Luna integration
 
@@ -811,9 +814,8 @@ Not safe to claim yet:
 - Luna is better than Gemini;
 - complex chemistry or full undergraduate math is supported.
 
-The current safe change is the disabled-by-default, mock-tested MyScript backend
-adapter and Cloud Run secret mapping. After it merges, verify the new revision's
-false flags and secret references without reading values, then add only an
-internal frontend adapter that remains unreachable by default. Live POC calls
-remain blocked on the written licensing/privacy answers and approved corpus in
-`provider-readiness.md`.
+The current safe change is the dual-gated frontend MyScript POC adapter and
+rollout runbook. Deploy the already-merged disabled backend revision only after
+Cloud Shell authorization, then verify false flags and secret references without
+reading values. Live POC calls remain blocked on the written licensing/privacy
+answers and approved corpus in `provider-readiness.md`.

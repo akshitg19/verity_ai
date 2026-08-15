@@ -154,6 +154,8 @@ async function get(path, options = {}) {
 export const checkSteps = (topic, problem, steps, options) => post("/check", { topic, problem, steps }, options);
 export const transcribeLine = (imageBase64, options) =>
   post("/transcribe", { image_base64: imageBase64 }, options);
+export const recognizeMyScript = (payload, options) =>
+  post("/handwriting/myscript/recognize", payload, options);
 
 // -- chemistry ---------------------------------------------------------------
 

@@ -24,6 +24,8 @@ for implementation decisions.
   Gemini scheduling comparison and content-free export workflow.
 - [Provider readiness](provider-readiness.md) records current official-source
   licensing, privacy, pricing, secret mapping, POC budget, and rollout gates.
+- [Rollout runbook](rollout-runbook.md) records the disabled deployment check,
+  activation prerequisites, monitoring, outage response, and kill switches.
 - [Fixture schema](fixtures/fixture.schema.json) defines the machine-readable
   test-case format.
 - [Stroke schema](fixtures/stroke.schema.json) bounds replayable digital ink,
@@ -36,22 +38,22 @@ for implementation decisions.
 
 - Architecture status: Phase 0–2 merged by PR #31 (`cfa06e0`), Phase A/B by PR
   #32 (`156d724`), and provider readiness/offline evaluation by PR #33
-  (`e01d28e`).
+  (`e01d28e`). The disabled backend adapter was merged by PR #34 (`949e1ea`),
+  and PR #35 adds the disabled frontend POC boundary.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
-- Vector recognizer: a backend MyScript REST adapter and internal route are
-  implemented on `feat/handwriting-myscript-adapter`, but both provider and
-  route flags are false and no frontend path or live call is enabled.
+- Vector recognizer: the backend MyScript REST adapter and internal route are
+  merged. PR #35 implements unreachable-by-default frontend POC wiring; no live
+  call is enabled.
 - Recommended vector POC: MyScript iink. The developer application, local
   credential file, GCP secrets, and runtime-service-account secret access are
-  complete. Disabled deployment mapping is implemented; revision-metadata
-  verification, licensing/privacy approval, frontend POC wiring, and evaluation
-  remain.
+  complete. Disabled deployment mapping is merged; revision-metadata
+  verification, licensing/privacy approval, and evaluation remain.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
-- Current safe work: mock-tested, disabled-by-default backend adapter and Cloud
-  Run mapping on `feat/handwriting-myscript-adapter`.
+- Current safe work: dual-gated, direct vector-only frontend POC adapter and
+  rollout runbook on `feat/handwriting-myscript-frontend`.
 - Next gates: target-device Phase A/B exports; written MyScript commercial and
   student-privacy answers; deployed false-flag/secret-mapping validation; and an
   approved, consented raw-stroke corpus before live Phase 3 evaluation.

@@ -88,8 +88,8 @@ The current row identity is used by recognition snapshots, verdict maps, edits,
 undo, notebook persistence, and stale-response protection. It must not be
 removed as part of eliminating PNG segmentation.
 
-Current `origin/main` through `e01d28e` implements the target foundation and
-offline readiness work through Phase C/D:
+Current `origin/main` through `949e1ea` implements the target foundation,
+offline readiness work, and the disabled backend MyScript boundary:
 
 - recognizer, hybrid fallback, and shadow-control adapters;
 - named provider-aware 350ms vector and 750ms image finalization policies;
@@ -98,11 +98,11 @@ offline readiness work through Phase C/D:
 - edit, erase, undo/redo, clear, and navigation invalidation;
 - content-free pointer-to-paint lifecycle events.
 
-Gemini image recognition remains the only enabled provider. A MyScript REST
-adapter and internal route are implemented on
-`feat/handwriting-myscript-adapter`, but provider and route flags remain false;
-the vector primary and its measured service objectives therefore remain future
-work.
+Gemini image recognition remains the only enabled provider. The MyScript REST
+adapter and internal route are merged, but provider and route flags remain
+false. PR #35 implements a direct, no-fallback frontend POC mode behind two more
+false-by-default gates; the vector primary and its measured service objectives
+therefore remain future work.
 
 ## 4. Target architecture
 
@@ -271,8 +271,12 @@ privacy must pass the evaluation plan.
 The first POC reuses VerityAI's existing canvas and sends collected strokes to
 the backend adapter. The adapter accepts only the `linear-equation-v1` profile,
 signs canonical REST bytes server-side, disables solver and JIIX stroke export,
-and is unreachable while either deploy flag is false. It does not replace the
-canvas/editor and is not production evidence until the frozen corpus is replayed.
+and is unreachable while either deploy flag is false. The frontend direct POC
+requires both `VITE_HANDWRITING_MODE=myscript-poc` and
+`VITE_MYSCRIPT_POC_ENABLED=true`; it sends ordered point data without rendering
+PNG and deliberately has no automatic fallback before evaluation. It does not
+replace the canvas/editor and is not production evidence until the frozen corpus
+is replayed.
 
 ### Image fallback
 
