@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, ApiTimeoutError, checkSteps, getHint } from "./api";
+import {
+  ApiError,
+  ApiTimeoutError,
+  checkSteps,
+  getHint,
+  recognizeMyScript,
+} from "./api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -64,5 +70,28 @@ describe("API request wrapper", () => {
     const request = getHint({ level: 1 }, { signal: controller.signal, timeoutMs: 5000 });
     controller.abort();
     await expect(request).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("posts vector ink only to the backend MyScript boundary", async () => {
+    const fetchMock = vi.fn(async () => response({
+      text: "x=3",
+      source: "myscript",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const payload = {
+      schema_version: 1,
+      profile: "linear-equation-v1",
+      strokes: [{ points: [{ x: 1, y: 2, t: 3 }] }],
+      dpi_x: 96,
+      dpi_y: 96,
+    };
+
+    await recognizeMyScript(payload);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "/api/handwriting/myscript/recognize"
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(payload);
   });
 });

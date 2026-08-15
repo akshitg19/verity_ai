@@ -1,10 +1,10 @@
 # Handwriting v2 Implementation Plan
 
 **Status:** Phases 0–2 merged in PR #31 (`cfa06e0`), Phase A/B in PR #32
-(`156d724`), and Phase C/D safe tooling in PR #33 (`e01d28e`); the disabled
-Phase 3 backend adapter is implemented on `feat/handwriting-myscript-adapter`,
-while live Phase 3 still requires written licensing/privacy and approved-corpus
-evidence
+(`156d724`), Phase C/D safe tooling in PR #33 (`e01d28e`), and the disabled
+Phase 3 backend adapter in PR #34 (`949e1ea`); unreachable-by-default frontend
+POC wiring is in progress on `feat/handwriting-myscript-frontend`, while live
+Phase 3 still requires written licensing/privacy and approved-corpus evidence
 **Rule:** One phase per reviewable change unless scope expansion is explicit
 
 ## Phase 0 — Source of truth and safe workspace
@@ -101,9 +101,9 @@ and target-device latency measurement remain explicit follow-up evidence.
 
 ## Phase 3 — MyScript vector POC
 
-**Status:** Safe backend portion implemented with mocks and both deploy flags
-false. Frontend wiring, live traffic, corpus replay, and provider evidence remain
-blocked or pending.
+**Status:** Safe backend portion merged with both deploy flags false. Direct
+vector-only frontend wiring is implemented behind two additional false-by-default
+gates. Live traffic, corpus replay, and provider evidence remain blocked.
 
 ### Preconditions
 
@@ -354,4 +354,36 @@ privacy/commercial approvals and an approved frozen corpus remain blocked.
 Next action: merge and deploy the disabled revision, verify only its secret
 references and false flags, then add unreachable-by-default frontend POC wiring.
 Do not make a live provider call until every external-call gate closes.
+```
+
+```text
+Date: 2026-08-14
+Branch/commit: feat/handwriting-myscript-frontend (Phase 3 safe frontend change)
+Phase: 3 safe/offline frontend portion
+Implemented: direct MyScript vector adapter; ordered x/y/t/p translation with
+presentation and identity fields removed; algebra-only profile; abort
+propagation; content-safe typed HTTP failures; content-free request timing;
+backend API helper; exact dual Vite gates; no automatic fallback in POC mode;
+production-bundle provider-secret assertions; and a rollout/outage/rollback
+runbook.
+Tests and results: 39 focused adapter/config/API/hybrid/coordinator/workflow tests
+passed; full frontend passed 387 tests across 41 files; lint and App.jsx cap
+(256/260) passed; normal, default
+production, and locally POC-gated production builds passed; both production
+bundle inspections found the expected Cloud Run API base and no MyScript
+provider-secret names. Full backend passed 1219 tests with 3 expected xfails
+and 3 existing OPSIN warnings; the three shape-only fixture examples passed
+manifest validation as intentionally decision-ineligible; all 9 handwriting
+Markdown files passed relative-link validation; targeted frontend source/asset
+scans found no MyScript credential names or local credential path.
+Measured metrics: payload, cancellation, configuration, and content-free metric
+behavior are deterministic only. No external provider request, recognition
+accuracy, target-device latency, request count, or cost is claimed.
+Known risks: PR/CI are pending; the disabled backend revision is not deployed
+because the GCP project has no Cloud Build trigger and Cloud Shell authorization
+requires explicit user approval; vendor privacy/commercial approval, an approved
+corpus, numeric secret versions, and a durable run ledger remain blocked.
+Next action: merge this safe PR when CI is green, then deploy and validate the
+disabled revision after Cloud Shell authorization. Do not enable either frontend
+gate in Vercel.
 ```

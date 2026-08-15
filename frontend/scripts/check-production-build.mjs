@@ -17,4 +17,17 @@ if (source.includes('const API_BASE="/api"') || source.includes("const API_BASE=
   throw new Error("Production bundle still uses /api as its effective API base.");
 }
 
+const forbiddenProviderSecretTokens = [
+  "MYSCRIPT_APPLICATION_KEY",
+  "MYSCRIPT_HMAC_KEY",
+  "verity-myscript-application-key",
+  "verity-myscript-hmac-key",
+];
+for (const token of forbiddenProviderSecretTokens) {
+  if (source.includes(token)) {
+    throw new Error(`Production bundle contains a forbidden provider-secret token: ${token}`);
+  }
+}
+
 console.log(`Production API base verified in ${javascript.length} JavaScript asset(s): ${expected}`);
+console.log("Production bundle contains no MyScript provider-secret names.");

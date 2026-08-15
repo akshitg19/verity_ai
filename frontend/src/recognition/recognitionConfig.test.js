@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import HybridRecognizer from "./HybridRecognizer";
 import ShadowRecognizer from "./ShadowRecognizer";
@@ -6,17 +6,62 @@ import {
   createConfiguredRecognizer,
   HANDWRITING_MODES,
   resolveHandwritingMode,
+  resolveMyScriptPocEnabled,
 } from "./recognitionConfig";
 
 function provider(source, text) {
   return { source, recognize: vi.fn(async () => ({ text })) };
 }
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe("recognition configuration", () => {
   it("defaults unknown configuration to Gemini-only", () => {
     expect(resolveHandwritingMode("not-a-mode")).toBe(HANDWRITING_MODES.GEMINI);
     const gemini = provider("gemini", "x = 1");
     expect(createConfiguredRecognizer({ mode: "invalid", gemini })).toBe(gemini);
+  });
+
+  it("requires both explicit MyScript POC gates and enables no fallback", () => {
+    const gemini = provider("gemini", "gemini");
+    const myscript = {
+      ...provider("myscript", "vector"),
+      inputMode: "vector",
+      supportsProvisional: false,
+    };
+    const createMyScript = vi.fn(() => myscript);
+
+    expect(resolveMyScriptPocEnabled("TRUE")).toBe(false);
+    expect(resolveMyScriptPocEnabled("true")).toBe(true);
+    expect(createConfiguredRecognizer({
+      mode: HANDWRITING_MODES.MYSCRIPT_POC,
+      gemini,
+      myscriptPocEnabled: false,
+      createMyScript,
+    })).toBe(gemini);
+    expect(createMyScript).not.toHaveBeenCalled();
+
+    const selected = createConfiguredRecognizer({
+      mode: HANDWRITING_MODES.MYSCRIPT_POC,
+      gemini,
+      myscriptPocEnabled: true,
+      createMyScript,
+    });
+    expect(selected).toBe(myscript);
+    expect(selected).not.toBeInstanceOf(HybridRecognizer);
+    expect(selected).not.toBeInstanceOf(ShadowRecognizer);
+    expect(createMyScript).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads the two exact Vite gates for the default configuration path", () => {
+    vi.stubEnv("VITE_HANDWRITING_MODE", "myscript-poc");
+    vi.stubEnv("VITE_MYSCRIPT_POC_ENABLED", "true");
+    const gemini = provider("gemini", "gemini");
+    const myscript = provider("myscript", "vector");
+    const createMyScript = vi.fn(() => myscript);
+
+    expect(createConfiguredRecognizer({ gemini, createMyScript })).toBe(myscript);
+    expect(createMyScript).toHaveBeenCalledTimes(1);
   });
 
   it("only constructs hybrid or shadow modes when a primary exists", () => {

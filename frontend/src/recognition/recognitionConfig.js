@@ -1,5 +1,6 @@
 import GeminiImageRecognizer from "./GeminiImageRecognizer";
 import HybridRecognizer from "./HybridRecognizer";
+import MyScriptVectorRecognizer from "./MyScriptVectorRecognizer";
 import ShadowRecognizer from "./ShadowRecognizer";
 import {
   IMAGE_FINALIZATION_POLICY,
@@ -12,6 +13,7 @@ export {
 
 export const HANDWRITING_MODES = Object.freeze({
   GEMINI: "gemini",
+  MYSCRIPT_POC: "myscript-poc",
   SHADOW: "shadow",
   HYBRID: "hybrid",
 });
@@ -26,13 +28,29 @@ export function resolveHandwritingMode(value) {
     : HANDWRITING_MODES.GEMINI;
 }
 
+export function resolveMyScriptPocEnabled(value) {
+  return value === "true";
+}
+
 export function createConfiguredRecognizer({
   mode = resolveHandwritingMode(import.meta.env.VITE_HANDWRITING_MODE),
   gemini = new GeminiImageRecognizer(),
   primary = null,
+  myscriptPocEnabled = resolveMyScriptPocEnabled(
+    import.meta.env.VITE_MYSCRIPT_POC_ENABLED
+  ),
+  createMyScript = () => new MyScriptVectorRecognizer(),
   onShadowResult = null,
   primaryTimeoutMs = DEFAULT_RECOGNITION_TIMEOUT_MS,
 } = {}) {
+  // The direct POC has two independent frontend gates and deliberately has no
+  // automatic image fallback. This keeps vector-only measurements honest and
+  // makes a single mistaken Vercel variable fall back to the shipped Gemini
+  // configuration instead of opening the backend route.
+  if (mode === HANDWRITING_MODES.MYSCRIPT_POC) {
+    if (!myscriptPocEnabled) return gemini;
+    return primary ?? createMyScript();
+  }
   if (!primary || mode === HANDWRITING_MODES.GEMINI) return gemini;
   if (mode === HANDWRITING_MODES.SHADOW) {
     return new ShadowRecognizer({
