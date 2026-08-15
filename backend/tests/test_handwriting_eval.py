@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -335,4 +336,5 @@ def test_plan_enforces_provider_approval_and_request_cap(tmp_path, capsys):
     plan = json.loads(output_path.read_text(encoding="utf-8"))
     assert plan["planned_requests"] == 2
     assert "expected" not in output_path.read_text(encoding="utf-8")
-    assert output_path.stat().st_mode & 0o077 == 0
+    if os.name == "posix":
+        assert output_path.stat().st_mode & 0o077 == 0
