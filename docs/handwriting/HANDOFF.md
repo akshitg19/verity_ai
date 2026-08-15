@@ -4,13 +4,13 @@
 
 **Status:** Phases 0–2, Phase A/B, provider readiness, the disabled MyScript
 backend adapter, and unreachable-by-default frontend wiring are merged through
-PRs #31–#35. Durable POC attempt-ledger enforcement is in progress; live
-vector-provider POC and target-device evidence remain unavailable. PR #36 adds
-the durable ledger guardrail without enabling provider traffic.
+PRs #31–#36. The durable POC attempt-ledger guardrail is merged without enabling
+provider traffic. PR #37 adds the explicit no-decision provider report
+checkpoint; live vector-provider POC and target-device evidence remain unavailable.
 
-**Working branch:** `feat/handwriting-poc-ledger`
+**Working branch:** `docs/handwriting-evaluation-checkpoint`
 
-**Base:** `origin/main` at `5e40375`
+**Base:** `origin/main` at `a584368`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
@@ -552,7 +552,8 @@ it has no automatic image fallback. No external call, deployed-revision metadata
 proof, POC corpus run, or measured result exists. The route additionally requires
 the existing API access-control header before it can open. Provider/legal
 evidence, offline evaluation harness, and rollback procedure are in
-`provider-readiness.md`, `fixtures/README.md`, and `rollout-runbook.md`.
+`provider-readiness.md`, `fixtures/README.md`, `provider-evaluation-report.md`,
+and `rollout-runbook.md`.
 
 ### No Luna integration
 
