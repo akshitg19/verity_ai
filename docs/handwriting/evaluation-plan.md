@@ -150,6 +150,13 @@ gate after seeing results without recording the product decision and rationale.
 7. Publish aggregate results and failure examples permitted by consent.
 8. Record a go/no-go decision in the architecture decision table.
 
+The repository's offline tooling implements the validation, replay-plan, and
+aggregate-scoring boundary described here. See
+`docs/handwriting/fixtures/README.md`. Provider adapters consume a
+ground-truth-free plan and create restricted prediction JSONL; the scorer is the
+only step that combines predictions with truth. The tooling makes no provider
+calls by itself.
+
 ## 9. Privacy and retention
 
 - Use explicit consent for retained handwriting samples.
@@ -159,6 +166,8 @@ gate after seeing results without recording the product decision and rationale.
 - Define a retention/deletion policy before collecting production samples.
 - Do not send one student's ink to multiple providers outside an approved
   evaluation or fallback policy.
+- List each permitted processor in `consent.approved_providers`; a generic
+  “external provider” consent is not sufficient for the replay planner.
 
 ## 10. Required report
 
@@ -179,4 +188,3 @@ Privacy/licensing notes:
 Recommendation:
 Known uncertainty:
 ```
-

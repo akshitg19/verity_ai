@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verityai.example/schemas/handwriting-prediction-v1.json",
+  "title": "VerityAI handwriting provider prediction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "fixture_id",
+    "run_id",
+    "provider",
+    "model",
+    "configuration_id",
+    "status",
+    "benchmark_eligible"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "fixture_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "provider": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "model": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]+$",
+      "maxLength": 120
+    },
+    "configuration_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "status": { "enum": ["ok", "timeout", "error", "skipped"] },
+    "benchmark_eligible": { "type": "boolean" },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "text", "unreadable"],
+      "properties": {
+        "format": { "enum": ["ascii", "latex", "jiix", "smiles", "text"] },
+        "text": { "type": "string", "maxLength": 10000 },
+        "candidates": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "type": "string", "maxLength": 10000 },
+          "uniqueItems": true
+        },
+        "unreadable": { "type": "boolean" }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "latency_ms": { "type": "number", "minimum": 0, "maximum": 600000 },
+        "request_bytes": { "type": "integer", "minimum": 0, "maximum": 10485760 },
+        "cost_usd": { "type": "number", "minimum": 0, "maximum": 1000 },
+        "parse_success": { "type": "boolean" },
+        "fallback_used": { "type": "boolean" },
+        "correction_required": { "type": "boolean" },
+        "cold_start": { "type": "boolean" }
+      }
+    },
+    "error_code": {
+      "enum": [
+        "timeout",
+        "rate_limited",
+        "quota_exhausted",
+        "authentication",
+        "invalid_request",
+        "service_unavailable",
+        "provider_error",
+        "adapter_error",
+        "policy_blocked"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "ok" } } },
+      "then": { "required": ["output"] }
+    },
+    {
+      "if": {
+        "properties": { "status": { "enum": ["timeout", "error"] } },
+        "required": ["status"]
+      },
+      "then": { "required": ["error_code"] }
+    }
+  ]
+}

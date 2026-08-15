@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verityai.example/schemas/handwriting-strokes-v1.json",
+  "title": "VerityAI handwriting stroke fixture",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "canvas", "strokes"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "canvas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "units", "origin"],
+      "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+        "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+        "units": { "const": "css_px" },
+        "origin": { "const": "top_left" }
+      }
+    },
+    "strokes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["points"],
+        "properties": {
+          "pointer_type": {
+            "enum": ["pen", "touch", "mouse", "synthetic"]
+          },
+          "points": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4096,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["x", "y", "t", "p"],
+              "properties": {
+                "x": { "type": "number", "minimum": -1000, "maximum": 11000 },
+                "y": { "type": "number", "minimum": -1000, "maximum": 11000 },
+                "t": { "type": "number", "minimum": 0 },
+                "p": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,8 +1,9 @@
 # Handwriting v2 Implementation Plan
 
-**Status:** Phases 0–2 merged to `origin/main` in PR #31 (`cfa06e0`); Phase A/B
-measurement tooling is implemented on `feat/handwriting-completion`; Phase 3
-still requires licensing/privacy and approved-corpus evidence
+**Status:** Phases 0–2 merged in PR #31 (`cfa06e0`) and Phase A/B merged in PR
+#32 (`156d724`); Phase C/D safe tooling is implemented on
+`feat/handwriting-provider-readiness`; live Phase 3 still requires written
+licensing/privacy and approved-corpus evidence
 **Rule:** One phase per reviewable change unless scope expansion is explicit
 
 ## Phase 0 — Source of truth and safe workspace
@@ -101,9 +102,14 @@ and target-device latency measurement remain explicit follow-up evidence.
 
 ### Preconditions
 
-- Approved MyScript account/credentials and licensing review.
-- Backend credential storage design.
-- Fixture corpus with consent and expected canonical outputs.
+- Complete MyScript account/credentials and backend secret storage (complete).
+- Written licensing/privacy approval before external calls or student data.
+- Fixture corpus with provider-specific consent and expected canonical outputs
+  before live evaluation.
+
+The backend adapter, HMAC fixtures, error mapping, request caps, and disabled
+Cloud Run configuration may be implemented with mocks before the external-call
+preconditions close.
 
 ### Scope
 
@@ -286,4 +292,32 @@ preview requires existing `verity-ai2` Vercel team access; the internal query
 variant must be cleaned up after the comparison.
 Next action: use the documented PR #32 preview to collect paired target-device
 exports, then continue provider-readiness and corpus-harness work.
+```
+
+```text
+Date: 2026-08-14
+Branch/commit: feat/handwriting-provider-readiness
+Phase: C and D safe/offline portion
+Implemented: official-source provider, pricing, privacy, licensing, and minor-
+use review; MyScript REST/HMAC/secret-mapping design; 650-call POC budget;
+vendor-question draft; Draft 2020-12 fixture/stroke/prediction schemas; strict
+path, size, review, retention, provider-approval, and PII guards; a
+ground-truth-free replay planner; and content-free aggregate scoring with
+category/device/browser breakdowns.
+Tests and results: 10 handwriting-evaluation tests passed on Python 3.12;
+shape-only example validation and example scoring passed. A clean full backend
+rerun passed 1195 tests with 3 expected xfails and 3 existing OPSIN warnings.
+An earlier run exposed one pre-existing random-ID test flake when its opaque
+session ID happened to contain the answer string; it passed alone and in the
+clean full rerun.
+Measured metrics: tooling behavior is verified; the included fixture-echo
+example is explicitly benchmark-ineligible and supplies no provider evidence.
+Known risks: no approved 30–50 smoke or 300–500 decision corpus exists;
+MyScript free-trial result use, FERPA/COPPA/minor terms, commercial price, and
+attribution/publicity terms remain unresolved; current Google Generative AI
+terms contain an under-18 application restriction relevant to the Gemini
+baseline.
+Next action: merge the safe tooling, implement the disabled-by-default MyScript
+backend adapter with mocks, map secrets to a non-traffic Cloud Run revision,
+and obtain the external approvals/corpus before making a live call.
 ```

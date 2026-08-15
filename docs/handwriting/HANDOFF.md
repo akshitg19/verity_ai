@@ -2,12 +2,13 @@
 
 **Handoff date:** 2026-08-14
 
-**Status:** Phases 0–2 merged through PR #31; Phase A/B measurement tooling is
-implemented; vector-provider POC and target-device evidence remain
+**Status:** Phases 0–2 merged through PR #31 and Phase A/B tooling merged
+through PR #32; provider-readiness evidence and offline evaluation tooling are
+implemented; live vector-provider POC and target-device evidence remain
 
-**Working branch:** `feat/handwriting-completion`
+**Working branch:** `feat/handwriting-provider-readiness`
 
-**Base:** `origin/main` at `cfa06e0`
+**Base:** `origin/main` at `156d724`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
@@ -56,7 +57,9 @@ The merged Phase 2 implementation removes the fixed 1500ms gate and serial
 recognition queue, but it
 does not claim a measured 300–500ms result. Target-device latency and live
 corpus measurements remain outstanding. MyScript and GPT-5.6 Luna are
-candidates, not working integrations yet.
+candidates, not working integrations yet. MyScript account/key/secret setup is
+complete; `provider-readiness.md` records the contractual and privacy blockers
+that prevent student traffic.
 
 ## 2. Workspace and Git state
 
@@ -99,7 +102,8 @@ The Phase 0/1 handwriting work was committed separately:
 Phase 2 followed it and both changes were merged by PR #31 at `cfa06e0`. The
 historical worktree was then removed. Current continuation work is isolated in
 `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal` on
-`feat/handwriting-completion`; the dirty landing-page worktree remains intact.
+`feat/handwriting-provider-readiness`; Phase A/B was merged by PR #32 at
+`156d724`. The dirty landing-page worktree remains intact.
 
 The obsolete `verity_ai-frontend-polish` worktree was removed on 2026-08-14
 after verifying that it was clean and its branch was already an ancestor of
@@ -536,7 +540,8 @@ remain only in the local ignored secret file and two GCP Secret Manager secrets;
 the Cloud Run runtime service account has accessor permission. There is still no
 backend route, protocol client, Cloud Run secret-to-environment mapping,
 LaTeX/JIIX normalizer, deployed POC, or measured result. A clean frontend adapter
-boundary exists for the POC.
+boundary exists for the POC. Provider/legal evidence and an offline evaluation
+harness now exist in `provider-readiness.md` and `fixtures/README.md`.
 
 ### No Luna integration
 
@@ -546,8 +551,8 @@ request path, prompt, or production dependency was added.
 ### No provider benchmark corpus
 
 The repository has legacy PNG samples and three schema examples, but not the
-required 300–500 consented raw-stroke fixtures. No live Gemini corpus or device
-benchmark was run as part of the deterministic Phase 2 validation.
+required 30–50 approved smoke fixtures or 300–500 consented decision fixtures.
+No live provider corpus or target-device benchmark has been run.
 
 ### No general row-model rewrite
 
@@ -643,9 +648,10 @@ internal feature flag only
 
 Do not begin by replacing the full canvas/editor.
 
-POC dataset should include at least 300–500 expressions across writers and
-target devices, with fractions, exponents, ambiguous symbols, edits, and writing
-quality variation.
+Start with 30–50 synthetic or expressly approved internal expressions. Freeze a
+300–500 expression decision corpus across writers and target devices only after
+the smoke passes and the provider/privacy gates close. Include fractions,
+exponents, ambiguous symbols, edits, and writing-quality variation.
 
 The vector provider becomes primary only if category-level exact match,
 parse-success rate, latency, privacy, licensing, and fallback-rate gates pass.
@@ -741,10 +747,12 @@ phase branch based on the latest `origin/main`.
 
 Read docs/handwriting/HANDOFF.md, README.md, architecture-v2.md,
 implementation-plan.md, and evaluation-plan.md. Inspect the current code and
-tests. Confirm the Phase 3 preconditions before writing provider code: approved
-MyScript credentials/licensing, a backend secret-storage decision, and a
-consented raw-stroke fixture corpus. If any are absent, report that blocker and
-work only on obtaining or specifying the missing precondition.
+tests. Confirm the Phase 3 external-call preconditions before enabling traffic:
+approved MyScript licensing/privacy terms and a provider-approved raw-stroke
+fixture corpus. Account credentials and backend secret storage already exist.
+If external preconditions are absent, keep traffic disabled and implement only
+safe mock-tested adapter, HMAC, error-mapping, deployment-metadata, and corpus
+tooling work.
 
 Once all preconditions exist, implement only the internal linear-equation
 MyScript POC. Preserve the existing canvas, stable expression identity,
@@ -775,7 +783,9 @@ corpus and target devices have been measured.
 Safe to review now:
 
 - architecture decisions are documented;
-- fixture/evaluation structure exists;
+- provider licensing/privacy evidence and explicit go/no-go gates exist;
+- fixture/stroke/prediction schemas, provider-approved replay planning, and
+  content-free aggregate scoring exist;
 - math workflow is provider-decoupled;
 - Gemini remains the safe default;
 - hybrid and shadow routing are tested;
@@ -795,5 +805,7 @@ Not safe to claim yet:
 - Luna is better than Gemini;
 - complex chemistry or full undergraduate math is supported.
 
-The next change is the MyScript POC only after its credentials, licensing,
-secret-storage, and consented-corpus preconditions are met.
+The next safe change is the disabled-by-default, mock-tested MyScript backend
+adapter and Cloud Run secret mapping. Live POC calls remain blocked on the
+written licensing/privacy answers and approved corpus recorded in
+`provider-readiness.md`.
