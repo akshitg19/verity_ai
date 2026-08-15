@@ -288,7 +288,7 @@ Rules:
 | Backend REST adapter with mock tests | Implemented; live call blocked | Fixed HMAC vector, exact-body mock, timeout/error/retry/cap tests, bounded schemas, content-safe logging |
 | Cloud Run secret-to-environment mapping | Implemented in deploy config; runtime verification pending | Revision metadata showing both mappings and both false flags, never values |
 | Direct frontend POC adapter | Implemented in PR #35 | Dual-gate config tests, ordered vector payload, no-PNG/no-local-metadata assertion, cancellation and safe-error tests, production-bundle secret scan |
-| Durable POC attempt ledger | Implemented; merge pending | Owner-only repository-external ledger, concurrent atomic reservations, corruption/identity/cap fail-closed tests, restart persistence, production-factory enforcement |
+| Durable POC attempt ledger | Implemented in PR #36 | Owner-only repository-external ledger, concurrent atomic reservations, corruption/identity/cap fail-closed tests, restart persistence, production-factory enforcement |
 | Synthetic/internal smoke corpus (30–50) | Blocked | Approved sources, two-reviewer truth for decision cases, schema validation |
 | Frozen external corpus (300–500) | Blocked | Consent/provenance, restricted store, retention/deletion policy, target devices |
 | MyScript trial data-use clarification | Blocked | Written answer reconciling trial research access with DPA transient processing |

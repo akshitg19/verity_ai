@@ -52,8 +52,8 @@ for implementation decisions.
   verification, licensing/privacy approval, and evaluation remain.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
-- Current safe work: repository-external durable POC attempt ledger and
-  production-factory enforcement on `feat/handwriting-poc-ledger`.
+- Current safe work: PR #36 adds a repository-external durable POC attempt
+  ledger and production-factory enforcement.
 - Next gates: target-device Phase A/B exports; written MyScript commercial and
   student-privacy answers; deployed false-flag/secret-mapping validation; and an
   approved, consented raw-stroke corpus before live Phase 3 evaluation.

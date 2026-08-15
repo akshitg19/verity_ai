@@ -5,7 +5,8 @@
 **Status:** Phases 0–2, Phase A/B, provider readiness, the disabled MyScript
 backend adapter, and unreachable-by-default frontend wiring are merged through
 PRs #31–#35. Durable POC attempt-ledger enforcement is in progress; live
-vector-provider POC and target-device evidence remain unavailable.
+vector-provider POC and target-device evidence remain unavailable. PR #36 adds
+the durable ledger guardrail without enabling provider traffic.
 
 **Working branch:** `feat/handwriting-poc-ledger`
 

@@ -103,9 +103,8 @@ and target-device latency measurement remain explicit follow-up evidence.
 
 **Status:** Safe backend portion merged with both deploy flags false. Direct
 vector-only frontend wiring is implemented behind two additional false-by-default
-gates. Durable cross-restart attempt-ledger enforcement is implemented on
-`feat/handwriting-poc-ledger`. Live traffic, corpus replay, and provider evidence
-remain blocked.
+gates. PR #36 implements durable cross-restart attempt-ledger enforcement. Live
+traffic, corpus replay, and provider evidence remain blocked.
 
 ### Preconditions
 
@@ -394,7 +393,7 @@ gate in Vercel.
 
 ```text
 Date: 2026-08-14
-Branch/commit: feat/handwriting-poc-ledger (Phase 3 durable-budget change)
+Branch/commit: feat/handwriting-poc-ledger at 8e921e4 (PR #36)
 Phase: 3 safe/offline live-traffic guardrail
 Implemented: repository-external owner-only append-only attempt ledger;
 content-free run/provider/cap/sequence schema; atomic multi-worker lock and
