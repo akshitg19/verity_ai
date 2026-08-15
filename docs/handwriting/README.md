@@ -38,13 +38,14 @@ for implementation decisions.
 
 - Architecture status: Phase 0–2 merged by PR #31 (`cfa06e0`), Phase A/B by PR
   #32 (`156d724`), and provider readiness/offline evaluation by PR #33
-  (`e01d28e`). The disabled backend adapter was merged by PR #34 (`949e1ea`).
+  (`e01d28e`). The disabled backend adapter was merged by PR #34 (`949e1ea`),
+  and PR #35 adds the disabled frontend POC boundary.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: the backend MyScript REST adapter and internal route are
-  merged. Unreachable-by-default frontend POC wiring is in progress on
-  `feat/handwriting-myscript-frontend`; no live call is enabled.
+  merged. PR #35 implements unreachable-by-default frontend POC wiring; no live
+  call is enabled.
 - Recommended vector POC: MyScript iink. The developer application, local
   credential file, GCP secrets, and runtime-service-account secret access are
   complete. Disabled deployment mapping is merged; revision-metadata

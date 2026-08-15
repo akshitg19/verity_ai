@@ -3,9 +3,9 @@
 **Handoff date:** 2026-08-14
 
 **Status:** Phases 0–2, Phase A/B, and provider-readiness/offline evaluation are
-merged through PRs #31–#34; the disabled MyScript backend adapter and deploy
-mapping are merged, and unreachable-by-default frontend wiring is in progress;
-live vector-provider POC and target-device evidence remain
+implemented through PRs #31–#35; the disabled MyScript backend adapter and
+deploy mapping are merged, and PR #35 adds unreachable-by-default frontend
+wiring; live vector-provider POC and target-device evidence remain
 
 **Working branch:** `feat/handwriting-myscript-frontend`
 

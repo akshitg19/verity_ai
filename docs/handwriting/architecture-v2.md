@@ -100,7 +100,7 @@ offline readiness work, and the disabled backend MyScript boundary:
 
 Gemini image recognition remains the only enabled provider. The MyScript REST
 adapter and internal route are merged, but provider and route flags remain
-false. A direct, no-fallback frontend POC mode is being added behind two more
+false. PR #35 implements a direct, no-fallback frontend POC mode behind two more
 false-by-default gates; the vector primary and its measured service objectives
 therefore remain future work.
 

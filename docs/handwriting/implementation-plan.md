@@ -3,8 +3,8 @@
 **Status:** Phases 0–2 merged in PR #31 (`cfa06e0`), Phase A/B in PR #32
 (`156d724`), Phase C/D safe tooling in PR #33 (`e01d28e`), and the disabled
 Phase 3 backend adapter in PR #34 (`949e1ea`); unreachable-by-default frontend
-POC wiring is in progress on `feat/handwriting-myscript-frontend`, while live
-Phase 3 still requires written licensing/privacy and approved-corpus evidence
+POC wiring is implemented in PR #35, while live Phase 3 still requires written
+licensing/privacy and approved-corpus evidence
 **Rule:** One phase per reviewable change unless scope expansion is explicit
 
 ## Phase 0 — Source of truth and safe workspace
