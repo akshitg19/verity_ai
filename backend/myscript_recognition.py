@@ -12,11 +12,12 @@ import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from threading import Lock
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Protocol
 from urllib.parse import urlsplit
 
 import httpx
 
+from handwriting_eval.ledger import AttemptLedgerError, DurableAttemptLedger
 from handwriting_normalization import normalize_expression
 from schemas import MyScriptRecognizeRequest
 
@@ -52,6 +53,8 @@ class MyScriptSettings:
     recognition_url: str = DEFAULT_RECOGNITION_URL
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
     request_cap: int = DEFAULT_REQUEST_CAP
+    eval_ledger_path: str = ""
+    eval_run_id: str = ""
 
     def __repr__(self) -> str:
         return (
@@ -60,6 +63,7 @@ class MyScriptSettings:
             f"recognition_url={self.recognition_url!r}, "
             f"timeout_seconds={self.timeout_seconds!r}, "
             f"request_cap={self.request_cap!r}, "
+            f"eval_ledger_configured={bool(self.eval_ledger_path and self.eval_run_id)!r}, "
             f"credentials_configured={bool(self.application_key and self.hmac_key)!r})"
         )
 
@@ -84,8 +88,12 @@ class MyScriptSettings:
         )
         application_key = os.getenv("MYSCRIPT_APPLICATION_KEY", "").strip()
         hmac_key = os.getenv("MYSCRIPT_HMAC_KEY", "").strip()
+        eval_ledger_path = os.getenv("MYSCRIPT_EVAL_LEDGER_PATH", "").strip()
+        eval_run_id = os.getenv("MYSCRIPT_EVAL_RUN_ID", "").strip()
         if enabled and (not application_key or not hmac_key):
             raise MyScriptRecognitionError("credentials_not_configured")
+        if enabled and (not eval_ledger_path or not eval_run_id):
+            raise MyScriptRecognitionError("request_ledger_not_configured")
         if len(application_key) > 1024 or len(hmac_key) > 1024:
             raise MyScriptRecognitionError("credentials_invalid")
         return cls(
@@ -95,6 +103,8 @@ class MyScriptSettings:
             recognition_url=recognition_url,
             timeout_seconds=timeout_seconds,
             request_cap=request_cap,
+            eval_ledger_path=eval_ledger_path,
+            eval_run_id=eval_run_id,
         )
 
 
@@ -126,6 +136,13 @@ class RequestBudget:
     def used(self) -> int:
         with self._lock:
             return self._used
+
+
+class AttemptBudget(Protocol):
+    def reserve(self) -> int: ...
+
+    @property
+    def used(self) -> int: ...
 
 
 def _parse_enabled(raw_value: str) -> bool:
@@ -405,12 +422,25 @@ class MyScriptRecognizer:
         *,
         transport: httpx.AsyncBaseTransport | None = None,
         sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
-        budget: RequestBudget | None = None,
+        budget: AttemptBudget | None = None,
     ):
         self.settings = settings
         self.transport = transport
         self.sleeper = sleeper
         self.budget = budget or RequestBudget(settings.request_cap)
+
+    def _reserve_attempt(self) -> None:
+        failure: MyScriptRecognitionError | None = None
+        try:
+            self.budget.reserve()
+        except AttemptLedgerError as exc:
+            failure = MyScriptRecognitionError(
+                exc.code
+                if exc.code == "request_cap_exhausted"
+                else "request_ledger_unavailable"
+            )
+        if failure is not None:
+            raise failure
 
     async def recognize(
         self, request: MyScriptRecognizeRequest
@@ -448,7 +478,7 @@ class MyScriptRecognizer:
             trust_env=False,
         ) as client:
             while attempts < MAX_PROVIDER_ATTEMPTS:
-                self.budget.reserve()
+                self._reserve_attempt()
                 attempts += 1
                 transport_failure: MyScriptRecognitionError | None = None
                 try:
@@ -512,4 +542,16 @@ class MyScriptRecognizer:
 
 @lru_cache(maxsize=1)
 def get_myscript_recognizer() -> MyScriptRecognizer:
-    return MyScriptRecognizer(MyScriptSettings.from_env())
+    settings = MyScriptSettings.from_env()
+    budget: AttemptBudget | None = None
+    if settings.enabled:
+        try:
+            budget = DurableAttemptLedger(
+                settings.eval_ledger_path,
+                run_id=settings.eval_run_id,
+                provider="myscript",
+                request_cap=settings.request_cap,
+            )
+        except AttemptLedgerError:
+            raise MyScriptRecognitionError("request_ledger_unavailable") from None
+    return MyScriptRecognizer(settings, budget=budget)

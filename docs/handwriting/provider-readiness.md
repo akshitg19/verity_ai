@@ -145,7 +145,15 @@ MYSCRIPT_POC_ROUTE_ENABLED=false
 MYSCRIPT_RECOGNITION_URL=https://cloud.myscript.com/api/v4.0/iink/recognize
 MYSCRIPT_TIMEOUT_SECONDS=3
 MYSCRIPT_EVAL_REQUEST_CAP=650
+MYSCRIPT_EVAL_LEDGER_PATH=/approved/durable/store/run.handwriting-ledger.jsonl
+MYSCRIPT_EVAL_RUN_ID=approved-content-free-run-id
 ```
+
+The ledger path and run ID are required only when the provider is enabled. The
+path must be absolute, outside the repository, owner-only, and backed by the
+approved durable replay store; an ephemeral Cloud Run filesystem does not meet
+the cross-restart budget requirement. The ledger stores only its provider, run
+ID, cap, and monotonically increasing reservation sequence.
 
 `cloudbuild.yaml` maps the two existing Secret Manager resources to the two
 runtime environment names with Cloud Run's `--update-secrets` option. The first
@@ -280,6 +288,7 @@ Rules:
 | Backend REST adapter with mock tests | Implemented; live call blocked | Fixed HMAC vector, exact-body mock, timeout/error/retry/cap tests, bounded schemas, content-safe logging |
 | Cloud Run secret-to-environment mapping | Implemented in deploy config; runtime verification pending | Revision metadata showing both mappings and both false flags, never values |
 | Direct frontend POC adapter | Implemented in PR #35 | Dual-gate config tests, ordered vector payload, no-PNG/no-local-metadata assertion, cancellation and safe-error tests, production-bundle secret scan |
+| Durable POC attempt ledger | Implemented; merge pending | Owner-only repository-external ledger, concurrent atomic reservations, corruption/identity/cap fail-closed tests, restart persistence, production-factory enforcement |
 | Synthetic/internal smoke corpus (30–50) | Blocked | Approved sources, two-reviewer truth for decision cases, schema validation |
 | Frozen external corpus (300–500) | Blocked | Consent/provenance, restricted store, retention/deletion policy, target devices |
 | MyScript trial data-use clarification | Blocked | Written answer reconciling trial research access with DPA transient processing |

@@ -2,14 +2,14 @@
 
 **Handoff date:** 2026-08-14
 
-**Status:** Phases 0–2, Phase A/B, and provider-readiness/offline evaluation are
-implemented through PRs #31–#35; the disabled MyScript backend adapter and
-deploy mapping are merged, and PR #35 adds unreachable-by-default frontend
-wiring; live vector-provider POC and target-device evidence remain
+**Status:** Phases 0–2, Phase A/B, provider readiness, the disabled MyScript
+backend adapter, and unreachable-by-default frontend wiring are merged through
+PRs #31–#35. Durable POC attempt-ledger enforcement is in progress; live
+vector-provider POC and target-device evidence remain unavailable.
 
-**Working branch:** `feat/handwriting-myscript-frontend`
+**Working branch:** `feat/handwriting-poc-ledger`
 
-**Base:** `origin/main` at `949e1ea`
+**Base:** `origin/main` at `5e40375`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
@@ -58,8 +58,8 @@ The merged Phase 2 implementation removes the fixed 1500ms gate and serial
 recognition queue, but it
 does not claim a measured 300–500ms result. Target-device latency and live
 corpus measurements remain outstanding. MyScript now has a mock-tested backend
-adapter and disabled internal route. Direct vector-only frontend wiring is being
-added behind two independent frontend gates, but there is no live integration;
+adapter and disabled internal route. Direct vector-only frontend wiring is
+merged behind two independent frontend gates, but there is no live integration;
 GPT-5.6 Luna remains only a candidate. MyScript account/key/secret setup is
 complete, and `provider-readiness.md` records the contractual and privacy
 blockers that prevent student traffic.
@@ -107,8 +107,9 @@ historical worktree was then removed. Current continuation work is isolated in
 `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`; Phase A/B was
 merged by PR #32 at `156d724`, and provider readiness/offline evaluation was
 merged by PR #33 at `e01d28e`. The backend adapter was merged by PR #34 at
-`949e1ea`; current work is on `feat/handwriting-myscript-frontend`. The dirty
-landing-page worktree remains intact.
+`949e1ea`, and the dual-gated frontend POC boundary was merged by PR #35 at
+`5e40375`. Current work is on `feat/handwriting-poc-ledger`. The dirty landing-
+page worktree remains intact.
 
 The obsolete `verity_ai-frontend-polish` worktree was removed on 2026-08-14
 after verifying that it was clean and its branch was already an ancestor of

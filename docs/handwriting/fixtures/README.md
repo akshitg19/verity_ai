@@ -78,6 +78,42 @@ python -m handwriting_eval.cli plan \
   --decision-run
 ```
 
+Create the separate content-free attempt ledger on the approved durable store,
+outside the repository. Its identity and cap must exactly match the replay run:
+
+```bash
+python -m handwriting_eval.cli ledger-init \
+  --ledger /approved/store/runs/myscript-rest-poc-1.handwriting-ledger.jsonl \
+  --provider myscript \
+  --run-id myscript-rest-poc-1 \
+  --request-cap 650
+```
+
+Every replay executor must reserve exactly one ledger sequence immediately
+before each HTTP attempt, including retries and failed attempts. The MyScript
+production factory does this internally through the Python API. The standalone
+command below is an integration/diagnostic hook for an executor that does not
+call that factory; never run both mechanisms for the same attempt, or it will be
+counted twice:
+
+```bash
+python -m handwriting_eval.cli ledger-reserve \
+  --ledger /approved/store/runs/myscript-rest-poc-1.handwriting-ledger.jsonl \
+  --provider myscript \
+  --run-id myscript-rest-poc-1 \
+  --request-cap 650
+```
+
+Use `ledger-status` with the same arguments for a content-free before/after
+record. The append-only sequence survives executor restarts and stops before
+attempt 651. It fails closed on corruption, identity mismatch, owner-permission
+violations, an existing lock, or an exhausted cap. A reservation abandoned by a
+crash still consumes budget. Do not delete a stale lock or edit/reset a ledger
+without a recorded operator review and reconciliation with the provider
+dashboard. The MyScript production factory also refuses to enable without
+`MYSCRIPT_EVAL_LEDGER_PATH` and `MYSCRIPT_EVAL_RUN_ID`; the path must reference
+this approved durable store, not an ephemeral container filesystem.
+
 After an approved adapter writes predictions matching
 `prediction.schema.json`, produce a content-free aggregate report:
 

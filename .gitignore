@@ -18,3 +18,8 @@ dist/
 CLAUDE.md
 .claude/
 backend/tests/transcription/results.txt
+
+# Restricted handwriting replay artifacts and durable attempt ledgers
+*.plan.json
+*.predictions.jsonl
+*.handwriting-ledger.jsonl*
