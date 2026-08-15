@@ -24,6 +24,9 @@ for implementation decisions.
   Gemini scheduling comparison and content-free export workflow.
 - [Provider readiness](provider-readiness.md) records current official-source
   licensing, privacy, pricing, secret mapping, POC budget, and rollout gates.
+- [Provider evaluation report](provider-evaluation-report.md) records the
+  current no-decision checkpoint and the mandatory category/device report
+  contract; `NOT_MEASURED` fields must not be inferred from examples.
 - [Rollout runbook](rollout-runbook.md) records the disabled deployment check,
   activation prerequisites, monitoring, outage response, and kill switches.
 - [Fixture schema](fixtures/fixture.schema.json) defines the machine-readable
@@ -52,8 +55,8 @@ for implementation decisions.
   verification, licensing/privacy approval, and evaluation remain.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
-- Current safe work: PR #36 adds a repository-external durable POC attempt
-  ledger and production-factory enforcement.
+- Current safe work: explicit `NOT_RUN`/`NO_DECISION` provider report checkpoint
+  and evidence-completeness contract.
 - Next gates: target-device Phase A/B exports; written MyScript commercial and
   student-privacy answers; deployed false-flag/secret-mapping validation; and an
   approved, consented raw-stroke corpus before live Phase 3 evaluation.

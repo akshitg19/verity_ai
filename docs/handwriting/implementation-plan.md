@@ -3,8 +3,9 @@
 **Status:** Phases 0–2 merged in PR #31 (`cfa06e0`), Phase A/B in PR #32
 (`156d724`), Phase C/D safe tooling in PR #33 (`e01d28e`), and the disabled
 Phase 3 backend adapter in PR #34 (`949e1ea`); unreachable-by-default frontend
-POC wiring is implemented in PR #35, while live Phase 3 still requires written
-licensing/privacy and approved-corpus evidence
+POC wiring is implemented in PR #35, and durable attempt-ledger enforcement in
+PR #36 (`a584368`), while live Phase 3 still requires written licensing/privacy
+and approved-corpus evidence
 **Rule:** One phase per reviewable change unless scope expansion is explicit
 
 ## Phase 0 — Source of truth and safe workspace
@@ -137,6 +138,11 @@ preconditions close.
 - Results can be reproduced from stored consented fixtures.
 
 ## Phase 4 — Shadow evaluation
+
+**Status:** The report contract and explicit `NOT_RUN`/`NO_DECISION` checkpoint
+are implemented in `provider-evaluation-report.md`. Live smoke, frozen-corpus,
+target-device, and provider-decision evidence remain blocked by the recorded
+external gates.
 
 ### Scope
 
@@ -424,4 +430,28 @@ Next action: merge this safe guardrail PR when CI is green. Then deploy only the
 disabled revision after Cloud Shell authorization. Do not initialize or mount a
 live ledger, enable either backend flag, or call the provider until its storage,
 vendor, corpus, and operator gates close.
+```
+
+```text
+Date: 2026-08-14
+Branch/commit: docs/handwriting-evaluation-checkpoint (Phase 4 report contract)
+Phase: 4 safe/offline decision checkpoint
+Implemented: authoritative provider-evaluation report with explicit NOT_RUN and
+NO_DECISION state; decision-eligibility gate; exact external owners and evidence;
+run/corpus/configuration identity; category, device, browser, critical-symbol,
+latency, lifecycle-integrity, operations, request, and cost tables; immutable
+NOT_MEASURED semantics; and GO/CATEGORY_LIMITED_GO/NO_GO decision protocol.
+Tests and results: all 11 handwriting Markdown files passed relative-link
+validation; changed-diff sensitive-pattern scan and `git diff --check` passed.
+The base `a584368` had green post-merge Linux backend, Windows backend, and
+frontend CI before this documentation-only change.
+Measured metrics: none. The fixture examples remain decision-ineligible and no
+example output was promoted into the report. No provider accuracy, latency,
+request count, cost, or go/no-go result is claimed.
+Known risks: PR/CI are pending; disabled Cloud Run deployment, vendor/legal
+answers, approved corpora and durable store, target devices, and live evaluation
+remain externally blocked.
+Next action: merge this report checkpoint when CI is green. Then deploy only the
+disabled backend revision after explicit Cloud Shell authorization; keep all
+provider gates false until every report eligibility row closes.
 ```
