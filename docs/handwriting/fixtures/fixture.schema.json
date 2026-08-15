@@ -13,6 +13,7 @@
     "inputs",
     "expected",
     "tags",
+    "annotation",
     "consent"
   ],
   "properties": {
@@ -28,16 +29,22 @@
     },
     "topic": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
     },
     "difficulty": {
       "enum": ["basic", "intermediate", "advanced", "ambiguous"]
     },
     "device_group": {
-      "type": "string"
+      "type": "string",
+      "maxLength": 80,
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
     },
     "browser_group": {
-      "type": "string"
+      "type": "string",
+      "maxLength": 80,
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
     },
     "inputs": {
       "type": "object",
@@ -106,6 +113,7 @@
     "annotation": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["reviewer_count", "status"],
       "properties": {
         "reviewer_count": {
           "type": "integer",
@@ -115,23 +123,49 @@
           "enum": ["draft", "reviewed", "adjudicated"]
         },
         "notes": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 240
         }
       }
     },
     "consent": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["retention_approved"],
+      "required": [
+        "retention_approved",
+        "retention_policy_id",
+        "source",
+        "provenance_id",
+        "approved_providers"
+      ],
       "properties": {
         "retention_approved": {
           "type": "boolean"
         },
+        "retention_policy_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]+$",
+          "maxLength": 80
+        },
         "source": {
           "enum": ["synthetic", "internal", "consented_user"]
+        },
+        "provenance_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]+$",
+          "maxLength": 80
+        },
+        "approved_providers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]+$"
+          },
+          "uniqueItems": true
         }
       }
     }
   }
 }
-

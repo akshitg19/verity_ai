@@ -1,6 +1,10 @@
 # VerityAI Handwriting v2
 
 This directory is the source of truth for the handwriting-recognition redesign.
+
+Provider licensing, privacy, credential mapping, and POC go/no-go evidence are
+tracked in `provider-readiness.md`. Corpus and scorer commands are documented in
+`fixtures/README.md`.
 It replaces chat history and the older workspace-level handoff as the authority
 for implementation decisions.
 
@@ -18,16 +22,20 @@ for implementation decisions.
   baseline, lifecycle coverage, and the outstanding target-device evidence.
 - [Internal A/B comparison](internal-ab-comparison.md) defines the consented
   Gemini scheduling comparison and content-free export workflow.
+- [Provider readiness](provider-readiness.md) records current official-source
+  licensing, privacy, pricing, secret mapping, POC budget, and rollout gates.
 - [Fixture schema](fixtures/fixture.schema.json) defines the machine-readable
   test-case format.
+- [Stroke schema](fixtures/stroke.schema.json) bounds replayable digital ink,
+  and [prediction schema](fixtures/prediction.schema.json) defines restricted
+  provider-run output.
 - [Example fixtures](fixtures/cases.example.jsonl) show valid JSONL records. They
   are examples, not benchmark results.
 
 ## Status
 
 - Architecture status: implemented through Phase 2 on `origin/main` by PR #31
-  (`cfa06e0`); Phase A/B tooling is under review on
-  `feat/handwriting-completion`.
+  (`cfa06e0`); Phase A/B tooling was merged by PR #32 (`156d724`).
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
@@ -38,9 +46,11 @@ for implementation decisions.
   and evaluation remain.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
-- Next gates: target-device Phase A/B exports; current provider/licensing and
-  privacy evidence; backend secret-to-environment mapping; and an approved,
-  consented raw-stroke corpus before live Phase 3 evaluation.
+- Current safe work: provider-readiness evidence and an offline fixture/plan/
+  scoring harness on `feat/handwriting-provider-readiness`.
+- Next gates: target-device Phase A/B exports; written MyScript commercial and
+  student-privacy answers; backend adapter and secret-to-environment mapping;
+  and an approved, consented raw-stroke corpus before live Phase 3 evaluation.
 
 ## Working agreement for AI-assisted changes
 
