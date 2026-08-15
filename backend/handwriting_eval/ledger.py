@@ -10,6 +10,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 from typing import Any, Iterator
 
 
@@ -18,11 +19,13 @@ MYSCRIPT_POC_ATTEMPT_CAP = 650
 MAX_GENERIC_ATTEMPT_CAP = 10_000
 MAX_LEDGER_BYTES = 512 * 1024
 MAX_LEDGER_LINE_BYTES = 4096
-LOCK_WAIT_SECONDS = 1.0
+LOCK_WAIT_SECONDS = 5.0
 LOCK_POLL_SECONDS = 0.005
 LEDGER_SUFFIX = ".handwriting-ledger.jsonl"
 SAFE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,119}$")
 REPO_ROOT = Path(__file__).resolve().parents[2]
+_LOCAL_LOCKS_GUARD = Lock()
+_LOCAL_LOCKS: dict[str, Any] = {}
 
 
 class AttemptLedgerError(RuntimeError):
@@ -75,6 +78,12 @@ def _encoded_record(record: dict[str, Any]) -> bytes:
         json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
         + "\n"
     ).encode("ascii")
+
+
+def _local_lock(path: Path):
+    key = os.path.normcase(str(path.resolve(strict=False)))
+    with _LOCAL_LOCKS_GUARD:
+        return _LOCAL_LOCKS.setdefault(key, Lock())
 
 
 class DurableAttemptLedger:
@@ -137,6 +146,9 @@ class DurableAttemptLedger:
 
     @contextmanager
     def _exclusive_lock(self) -> Iterator[None]:
+        process_lock = _local_lock(self.path)
+        if not process_lock.acquire(timeout=LOCK_WAIT_SECONDS):
+            raise AttemptLedgerError("ledger_locked")
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
@@ -161,18 +173,19 @@ class DurableAttemptLedger:
                 failure = AttemptLedgerError("ledger_lock_unavailable")
             finally:
                 os.close(descriptor)
-        if failure is not None:
-            raise failure
-
         try:
+            if failure is not None:
+                raise failure
             yield
         finally:
-            try:
-                self._lock_path.unlink()
-            except OSError:
-                # A lock that cannot be removed intentionally blocks subsequent
-                # traffic until an operator investigates it.
-                pass
+            if failure is None:
+                try:
+                    self._lock_path.unlink()
+                except OSError:
+                    # A lock that cannot be removed intentionally blocks
+                    # subsequent traffic until an operator investigates it.
+                    pass
+            process_lock.release()
 
     def initialize(self) -> AttemptLedgerStatus:
         """Create a new empty ledger; never overwrite an existing run."""
