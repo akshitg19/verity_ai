@@ -84,7 +84,7 @@ browser strokes
   -> backend validates and bounds the stroke payload
   -> backend builds one canonical MyScript request body
   -> backend computes HMAC over those exact bytes
-  -> MyScript /api/v4.0/iink/recognize/
+  -> MyScript /api/v4.0/iink/recognize
   -> backend parses JIIX math label / candidate output
   -> existing frontend recognition contract
 ```
@@ -108,11 +108,19 @@ Reasons:
 - Enforce bounded expression, stroke, point, body-size, and coordinate limits
   before signing.
 - Serialize once; compute HMAC and send the same byte string.
+- Do not send local stroke IDs, pointer IDs, presentation styles, page IDs, or
+  expression IDs to MyScript. Translate only ordered coordinate arrays and
+  valid optional time/pressure arrays.
+- Request JIIX with `export.jiix.strokes=false`, keep the math solver disabled,
+  and return only the restricted linear-equation normalization from the API
+  route. The provider's raw JIIX/LaTeX is never written to normal logs.
 - Use a short connect/read timeout and an abort signal.
 - Retry at most once for a transient `429`/`5xx`, and count the retry against
   the evaluation budget. Do not retry authentication, quota, or validation
   failures.
-- Normalize provider output only after storing the restricted raw POC artifact.
+- The online API route does not persist raw provider output. During an approved
+  evaluator run, store raw provider output only in the restricted run artifact
+  named by the validated replay plan, then normalize it for scoring.
 - Never put ink, JIIX, LaTeX, expected answers, keys, HMACs, request bodies, or
   student identifiers in normal application logs.
 - Log only content-free fields such as provider, mode, fixture category,
@@ -133,20 +141,27 @@ Non-secret configuration should use explicit environment variables:
 
 ```text
 MYSCRIPT_ENABLED=false
-MYSCRIPT_RECOGNITION_URL=https://cloud.myscript.com/api/v4.0/iink/recognize/
+MYSCRIPT_POC_ROUTE_ENABLED=false
+MYSCRIPT_RECOGNITION_URL=https://cloud.myscript.com/api/v4.0/iink/recognize
 MYSCRIPT_TIMEOUT_SECONDS=3
 MYSCRIPT_EVAL_REQUEST_CAP=650
 ```
 
-The initial deployment command will map the two Secret Manager resources to the
-two runtime environment names with Cloud Run's `--update-secrets` option. For a
-production revision, pin reviewed numeric secret versions instead of relying on
-`latest`. Do not run a command that reads a secret version's value merely to
-verify the mapping; inspect Cloud Run metadata and exercise a redacted health
-check instead.
+`cloudbuild.yaml` maps the two existing Secret Manager resources to the two
+runtime environment names with Cloud Run's `--update-secrets` option. The first
+disabled revision uses `latest` because no MyScript traffic is possible. Before
+an approved POC, override both version substitutions with reviewed numeric
+versions, matching Google's recommendation to pin environment-variable secrets.
+Cloud Run checks the runtime identity's secret access during deployment and
+resolves environment-variable secrets before an instance starts. Do not run a
+command that reads a secret version's value merely to verify the mapping;
+inspect Cloud Run metadata and exercise the disabled route check instead.
 
-The feature flag stays false in production until the privacy, commercial,
-corpus, and release gates below are signed off.
+The provider flag and the separate POC-route flag stay false in production until
+the privacy, commercial, corpus, and release gates below are signed off. Even
+then, the HTTP route fails closed unless VerityAI's existing API access-control
+header is also configured. That shared header is not real user authentication;
+student rollout requires a separate authentication review.
 
 ## 5. Privacy and licensing findings
 
@@ -223,6 +238,11 @@ Rules:
 
 - Stop automatically before call 651, regardless of dashboard quota.
 - A retry and a failed request both consume the local budget counter.
+- The adapter's in-process counter is a secondary fail-closed guard, not a
+  durable cross-restart ledger. An approved live POC must also use the frozen
+  replay plan, a durable run total, one controlled revision, and before/after
+  dashboard checks. Never rely on a restarted Cloud Run process to remember
+  prior requests.
 - Run neither the 30–50 smoke nor the 300–500 corpus until each fixture's
   source, retention, reviewer status, and provider permission pass validation.
 - Do not fan one writer's ink out to multiple providers unless the consent and
@@ -238,8 +258,8 @@ Rules:
 |---|---|---|
 | Developer account, app, keys | Complete | User-verified 2026-08-14 |
 | GCP secret storage and runtime IAM | Complete | User-verified 2026-08-14 |
-| Backend REST adapter with mock tests | Pending | HMAC/body fixtures, timeout/error mapping, payload bounds, no-secret logs |
-| Cloud Run secret-to-environment mapping | Pending | Revision metadata showing both mappings, never values |
+| Backend REST adapter with mock tests | Implemented; live call blocked | Fixed HMAC vector, exact-body mock, timeout/error/retry/cap tests, bounded schemas, content-safe logging |
+| Cloud Run secret-to-environment mapping | Implemented in deploy config; runtime verification pending | Revision metadata showing both mappings and both false flags, never values |
 | Synthetic/internal smoke corpus (30–50) | Blocked | Approved sources, two-reviewer truth for decision cases, schema validation |
 | Frozen external corpus (300–500) | Blocked | Consent/provenance, restricted store, retention/deletion policy, target devices |
 | MyScript trial data-use clarification | Blocked | Written answer reconciling trial research access with DPA transient processing |
@@ -314,6 +334,9 @@ All sources below were accessed 2026-08-14.
   https://www.myscript.com/dpa/
 - REST architecture and HMAC:
   https://developer.myscript.com/doc/interactive-ink/4.0/web/rest/architecture/
+- Current recognize request guide and raw OpenAPI schema:
+  https://developer.myscript.com/doc/interactive-ink/4.3/web/rest/new-api/ and
+  https://cloud.myscript.com/api/v4.0/iink/batch/api-docs
 - REST versus WebSocket:
   https://developer.myscript.com/doc/interactive-ink/4.0/web/overview/http-rest-or-websocket/
 - JIIX reference:
@@ -357,3 +380,13 @@ All sources below were accessed 2026-08-14.
   https://github.com/OleehyO/TexTeller
 - Google MathWriting repository and data license:
   https://github.com/google-research/google-research/tree/master/mathwriting
+
+### Google Cloud deployment
+
+- Cloud Run secret environment-variable mapping, version pinning, startup
+  behavior, and runtime identity access:
+  https://cloud.google.com/run/docs/configuring/services/secrets
+- `gcloud run deploy` flag reference:
+  https://cloud.google.com/sdk/gcloud/reference/run/deploy
+- Cloud Build to Cloud Run deployment configuration:
+  https://cloud.google.com/build/docs/deploying-builds/deploy-cloud-run

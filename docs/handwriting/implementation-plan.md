@@ -1,9 +1,10 @@
 # Handwriting v2 Implementation Plan
 
-**Status:** Phases 0–2 merged in PR #31 (`cfa06e0`) and Phase A/B merged in PR
-#32 (`156d724`); Phase C/D safe tooling is implemented on
-`feat/handwriting-provider-readiness`; live Phase 3 still requires written
-licensing/privacy and approved-corpus evidence
+**Status:** Phases 0–2 merged in PR #31 (`cfa06e0`), Phase A/B in PR #32
+(`156d724`), and Phase C/D safe tooling in PR #33 (`e01d28e`); the disabled
+Phase 3 backend adapter is implemented on `feat/handwriting-myscript-adapter`,
+while live Phase 3 still requires written licensing/privacy and approved-corpus
+evidence
 **Rule:** One phase per reviewable change unless scope expansion is explicit
 
 ## Phase 0 — Source of truth and safe workspace
@@ -100,6 +101,10 @@ and target-device latency measurement remain explicit follow-up evidence.
 
 ## Phase 3 — MyScript vector POC
 
+**Status:** Safe backend portion implemented with mocks and both deploy flags
+false. Frontend wiring, live traffic, corpus replay, and provider evidence remain
+blocked or pending.
+
 ### Preconditions
 
 - Complete MyScript account/credentials and backend secret storage (complete).
@@ -122,7 +127,8 @@ preconditions close.
 ### Acceptance
 
 - No PNG is generated on the MyScript test path.
-- Raw stroke order and timestamps are preserved.
+- Raw stroke order and timestamp order are preserved; browser fractional
+  milliseconds are rounded only to satisfy MyScript's integer REST schema.
 - Output is compatible with the deterministic judge.
 - Provider errors are typed and recoverable.
 - Results can be reproduced from stored consented fixtures.
@@ -320,4 +326,32 @@ baseline.
 Next action: merge the safe tooling, implement the disabled-by-default MyScript
 backend adapter with mocks, map secrets to a non-traffic Cloud Run revision,
 and obtain the external approvals/corpus before making a live call.
+```
+
+```text
+Date: 2026-08-14
+Branch/commit: feat/handwriting-myscript-adapter (Phase 3 safe backend change)
+Phase: 3 safe/offline backend portion
+Implemented: strict versioned stroke schemas; canonical MyScript Math payload;
+exact-body HMAC-SHA-512; bounded streaming JIIX parsing; restricted linear-
+equation normalization shared with the evaluator; typed content-safe failures;
+one transient retry; a process-local 650-attempt fail-closed guard; a dual-
+disabled internal API route that additionally requires the existing API header;
+Cloud Run secret references; and idempotent Secret Manager metadata/IAM setup.
+Tests and results: 41 focused adapter/evaluator/access-control tests passed;
+full backend passed 1219 tests with 3 expected xfails and 3 existing OPSIN
+warnings; frontend 375 tests, lint, normal/production builds, production API-base
+inspection, and App.jsx line cap passed; `cloudbuild.yaml` parsed and its two
+secret references, exact endpoint, and false flags passed semantic assertions;
+`git diff --check` passed.
+Measured metrics: only local mock latency and deterministic compatibility were
+verified. No provider request, provider accuracy, target-device latency, quota,
+or deployed-revision claim is made.
+Known risks: Cloud Run revision metadata still needs read-only verification;
+environment-variable secrets must be pinned to reviewed numeric versions before
+traffic; the in-process request counter is not a durable POC ledger; vendor
+privacy/commercial approvals and an approved frozen corpus remain blocked.
+Next action: merge and deploy the disabled revision, verify only its secret
+references and false flags, then add unreachable-by-default frontend POC wiring.
+Do not make a live provider call until every external-call gate closes.
 ```

@@ -88,8 +88,8 @@ The current row identity is used by recognition snapshots, verdict maps, edits,
 undo, notebook persistence, and stale-response protection. It must not be
 removed as part of eliminating PNG segmentation.
 
-Current `origin/main` at `cfa06e0` implements the target foundation through
-Phase 2:
+Current `origin/main` through `e01d28e` implements the target foundation and
+offline readiness work through Phase C/D:
 
 - recognizer, hybrid fallback, and shadow-control adapters;
 - named provider-aware 350ms vector and 750ms image finalization policies;
@@ -98,8 +98,11 @@ Phase 2:
 - edit, erase, undo/redo, clear, and navigation invalidation;
 - content-free pointer-to-paint lifecycle events.
 
-Gemini image recognition remains the only configured provider, so the vector
-primary and its measured service objectives remain future work.
+Gemini image recognition remains the only enabled provider. A MyScript REST
+adapter and internal route are implemented on
+`feat/handwriting-myscript-adapter`, but provider and route flags remain false;
+the vector primary and its measured service objectives therefore remain future
+work.
 
 ## 4. Target architecture
 
@@ -265,8 +268,11 @@ supports structured 2D math. This is a candidate decision, not a production
 claim. Credentials, protocol, browser behavior, accuracy, latency, cost, and
 privacy must pass the evaluation plan.
 
-The first POC should reuse VerityAI's existing canvas and send collected strokes
-to a backend adapter. It should not replace the entire canvas/editor.
+The first POC reuses VerityAI's existing canvas and sends collected strokes to
+the backend adapter. The adapter accepts only the `linear-equation-v1` profile,
+signs canonical REST bytes server-side, disables solver and JIIX stroke export,
+and is unreachable while either deploy flag is false. It does not replace the
+canvas/editor and is not production evidence until the frozen corpus is replayed.
 
 ### Image fallback
 

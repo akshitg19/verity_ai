@@ -34,23 +34,27 @@ for implementation decisions.
 
 ## Status
 
-- Architecture status: implemented through Phase 2 on `origin/main` by PR #31
-  (`cfa06e0`); Phase A/B tooling was merged by PR #32 (`156d724`).
+- Architecture status: Phase 0–2 merged by PR #31 (`cfa06e0`), Phase A/B by PR
+  #32 (`156d724`), and provider readiness/offline evaluation by PR #33
+  (`e01d28e`).
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
-- Vector recognizer: not integrated.
+- Vector recognizer: a backend MyScript REST adapter and internal route are
+  implemented on `feat/handwriting-myscript-adapter`, but both provider and
+  route flags are false and no frontend path or live call is enabled.
 - Recommended vector POC: MyScript iink. The developer application, local
   credential file, GCP secrets, and runtime-service-account secret access are
-  complete; backend integration, deployment mapping, licensing/privacy review,
-  and evaluation remain.
+  complete. Disabled deployment mapping is implemented; revision-metadata
+  verification, licensing/privacy approval, frontend POC wiring, and evaluation
+  remain.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
-- Current safe work: provider-readiness evidence and an offline fixture/plan/
-  scoring harness on `feat/handwriting-provider-readiness`.
+- Current safe work: mock-tested, disabled-by-default backend adapter and Cloud
+  Run mapping on `feat/handwriting-myscript-adapter`.
 - Next gates: target-device Phase A/B exports; written MyScript commercial and
-  student-privacy answers; backend adapter and secret-to-environment mapping;
-  and an approved, consented raw-stroke corpus before live Phase 3 evaluation.
+  student-privacy answers; deployed false-flag/secret-mapping validation; and an
+  approved, consented raw-stroke corpus before live Phase 3 evaluation.
 
 ## Working agreement for AI-assisted changes
 
