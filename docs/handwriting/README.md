@@ -55,8 +55,8 @@ for implementation decisions.
   verification, licensing/privacy approval, and evaluation remain.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
-- Current safe work: explicit `NOT_RUN`/`NO_DECISION` provider report checkpoint
-  and evidence-completeness contract.
+- Current safe work: PR #37 adds the explicit `NOT_RUN`/`NO_DECISION` provider
+  report checkpoint and evidence-completeness contract.
 - Next gates: target-device Phase A/B exports; written MyScript commercial and
   student-privacy answers; deployed false-flag/secret-mapping validation; and an
   approved, consented raw-stroke corpus before live Phase 3 evaluation.

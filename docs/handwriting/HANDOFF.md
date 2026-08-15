@@ -5,8 +5,8 @@
 **Status:** Phases 0–2, Phase A/B, provider readiness, the disabled MyScript
 backend adapter, and unreachable-by-default frontend wiring are merged through
 PRs #31–#36. The durable POC attempt-ledger guardrail is merged without enabling
-provider traffic. The explicit no-decision provider report checkpoint is in
-progress; live vector-provider POC and target-device evidence remain unavailable.
+provider traffic. PR #37 adds the explicit no-decision provider report
+checkpoint; live vector-provider POC and target-device evidence remain unavailable.
 
 **Working branch:** `docs/handwriting-evaluation-checkpoint`
 

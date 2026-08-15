@@ -139,10 +139,10 @@ preconditions close.
 
 ## Phase 4 — Shadow evaluation
 
-**Status:** The report contract and explicit `NOT_RUN`/`NO_DECISION` checkpoint
-are implemented in `provider-evaluation-report.md`. Live smoke, frozen-corpus,
-target-device, and provider-decision evidence remain blocked by the recorded
-external gates.
+**Status:** PR #37 implements the report contract and explicit
+`NOT_RUN`/`NO_DECISION` checkpoint in `provider-evaluation-report.md`. Live
+smoke, frozen-corpus, target-device, and provider-decision evidence remain
+blocked by the recorded external gates.
 
 ### Scope
 
@@ -434,7 +434,7 @@ vendor, corpus, and operator gates close.
 
 ```text
 Date: 2026-08-14
-Branch/commit: docs/handwriting-evaluation-checkpoint (Phase 4 report contract)
+Branch/commit: docs/handwriting-evaluation-checkpoint at e5feaf8 (PR #37)
 Phase: 4 safe/offline decision checkpoint
 Implemented: authoritative provider-evaluation report with explicit NOT_RUN and
 NO_DECISION state; decision-eligibility gate; exact external owners and evidence;
