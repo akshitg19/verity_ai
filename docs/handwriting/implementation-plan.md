@@ -103,7 +103,8 @@ and target-device latency measurement remain explicit follow-up evidence.
 
 **Status:** Safe backend portion merged with both deploy flags false. Direct
 vector-only frontend wiring is implemented behind two additional false-by-default
-gates. Live traffic, corpus replay, and provider evidence remain blocked.
+gates. PR #36 implements durable cross-restart attempt-ledger enforcement. Live
+traffic, corpus replay, and provider evidence remain blocked.
 
 ### Preconditions
 
@@ -131,6 +132,8 @@ preconditions close.
   milliseconds are rounded only to satisfy MyScript's integer REST schema.
 - Output is compatible with the deterministic judge.
 - Provider errors are typed and recoverable.
+- Every live HTTP attempt must reserve a content-free durable ledger sequence;
+  attempt 651 and every ledger integrity failure stop before provider I/O.
 - Results can be reproduced from stored consented fixtures.
 
 ## Phase 4 — Shadow evaluation
@@ -386,4 +389,39 @@ corpus, numeric secret versions, and a durable run ledger remain blocked.
 Next action: merge this safe PR when CI is green, then deploy and validate the
 disabled revision after Cloud Shell authorization. Do not enable either frontend
 gate in Vercel.
+```
+
+```text
+Date: 2026-08-14
+Branch/commit: feat/handwriting-poc-ledger at 8e921e4 (PR #36)
+Phase: 3 safe/offline live-traffic guardrail
+Implemented: repository-external owner-only append-only attempt ledger;
+content-free run/provider/cap/sequence schema; atomic multi-worker lock and
+reservation; restart persistence; fail-closed corruption, identity, symlink,
+permission, stale-lock, and cap handling; MyScript 650-attempt maximum; CLI
+init/status/reserve commands; restricted-artifact ignore rules; and production
+factory enforcement requiring an approved durable ledger path and run ID before
+the provider can be enabled.
+Tests and results: 50 focused ledger/adapter/evaluator tests passed; full backend
+passed 1235 tests with 3 expected xfails and 3 existing OPSIN warnings; full
+frontend passed 387 tests across 41 files; lint and App.jsx cap (256/260)
+passed; normal and production builds passed; production-bundle inspection found
+the expected Cloud Run API base and no MyScript provider-secret names. The 3
+shape-only fixtures passed schema validation as intentionally decision-
+ineligible; all 10 handwriting Markdown files passed relative-link validation;
+changed-diff and built-asset sensitive-token scans passed; `git diff --check`
+passed.
+Measured metrics: deterministic concurrent reservations 1–40 were unique and
+bounded; a newly constructed ledger instance retained prior usage. These are
+local integrity results only. No provider request, quota consumption, accuracy,
+latency, target-device, or cost result is claimed.
+Known risks: PR/CI are pending; an approved persistent ledger mount/store and
+operator ownership evidence do not yet exist; the disabled Cloud Run revision
+is not deployed because Cloud Shell authorization is awaiting explicit user
+approval; vendor privacy/commercial approval and an approved corpus remain
+blocked.
+Next action: merge this safe guardrail PR when CI is green. Then deploy only the
+disabled revision after Cloud Shell authorization. Do not initialize or mount a
+live ledger, enable either backend flag, or call the provider until its storage,
+vendor, corpus, and operator gates close.
 ```

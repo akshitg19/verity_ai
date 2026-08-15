@@ -17,6 +17,7 @@ from myscript_recognition import (
     RequestBudget,
     build_myscript_payload,
     compute_myscript_hmac,
+    get_myscript_recognizer,
     parse_myscript_jiix,
     serialize_myscript_request,
 )
@@ -329,14 +330,21 @@ def test_declared_oversized_provider_response_is_rejected_before_parsing():
     assert captured.value.code == "provider_response_too_large"
 
 
-def test_settings_are_fail_closed_and_repr_redacts_credentials(monkeypatch):
+def test_settings_are_fail_closed_and_repr_redacts_credentials(monkeypatch, tmp_path):
     monkeypatch.setenv("MYSCRIPT_ENABLED", "true")
     monkeypatch.setenv("MYSCRIPT_APPLICATION_KEY", SYNTHETIC_APPLICATION_KEY)
     monkeypatch.setenv("MYSCRIPT_HMAC_KEY", SYNTHETIC_HMAC_KEY)
+    monkeypatch.setenv(
+        "MYSCRIPT_EVAL_LEDGER_PATH",
+        str(tmp_path / "settings.handwriting-ledger.jsonl"),
+    )
+    monkeypatch.setenv("MYSCRIPT_EVAL_RUN_ID", "settings-test-run")
     configured = MyScriptSettings.from_env()
 
     rendered = repr(configured)
     assert "credentials_configured=True" in rendered
+    assert "eval_ledger_configured=True" in rendered
+    assert str(tmp_path) not in rendered
     assert SYNTHETIC_APPLICATION_KEY not in rendered
     assert SYNTHETIC_HMAC_KEY not in rendered
 
@@ -352,6 +360,42 @@ def test_settings_are_fail_closed_and_repr_redacts_credentials(monkeypatch):
         MyScriptRecognitionError, match="credentials_not_configured"
     ):
         MyScriptSettings.from_env()
+
+
+def test_enabled_settings_require_a_durable_ledger(monkeypatch):
+    monkeypatch.setenv("MYSCRIPT_ENABLED", "true")
+    monkeypatch.setenv("MYSCRIPT_APPLICATION_KEY", SYNTHETIC_APPLICATION_KEY)
+    monkeypatch.setenv("MYSCRIPT_HMAC_KEY", SYNTHETIC_HMAC_KEY)
+
+    with pytest.raises(
+        MyScriptRecognitionError, match="request_ledger_not_configured"
+    ):
+        MyScriptSettings.from_env()
+
+
+def test_production_factory_uses_the_initialized_durable_ledger(monkeypatch, tmp_path):
+    from handwriting_eval.ledger import DurableAttemptLedger
+
+    path = tmp_path / "factory.handwriting-ledger.jsonl"
+    DurableAttemptLedger(
+        path,
+        run_id="factory-test-run",
+        provider="myscript",
+        request_cap=2,
+    ).initialize()
+    monkeypatch.setenv("MYSCRIPT_ENABLED", "true")
+    monkeypatch.setenv("MYSCRIPT_APPLICATION_KEY", SYNTHETIC_APPLICATION_KEY)
+    monkeypatch.setenv("MYSCRIPT_HMAC_KEY", SYNTHETIC_HMAC_KEY)
+    monkeypatch.setenv("MYSCRIPT_EVAL_LEDGER_PATH", str(path))
+    monkeypatch.setenv("MYSCRIPT_EVAL_RUN_ID", "factory-test-run")
+    monkeypatch.setenv("MYSCRIPT_EVAL_REQUEST_CAP", "2")
+    get_myscript_recognizer.cache_clear()
+    try:
+        recognizer = get_myscript_recognizer()
+        assert isinstance(recognizer.budget, DurableAttemptLedger)
+        assert recognizer.budget.status().remaining == 2
+    finally:
+        get_myscript_recognizer.cache_clear()
 
 
 def test_api_route_returns_normalized_contract_without_raw_jiix():
@@ -393,6 +437,11 @@ def test_api_route_returns_normalized_contract_without_raw_jiix():
         ("provider_timeout", 504, "Vector recognition timed out"),
         (
             "provider_authentication",
+            503,
+            "Vector recognition is temporarily unavailable",
+        ),
+        (
+            "request_ledger_unavailable",
             503,
             "Vector recognition is temporarily unavailable",
         ),

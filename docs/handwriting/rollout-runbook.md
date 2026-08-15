@@ -44,8 +44,10 @@ All items must have an owner and attached evidence:
    procedure are approved and exercised.
 5. The vendor dashboard's remaining trial quota is checked without exposing
    credentials.
-6. The replay plan and a durable run ledger enforce the 650-attempt maximum
-   across process restarts. The adapter's in-process counter is secondary only.
+6. The replay plan and initialized owner-only durable run ledger enforce the
+   650-attempt maximum across process restarts. Its status is reconciled with
+   the provider dashboard before and after the run. The adapter's in-process
+   counter is secondary only.
 7. Both Secret Manager environment references are pinned to reviewed numeric
    versions, and Cloud Run revision metadata proves the references without
    reading values.
@@ -81,19 +83,23 @@ the build and revision IDs.
 Only after every precondition passes:
 
 1. Create a reviewed deployment change with numeric secret versions.
-2. Enable backend provider and route gates only on one controlled internal
+2. Mount the approved durable replay store, initialize its content-free attempt
+   ledger outside the repository, and configure `MYSCRIPT_EVAL_LEDGER_PATH` and
+   `MYSCRIPT_EVAL_RUN_ID`. Prove one reservation survives an executor restart;
+   do not use an ephemeral container path.
+3. Enable backend provider and route gates only on one controlled internal
    revision.
-3. Configure a non-production frontend preview with both frontend gates:
+4. Configure a non-production frontend preview with both frontend gates:
 
    ```text
    VITE_HANDWRITING_MODE=myscript-poc
    VITE_MYSCRIPT_POC_ENABLED=true
    ```
 
-4. Confirm the preview is inaccessible to ordinary student traffic.
-5. Run the validated replay plan, beginning with one synthetic fixture and then
+5. Confirm the preview is inaccessible to ordinary student traffic.
+6. Run the validated replay plan, beginning with one synthetic fixture and then
    the bounded 30–50-case smoke set.
-6. Stop on any permission, retention, authentication, budget, schema, timeout,
+7. Stop on any permission, retention, authentication, budget, schema, timeout,
    or logging discrepancy.
 
 Do not enable shadow fan-out, hybrid fallback, a percentage rollout, or student
@@ -142,7 +148,8 @@ gcloud run services update verity-ai \
 The next normal `cloudbuild.yaml` deployment also restores both values to false.
 After rollback, require the MyScript route's disabled response and verify health.
 Do not remove or read secret versions during an incident; disabling both flags
-ends provider traffic without exposing credential material.
+ends provider traffic without exposing credential material. Preserve the
+attempt ledger for dashboard reconciliation; never reset it as part of rollback.
 
 ## 6. Provider outage procedure
 

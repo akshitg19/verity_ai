@@ -276,7 +276,12 @@ requires both `VITE_HANDWRITING_MODE=myscript-poc` and
 `VITE_MYSCRIPT_POC_ENABLED=true`; it sends ordered point data without rendering
 PNG and deliberately has no automatic fallback before evaluation. It does not
 replace the canvas/editor and is not production evidence until the frozen corpus
-is replayed.
+is replayed. The backend production factory also requires an initialized,
+owner-only attempt ledger on an approved durable store before the provider can
+be enabled. Each HTTP attempt reserves one append-only sequence before opening
+the connection; corruption, mismatched run identity, lock failure, or attempt
+651 stops traffic. An ephemeral container filesystem is not an acceptable
+ledger store.
 
 ### Image fallback
 

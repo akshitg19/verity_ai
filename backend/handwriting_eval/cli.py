@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .ledger import AttemptLedgerError, DurableAttemptLedger
 from .scoring import score_run
 from .validation import (
     EvaluationDataError,
@@ -159,6 +160,57 @@ def _plan_command(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _ledger(args: argparse.Namespace) -> DurableAttemptLedger:
+    return DurableAttemptLedger(
+        args.ledger,
+        run_id=args.run_id,
+        provider=args.provider,
+        request_cap=args.request_cap,
+    )
+
+
+def _ledger_init_command(args: argparse.Namespace) -> dict[str, Any]:
+    status = _ledger(args).initialize()
+    return {
+        "valid": True,
+        "run_id": status.run_id,
+        "provider": status.provider,
+        "request_cap": status.request_cap,
+        "used": status.used,
+        "remaining": status.remaining,
+    }
+
+
+def _ledger_status_command(args: argparse.Namespace) -> dict[str, Any]:
+    status = _ledger(args).status()
+    return {
+        "valid": True,
+        "run_id": status.run_id,
+        "provider": status.provider,
+        "request_cap": status.request_cap,
+        "used": status.used,
+        "remaining": status.remaining,
+    }
+
+
+def _ledger_reserve_command(args: argparse.Namespace) -> dict[str, Any]:
+    ledger = _ledger(args)
+    sequence = ledger.reserve()
+    return {
+        "valid": True,
+        "sequence": sequence,
+        "used": sequence,
+        "remaining": ledger.request_cap - sequence,
+    }
+
+
+def _ledger_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--ledger", required=True, type=Path)
+    parser.add_argument("--provider", required=True)
+    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--request-cap", required=True, type=int)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m handwriting_eval.cli",
@@ -220,6 +272,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Require two-reviewer, retention, and device/browser decision gates.",
     )
     plan_parser.set_defaults(handler=_plan_command)
+
+    ledger_init_parser = subparsers.add_parser(
+        "ledger-init",
+        help="Create a content-free provider-attempt ledger outside the repository",
+    )
+    _ledger_arguments(ledger_init_parser)
+    ledger_init_parser.set_defaults(handler=_ledger_init_command)
+
+    ledger_status_parser = subparsers.add_parser(
+        "ledger-status", help="Read a content-free provider-attempt ledger"
+    )
+    _ledger_arguments(ledger_status_parser)
+    ledger_status_parser.set_defaults(handler=_ledger_status_command)
+
+    ledger_reserve_parser = subparsers.add_parser(
+        "ledger-reserve",
+        help="Reserve for an executor that does not already use the Python ledger API",
+    )
+    _ledger_arguments(ledger_reserve_parser)
+    ledger_reserve_parser.set_defaults(handler=_ledger_reserve_command)
     return parser
 
 
@@ -228,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         result = args.handler(args)
-    except EvaluationDataError as exc:
+    except (EvaluationDataError, AttemptLedgerError) as exc:
         print(f"handwriting-eval: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False))
