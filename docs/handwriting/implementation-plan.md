@@ -710,3 +710,31 @@ category decisions, correction UX, and enabled-canary rollback evidence remain.
 Next action: keep the goal active and resume in the six-step order documented in
 completion-audit-2026-08-16.md when the named owners attach evidence.
 ```
+
+```text
+Date: 2026-08-16
+Branch: test/handwriting-correction-terms-evidence
+Phase: cross-phase correction UX and public-terms evidence hardening
+Implemented: added direct UI proof that every recognized math line is exposed
+in an editable field; added workflow proof that a correction removes its stale
+verdict and submits the edited text for a fresh deterministic check. Rechecked
+the current MyScript pricing page, V.8 license, and May 2026 DPA; froze a
+fact-versus-open-question matrix and reduced the vendor confirmation package to
+the exact remaining contract/privacy conflicts.
+Tests and results: focused correction tests passed 9/9. The full frontend suite
+passed 394 tests across 41 files, lint, App.jsx cap (256/260), production build,
+production API-base verification, and provider-secret bundle scan. The full
+backend suite passed 1268 tests with 3 expected xfails and the existing OPSIN
+warnings. One intentionally misconfigured production build was rejected by the
+API-base checker before the correct production configuration passed.
+Measured metrics: deterministic UI callback, stale-verdict, and judge-input
+behavior only. Public terms state was reviewed without any provider request.
+No student data, secret access, paid action, production flag, accuracy result,
+latency measurement, or additional use of the 50-attempt POC budget occurred.
+Known risks: MyScript's public V.8 trial-result/technical-input access clauses
+still need written reconciliation with the DPA's transient-content language;
+FERPA/COPPA/student-data approval, a production quote/SLA, real auth, target
+devices, a two-reviewer corpus, same-input control, and enabled canary remain.
+Next action: merge the evidence hardening after remote gates. Keep all MyScript
+flags false and retain the 30/50 ledger state.
+```

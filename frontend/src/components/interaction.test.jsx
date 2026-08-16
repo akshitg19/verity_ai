@@ -1,9 +1,10 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import ActionDialog from "./ActionDialog";
 import HintLadder from "./HintLadder";
+import MathFeedbackPanel from "./MathFeedbackPanel";
 
 let root;
 let container;
@@ -22,6 +23,50 @@ function render(element) {
 }
 
 describe("workspace interactions", () => {
+  it("shows every recognized math line in an editable correction field", () => {
+    const handleLineEdit = vi.fn();
+    const handleLineEditDone = vi.fn();
+    render(
+      <MathFeedbackPanel
+        workflow={{
+          topicId: "algebra",
+          handleTopicChange: vi.fn(),
+          problem: "x + 1 = 2",
+          lines: [{ row: 4, text: "x = 1", unreadable: false }],
+          verdictsByLine: new Map([[4, { status: "valid" }]]),
+          firstWrongLine: null,
+          hintLevel: 0,
+          hintData: null,
+          hintError: null,
+          hintLoading: false,
+          provisionalByLine: new Map(),
+          handleLineEdit,
+          handleLineEditDone,
+          handleGetHint: vi.fn(),
+          cancelHint: vi.fn(),
+        }}
+      />
+    );
+
+    const field = container.querySelector('input[aria-label="Math line 1"]');
+    expect(field).not.toBe(null);
+    expect(field.value).toBe("x = 1");
+    expect(field.readOnly).toBe(false);
+
+    const valueSetter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    ).set;
+    act(() => {
+      valueSetter.call(field, "x = 2");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(handleLineEdit).toHaveBeenCalledWith(4, "x = 2");
+
+    act(() => field.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(handleLineEditDone).toHaveBeenCalledWith(4);
+  });
+
   it("collapses loaded hint content when Hide hints is pressed", () => {
     sessionStorage.setItem("verity.hintsOpen", "1");
     render(

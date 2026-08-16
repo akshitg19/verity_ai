@@ -285,6 +285,7 @@ The source-of-truth set is under `docs/handwriting/`:
 | `architecture-v2.md` | Responsibilities, contracts, provider strategy, metrics, privacy, rollout |
 | `implementation-plan.md` | Phase-by-phase work and acceptance criteria |
 | `evaluation-plan.md` | Corpus, metrics, experiment protocol, and provider decision gates |
+| `myscript-public-terms-checkpoint-2026-08-16.md` | Current public pricing/license/DPA facts and the reduced written-confirmation package |
 | `fixtures/fixture.schema.json` | Machine-readable evaluation fixture schema |
 | `fixtures/cases.example.jsonl` | Three synthetic example records |
 | `fixtures/README.md` | Consent, retention, and storage rules |

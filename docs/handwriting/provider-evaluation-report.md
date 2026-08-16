@@ -21,7 +21,7 @@ must never be inserted here as accuracy, latency, request, or cost evidence.
 |---|---|---|
 | Production primary | Gemini image transcription | Retain as rollback-safe control; no new provider traffic |
 | MyScript vector candidate | 30-case synthetic live POC complete; decision corpus blocked | `NO_DECISION`—technical boundary works, accuracy gate not established |
-| Hybrid vector → Gemini | Infrastructure/mock tests only | Not eligible for production configuration |
+| Hybrid vector → Gemini | One-shot fallback and visible-correction mechanisms regression-tested; no enabled canary | Not eligible for production configuration |
 | Image fallback candidate | Gemini retained; GPT-5.6 Luna not evaluated | `NO_DECISION` |
 | Written chemistry | Separate deterministic routing exists | No recognition-provider decision |
 | Structure drawings | Dedicated structure path retained | Must not enter the math recognizer |
@@ -35,7 +35,7 @@ measurement row.
 | Gate | Current state | Owner | Evidence required |
 |---|---|---|---|
 | Disabled Cloud Run revision | Complete | GCP project owner | Build `d35149af-52e2-4145-9d54-786d09ddb5fb`, current revision `verity-ai-00020-zwl`, and [post-POC fail-closed evidence](current-disabled-deployment-evidence-2026-08-16.md) |
-| MyScript trial/privacy terms | Synthetic smoke allowed; blocked for student ink | MyScript and VerityAI privacy/legal | Written data-use, retention, training, deletion, region, subprocessor, DPA, FERPA/COPPA, attribution, and publicity answers before student use |
+| MyScript trial/privacy terms | [Public facts frozen](myscript-public-terms-checkpoint-2026-08-16.md); blocked for student ink | MyScript and VerityAI privacy/legal | Internal approval and written reconciliation of trial-result research/technical-input access with DPA transient processing, plus FERPA/COPPA/student-data and acceptable attribution/publicity terms |
 | Commercial rights and cost | Deferred production gate | MyScript and VerityAI commercial owner | Written billing unit, quota, minimum, overage, cancellation, production right, SLA, and quote before distribution |
 | Approved smoke corpus | Complete for technical smoke | VerityAI engineering | 30 deterministic synthetic fixtures, MyScript-specific permission, provenance, retention, validation |
 | Frozen decision corpus | Blocked | VerityAI data/privacy owner | Versioned 300–500 fixtures in restricted storage with approved deletion/access rules |

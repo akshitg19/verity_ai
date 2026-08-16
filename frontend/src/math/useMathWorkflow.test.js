@@ -202,4 +202,45 @@ describe("useMathWorkflow recognition lifecycle", () => {
     expect(workflow.verdictsByLine.size).toBe(0);
     expect(workflow.lines.map(({ row }) => row)).toEqual([1]);
   });
+
+  it("invalidates a corrected line and judges the edited transcription", async () => {
+    checkSteps
+      .mockResolvedValueOnce({
+        verdicts: [{ line_number: 1, status: "valid" }],
+        first_wrong_line: 0,
+      })
+      .mockResolvedValueOnce({
+        verdicts: [{ line_number: 1, status: "invalid" }],
+        first_wrong_line: 1,
+      });
+    const recognizer = recognizerFrom(async ({ expressionId }) => ({
+      text: expressionId === 1 ? "x + 1 = 2" : "x = 1",
+    }));
+    await renderWorkflow({
+      pageId: "page-1",
+      recognizer,
+      emitRecognitionLifecycleMetric: vi.fn(),
+    });
+
+    act(() => {
+      workflow.invalidateRow(1);
+      workflow.invalidateRow(2);
+      workflow.queueRow({ row: 1, pageId: "page-1", strokes: [{}] });
+      workflow.queueRow({ row: 2, pageId: "page-1", strokes: [{}] });
+    });
+    await vi.waitFor(() => expect(workflow.verdictsByLine.get(2)?.status).toBe("valid"));
+
+    act(() => workflow.handleLineEdit(2, "x = 2"));
+    expect(workflow.lines.find(({ row }) => row === 2)?.text).toBe("x = 2");
+    expect(workflow.verdictsByLine.has(2)).toBe(false);
+
+    await act(async () => workflow.handleLineEditDone(2));
+    await vi.waitFor(() => expect(workflow.verdictsByLine.get(2)?.status).toBe("invalid"));
+    expect(checkSteps).toHaveBeenLastCalledWith(
+      "algebra",
+      "x + 1 = 2",
+      [{ line_number: 1, latex: "x = 2" }],
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
+  });
 });
