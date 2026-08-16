@@ -108,6 +108,20 @@ def valid_manifest(repository_root):
             capture_output=True,
         )
     source_commit = repository_head(repository_root)
+    for item in evidence.values():
+        blob = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository_root),
+                "cat-file",
+                "blob",
+                f"{source_commit}:{item['path']}",
+            ],
+            check=True,
+            capture_output=True,
+        ).stdout
+        item["sha256"] = hashlib.sha256(blob).hexdigest()
     return {
         "schema_version": 1,
         "release_id": "myscript-linear-canary-v1",
