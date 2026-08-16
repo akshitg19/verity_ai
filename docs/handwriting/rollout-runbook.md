@@ -3,7 +3,7 @@
 **Status date:** 2026-08-16
 **Current decision:** Gemini remains the only enabled production recognizer.
 **MyScript status:** backend deployed in disabled revision
-`verity-ai-00019-nj7`; frontend POC wiring is disabled by default. A separate
+`verity-ai-00020-zwl`; frontend POC wiring is disabled by default. A separate
 local 30-call synthetic smoke completed without changing Cloud Run traffic.
 
 ## 1. Safety model
@@ -103,6 +103,14 @@ the ready revision, both flags false, both secret references pinned to version
 `1`, the expected runtime service account and image digest, and HTTP sequence
 200/200/404/200. No MyScript request occurred. See
 [the current deployment evidence](current-disabled-deployment-evidence-2026-08-16.md).
+
+PR #45 then merged normalization `v2`, prediction-version enforcement, and the
+zero-request offline reprocessor. Build
+`d35149af-52e2-4145-9d54-786d09ddb5fb` deployed exact merge commit
+`3634598727067eae7c3c42b2a372b4a813ff37ee` as disabled revision
+`verity-ai-00020-zwl`. The same verifier returned `PASS` for the new digest,
+100% traffic, false flags, version-`1` references, and HTTP sequence
+200/200/404/200. No Secret Manager value or MyScript response was accessed.
 
 ### Repeatable disabled-revision verification
 

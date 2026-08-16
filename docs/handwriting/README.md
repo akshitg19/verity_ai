@@ -61,12 +61,13 @@ for implementation decisions.
   attempt ledger, PR #37 added the explicit evaluation checkpoint, PRs #38–#40
   deployed and pinned the disabled boundary, and PR #42 adds repeatable
   disabled-revision verification. PR #43 adds the bounded synthetic POC and its
-  reviewed adapter/evaluation fixes.
+  reviewed adapter/evaluation fixes; PR #45 adds normalization `v2`, versioned
+  prediction evidence, and zero-request offline reprocessing.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: the backend MyScript REST adapter and internal route are
-  deployed in disabled revision `verity-ai-00019-nj7`. A separate local,
+  deployed in disabled revision `verity-ai-00020-zwl`. A separate local,
   synthetic-only 30-call POC proved the live REST boundary; Cloud Run and
   frontend traffic remain disabled.
 - Recommended vector POC: MyScript iink. The developer application, local

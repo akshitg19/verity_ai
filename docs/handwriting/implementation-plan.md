@@ -624,3 +624,23 @@ Next action: merge the v2 correction, deploy another disabled-only revision,
 and preserve the 20 unused attempts unless a targeted provider question cannot
 be answered offline. Student/production traffic remains blocked.
 ```
+
+```text
+Date: 2026-08-16
+Source/revision: 3634598727067eae7c3c42b2a372b4a813ff37ee / verity-ai-00020-zwl
+Phase: 3 normalization-v2 disabled deployment verification
+Implemented: deployed the exact PR #45 merge with normalization v2, raw-LaTeX
+restricted artifact preservation, prediction-version enforcement, and the
+offline reprocessor. Both provider flags remain false.
+Tests and results: Cloud Build d35149af-52e2-4145-9d54-786d09ddb5fb completed
+SUCCESS in 3M39S. The content-safe verifier returned PASS for the expected
+runtime account, version-1 secret references, image digest, 100% traffic to the
+latest ready revision, and HTTP sequence 200/200/404/200.
+Measured metrics: deployment safety only. The deployment and verifier made no
+MyScript or Gemini recognition request and accessed no Secret Manager value.
+Known risks: the corrected 86.67% synthetic result remains decision-ineligible;
+four recognition errors, target devices, same-input control, reviewed real-ink
+corpus, privacy/commercial approval, authentication, and rollout evidence remain.
+Next action: preserve the 20 unused attempts and keep all MyScript gates false
+until a separately approved evaluation closes the remaining evidence gaps.
+```

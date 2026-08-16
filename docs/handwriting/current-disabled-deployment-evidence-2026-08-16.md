@@ -13,13 +13,13 @@ evaluation state.
 
 | Field | Evidence |
 |---|---|
-| Source merge commit | `7bace8f3e3237de7df05f09e83f0d7998c8ff125` |
-| Pull request | `#43` (`feat: add bounded synthetic MyScript POC`) |
-| Cloud Build ID | `ff0cc228-807c-4f8f-98ef-697a43c50298` |
-| Build status / duration | `SUCCESS` / `4M6S` |
-| Image tag | `7bace8f-disabled` |
-| Cloud Run revision | `verity-ai-00019-nj7` |
-| Revision image digest | `sha256:f0ebbac989b01087f83e23e62c6e3bf6805d0ddcc1db46b702e206208a8e7482` |
+| Source merge commit | `3634598727067eae7c3c42b2a372b4a813ff37ee` |
+| Pull request | `#45` (`fix: version MyScript normalization evidence`) |
+| Cloud Build ID | `d35149af-52e2-4145-9d54-786d09ddb5fb` |
+| Build status / duration | `SUCCESS` / `3M39S` |
+| Image tag | `3634598-disabled` |
+| Cloud Run revision | `verity-ai-00020-zwl` |
+| Revision image digest | `sha256:c2f329e9b121fd25c401b58b998cd7d158acb706c316fb6b8a7323bae082fa07` |
 
 The build used the repository's reviewed `cloudbuild.yaml`. The source clone
 was checked against the exact merge commit before submission.
@@ -31,7 +31,7 @@ not access a Secret Manager value.
 
 | Check | Observed value | Result |
 |---|---|---|
-| Serving traffic | 100% to `verity-ai-00019-nj7` | Pass |
+| Serving traffic | 100% to `verity-ai-00020-zwl` | Pass |
 | Runtime service account | `verity-ai-run@cs-sail-2b08.iam.gserviceaccount.com` | Pass |
 | `MYSCRIPT_ENABLED` | `false` | Pass |
 | `MYSCRIPT_POC_ROUTE_ENABLED` | `false` | Pass |

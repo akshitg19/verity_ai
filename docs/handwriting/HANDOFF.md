@@ -7,14 +7,15 @@ backend adapter, and unreachable-by-default frontend wiring are merged through
 PRs #31–#36. PR #37 added the explicit no-decision checkpoint, PR #38 recorded
 the disabled deployment, PR #39 pinned numeric Secret Manager versions, and PR
 #40 recorded revision `verity-ai-00018-fdv`. PR #42 added repeatable
-content-safe runtime verification, and PR #43 merged the bounded synthetic POC
-implementation and evidence. Current revision `verity-ai-00019-nj7` deploys
-that merged source with provider traffic still disabled; target-device and
-decision-corpus evidence remain unavailable.
+content-safe runtime verification, PR #43 merged the bounded synthetic POC,
+and PR #45 merged normalization `v2` plus zero-request offline reprocessing.
+Current revision `verity-ai-00020-zwl` deploys that merged source with provider
+traffic still disabled; target-device and decision-corpus evidence remain
+unavailable.
 
 **Working branch:** `main`
 
-**Base:** `origin/main` at `c90a935`
+**Base before this deployment-evidence update:** `origin/main` at `3634598`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
@@ -552,7 +553,7 @@ The MyScript developer application and credentials exist. The credentials remain
 only in the local ignored secret file and two GCP Secret Manager secrets; the
 Cloud Run runtime service account has accessor permission. A backend protocol
 client, typed route, shared normalizer, and Cloud Run secret mapping are merged
-and deployed in disabled revision `verity-ai-00019-nj7`; both provider and route
+and deployed in disabled revision `verity-ai-00020-zwl`; both provider and route
 flags are false. Runtime metadata proves the expected service account and the
 two numeric version-`1` Secret Manager references without reading their values;
 see `secret-version-pinning-evidence-2026-08-16.md`. A direct vector-only
@@ -831,7 +832,7 @@ Not safe to claim yet:
 - Luna is better than Gemini;
 - complex chemistry or full undergraduate math is supported.
 
-The current safe state is disabled revision `verity-ai-00019-nj7`, with both
+The current safe state is disabled revision `verity-ai-00020-zwl`, with both
 provider flags false and both Secret Manager references pinned to reviewed
 numeric version `1`. Further decision-corpus or student/deployed traffic remains
 blocked on its separately applicable corpus, privacy/legal, commercial,
