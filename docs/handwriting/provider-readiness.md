@@ -155,7 +155,7 @@ MYSCRIPT_ENABLED=false
 MYSCRIPT_POC_ROUTE_ENABLED=false
 MYSCRIPT_RECOGNITION_URL=https://cloud.myscript.com/api/v4.0/iink/recognize
 MYSCRIPT_TIMEOUT_SECONDS=3
-MYSCRIPT_EVAL_REQUEST_CAP=650
+MYSCRIPT_EVAL_REQUEST_CAP=1500
 MYSCRIPT_EVAL_LEDGER_PATH=/approved/durable/store/run.handwriting-ledger.jsonl
 MYSCRIPT_EVAL_RUN_ID=approved-content-free-run-id
 ```

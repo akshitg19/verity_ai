@@ -17,14 +17,18 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from handwriting_eval.ledger import AttemptLedgerError, DurableAttemptLedger
+from handwriting_eval.ledger import (
+    MYSCRIPT_POC_ATTEMPT_CAP,
+    AttemptLedgerError,
+    DurableAttemptLedger,
+)
 from handwriting_normalization import normalize_expression
 from schemas import MyScriptRecognizeRequest
 
 
 DEFAULT_RECOGNITION_URL = "https://cloud.myscript.com/api/v4.0/iink/recognize"
 DEFAULT_TIMEOUT_SECONDS = 3.0
-DEFAULT_REQUEST_CAP = 650
+DEFAULT_REQUEST_CAP = MYSCRIPT_POC_ATTEMPT_CAP
 MAX_REQUEST_BYTES = 4 * 1024 * 1024
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_PROVIDER_ATTEMPTS = 2
