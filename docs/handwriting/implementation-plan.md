@@ -919,13 +919,16 @@ duplicate keys, and content-safe failures. The full backend passes 1288 tests
 with 3 expected xfails. The unchanged frontend passes 402 tests across 41 files;
 lint, App.jsx
 256/260, development/production builds, API-base inspection, and provider-
-secret bundle scan pass. Remote checks remain pending.
+secret bundle scan pass. PR #61 passed Linux backend, Windows backend,
+frontend, and Vercel checks and merged as `06f5679`. The Windows run also
+proved that evidence hashes are taken from committed Git blobs while worktree
+drift detection remains line-ending aware.
 Measured metrics: engineering gate only; no provider, device, latency, accuracy,
 cost, or production traffic was generated.
 Known risks: hashes and machine checks cannot prove the substantive quality of
 human approvals. The manifest is a required release guard, not an approval
 authority or substitute for legal/security/product review.
-Next action: run full verification and merge. Keep flags false until a valid
-manifest and explicit activation approval exist; separately complete Google
-OAuth for the latest disabled deployment.
+Next action: keep flags false until a valid manifest and explicit activation
+approval exist. Collect the remaining owner/device evidence; separately
+complete Google OAuth for the latest disabled deployment.
 ```
