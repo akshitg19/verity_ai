@@ -51,7 +51,11 @@ for implementation decisions.
   records the content-free 300-case aggregate, frozen-gate outcomes, mismatch
   classes, quota reconciliation, and continuing `NO_DECISION` boundary.
 - [Rollout runbook](rollout-runbook.md) records the disabled deployment check,
-  activation prerequisites, monitoring, outage response, and kill switches.
+  executable content-free approval gate, activation prerequisites, monitoring,
+  outage response, and kill switches.
+- [Rollout approval schema](rollout-approval.schema.json) defines the strict
+  evidence contract that a future activation manifest must satisfy; no valid
+  real approval manifest exists while the current decision is `NO_DECISION`.
 - [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
   records the exact build, revision, false flags, secret references, image
   digest, and content-safe rollout checks without reading secret values.

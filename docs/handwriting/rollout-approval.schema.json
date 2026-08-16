@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verityai.example/schemas/handwriting-rollout-approval-v1.json",
+  "title": "VerityAI handwriting rollout approval manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release_id",
+    "source_commit",
+    "provider",
+    "rollout_scope",
+    "decision",
+    "approvals",
+    "evidence",
+    "operations",
+    "activation_flags"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "release_id": { "$ref": "#/$defs/safeId" },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "provider": { "const": "myscript" },
+    "rollout_scope": {
+      "enum": ["internal_canary", "category_limited"]
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "run_id",
+        "corpus_version",
+        "corpus_manifest_sha256",
+        "normalization_version",
+        "sample_count",
+        "categories"
+      ],
+      "properties": {
+        "status": {
+          "enum": ["NO_DECISION", "NO_GO", "GO", "CATEGORY_LIMITED_GO"]
+        },
+        "run_id": { "$ref": "#/$defs/safeId" },
+        "corpus_version": { "$ref": "#/$defs/safeId" },
+        "corpus_manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "normalization_version": {
+          "type": "string",
+          "pattern": "^v[1-9][0-9]*$"
+        },
+        "sample_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "categories": { "$ref": "#/$defs/categories" }
+      }
+    },
+    "approvals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "privacy_legal",
+        "commercial",
+        "security_authentication",
+        "data_governance",
+        "product_rollout"
+      ],
+      "properties": {
+        "privacy_legal": { "$ref": "#/$defs/approval" },
+        "commercial": { "$ref": "#/$defs/approval" },
+        "security_authentication": { "$ref": "#/$defs/approval" },
+        "data_governance": { "$ref": "#/$defs/approval" },
+        "product_rollout": { "$ref": "#/$defs/approval" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_report",
+        "target_device_report",
+        "rollout_runbook",
+        "rollback_test"
+      ],
+      "properties": {
+        "decision_report": { "$ref": "#/$defs/repositoryEvidence" },
+        "target_device_report": { "$ref": "#/$defs/repositoryEvidence" },
+        "rollout_runbook": { "$ref": "#/$defs/repositoryEvidence" },
+        "rollback_test": { "$ref": "#/$defs/repositoryEvidence" }
+      }
+    },
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "durable_ledger_path",
+        "ledger_run_id",
+        "request_cap",
+        "provider_dashboard_requests_before",
+        "provider_account_limit",
+        "canary_percentage",
+        "fallback_provider",
+        "max_primary_attempts",
+        "max_fallback_attempts",
+        "retention_policy_id",
+        "deletion_test_id",
+        "authentication_boundary_id",
+        "rollback_target_revision",
+        "categories"
+      ],
+      "properties": {
+        "durable_ledger_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "^/"
+        },
+        "ledger_run_id": { "$ref": "#/$defs/safeId" },
+        "request_cap": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1500
+        },
+        "provider_dashboard_requests_before": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "provider_account_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "canary_percentage": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 5
+        },
+        "fallback_provider": { "const": "gemini" },
+        "max_primary_attempts": { "const": 1 },
+        "max_fallback_attempts": { "const": 1 },
+        "retention_policy_id": { "$ref": "#/$defs/safeId" },
+        "deletion_test_id": { "$ref": "#/$defs/safeId" },
+        "authentication_boundary_id": { "$ref": "#/$defs/safeId" },
+        "rollback_target_revision": {
+          "type": "string",
+          "pattern": "^verity-ai-[0-9]{5}-[a-z0-9]+$",
+          "maxLength": 80
+        },
+        "categories": { "$ref": "#/$defs/categories" }
+      }
+    },
+    "activation_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["MYSCRIPT_ENABLED", "MYSCRIPT_POC_ROUTE_ENABLED"],
+      "properties": {
+        "MYSCRIPT_ENABLED": { "const": true },
+        "MYSCRIPT_POC_ROUTE_ENABLED": { "const": true }
+      }
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 100,
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/safeId" }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["pending", "approved", "rejected"] },
+        "evidence_id": { "$ref": "#/$defs/safeId" },
+        "artifact_sha256": { "$ref": "#/$defs/sha256" },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "valid_through": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "repositoryEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^docs/handwriting/[A-Za-z0-9][A-Za-z0-9._/-]+$"
+        },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

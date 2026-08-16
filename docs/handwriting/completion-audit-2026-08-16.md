@@ -55,7 +55,7 @@ evidence or approval.
 | 17 | Relevant local and remote checks pass | Complete for merged work | Backend passes 1272 tests / 3 expected xfails after a clean dependency install; frontend passes 402 tests across 41 files plus lint, App.jsx 256/260, development/production builds, API-base check, and provider-secret bundle scan. Linux, Windows, frontend, and Vercel checks all passed through PR #59. |
 | 18 | Reviewable PRs merged to current main | Complete for safe deliverables | PRs #31–#59 are merged; latest audited substantive merge is `be9f023`. |
 | 19 | Preview/staging smoke tests pass | Partially complete | Vercel previews and disabled Cloud Run health/OpenAPI/route/frontend checks pass. No target-device enabled-provider preview is authorized. |
-| 20 | Production rollout completed or fully rollout-ready | External evidence required | The safe state is fully disabled with exact activation gates documented, but provider selection, eligible categories, authentication, decision corpus, privacy/commercial approval, and canary evidence are missing. |
+| 20 | Production rollout completed or fully rollout-ready | Mechanism complete; external evidence required | The safe state is fully disabled. A strict content-free rollout manifest schema and fail-closed validator now require the exact manifest and checked-out source commit, evidence blobs pinned to that commit, eligible provider decision/corpus/categories, five independent approvals, durable ledger and budget reconciliation, authentication/retention IDs, ≤5% canary, one-shot Gemini fallback, and rollback evidence. No valid manifest exists because provider selection, eligible corpus/device evidence, privacy/commercial/security/data/product approvals, and canary evidence remain missing. |
 | 21 | Rollback commands verified | Mechanism complete; enabled rollback external | [Runbook](rollout-runbook.md) contains frontend/backend kill switches; every reviewed Cloud Build restores false flags; live disabled verifier passes. An enabled-provider rollback cannot be exercised before an enabled canary is approved. |
 | 22 | Current architecture/status/results/risks/maintenance docs | Complete | Architecture, implementation log, evaluation report, POC evidence, readiness, rollout, and this audit are current. |
 | 23 | Final Chinese handoff | Pending goal completion | A final production/provider decision handoff would be misleading until the external evidence above exists. |
@@ -70,6 +70,11 @@ evidence or approval.
 | Product/finance owner | The synthetic-only v2 run is complete at 300/1,500 attempts. Dashboard reconciliation passed at 350 total requests with zero discrepancy and 1,650 published free requests remaining. This approval does not cover real handwriting, paid usage, production, or a new corpus. | No further MyScript request is needed for this diagnostic. Retain the unused ledger capacity until a separately reviewed purpose is approved. |
 | Security/product owner | Real user authentication and internal-preview access boundary | Replace/review the shared browser header before any deployed provider route can open. |
 | Product/model-cost owner | Approval for same-input Gemini control and, only if needed, a difficult-fallback Luna benchmark | Approve exact sample count, provider(s), cost cap, artifact path, and no-student-data boundary before any new model requests. |
+
+When these owners finish, assemble only content-free repository evidence and
+run `scripts/validate_handwriting_rollout_approval.py` against the exact release
+commit. A `PASS` summary is required for an activation PR but is not itself an
+authorization to deploy or send student ink.
 
 ## Resume order after unblocking
 

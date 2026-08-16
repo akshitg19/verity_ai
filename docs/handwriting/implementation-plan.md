@@ -896,3 +896,36 @@ Next action: run the full frontend/backend gates and merge; then collect 3–5
 target-device pairs with --require-ready. Separately, complete Google OAuth to
 deploy and verify the latest disabled Cloud Run revision.
 ```
+
+```text
+Date: 2026-08-16
+Branch: feat/handwriting-rollout-approval-gate
+Phase: production activation evidence gate
+Implemented: added a strict Draft 2020-12 content-free rollout-approval schema
+and fail-closed offline validator. It binds approval to the exact checked-out
+Git commit,
+decision run/corpus/categories, five independent approval artifacts, four
+repository evidence hashes and their exact committed blobs, durable ledger
+identity/path, account budget,
+retention/deletion/authentication IDs, canary percentage, one-shot Gemini
+fallback, rollback target, and both activation flags. No real approval manifest
+was created and Cloud Build remains hardcoded false/false.
+Tests and results: 16 focused tests cover a synthetic complete manifest plus
+NO_DECISION, small corpus, pending/missing/duplicate/future/expired approvals, source
+and checked-out-commit drift, evidence substitution/traversal/hash drift,
+run/category/cap mismatch,
+account overrun, ephemeral ledger paths, activation-flag drift, malformed JSON,
+duplicate keys, and content-safe failures. The full backend passes 1288 tests
+with 3 expected xfails. The unchanged frontend passes 402 tests across 41 files;
+lint, App.jsx
+256/260, development/production builds, API-base inspection, and provider-
+secret bundle scan pass. Remote checks remain pending.
+Measured metrics: engineering gate only; no provider, device, latency, accuracy,
+cost, or production traffic was generated.
+Known risks: hashes and machine checks cannot prove the substantive quality of
+human approvals. The manifest is a required release guard, not an approval
+authority or substitute for legal/security/product review.
+Next action: run full verification and merge. Keep flags false until a valid
+manifest and explicit activation approval exist; separately complete Google
+OAuth for the latest disabled deployment.
+```
