@@ -28,11 +28,12 @@ substitutions:
   # which the browser reports only as "Failed to fetch". Single-quoted so YAML
   # leaves the backslashes alone.
   _CORS_ORIGIN_REGEX: 'https://verity-ai[a-z0-9-]*\.vercel\.app'
-  # The first revision maps the existing secrets but keeps all provider traffic
-  # disabled. `latest` is acceptable only for this no-traffic revision. Before
-  # an approved POC, override both substitutions with reviewed numeric versions.
-  _MYSCRIPT_APPLICATION_KEY_VERSION: latest
-  _MYSCRIPT_HMAC_KEY_VERSION: latest
+  # Secret Manager version numbers are metadata, not secret values. Keep these
+  # pinned so a rotation cannot silently change a running revision. The
+  # validation step below rejects `latest`, empty values, and non-numeric
+  # overrides before an image is built or a revision is changed.
+  _MYSCRIPT_APPLICATION_KEY_VERSION: '1'
+  _MYSCRIPT_HMAC_KEY_VERSION: '1'
   # Optional shared-secret header, empty and therefore off. It has to live in
   # the deploy config rather than being set out of band, because the deploy
   # below uses --set-env-vars, which replaces the whole environment: a value
@@ -65,6 +66,14 @@ timeout: 1800s
 # the ordering is visible rather than implied.
 
 steps:
+  - id: validate-secret-versions
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: python3
+    args:
+      - scripts/validate_myscript_secret_versions.py
+      - '${_MYSCRIPT_APPLICATION_KEY_VERSION}'
+      - '${_MYSCRIPT_HMAC_KEY_VERSION}'
+
   - id: build
     name: gcr.io/cloud-builders/docker
     args:
