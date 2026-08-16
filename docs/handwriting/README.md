@@ -35,6 +35,9 @@ for implementation decisions.
 - [Secret-version pinning evidence](secret-version-pinning-evidence-2026-08-16.md)
   records the reviewed numeric references, build guard, updated disabled
   revision, and repeated content-safe checks.
+- `scripts/verify_disabled_myscript_revision.py` reproduces the allowlisted
+  revision-metadata and fail-closed smoke checks without accessing Secret
+  Manager values.
 - [Fixture schema](fixtures/fixture.schema.json) defines the machine-readable
   test-case format.
 - [Stroke schema](fixtures/stroke.schema.json) bounds replayable digital ink,
@@ -63,8 +66,9 @@ for implementation decisions.
   evaluation remain.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
-- Current safe work: numeric secret-version pinning is deployed and verified
-  with both provider gates false and no provider request.
+- Current safe work: numeric secret-version pinning is deployed and verified;
+  a fail-closed verifier checks future disabled revisions before any provider
+  request can be possible.
 - Next gates: target-device Phase A/B exports; written MyScript commercial and
   student-privacy answers; approved durable ledger storage and restart proof;
   and an approved consented raw-stroke corpus before live Phase 3 evaluation.

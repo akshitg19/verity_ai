@@ -813,6 +813,8 @@ Safe to review now:
 - stale recognition and judge responses are rejected;
 - pointer-to-paint lifecycle stages are locally observable;
 - client reuse is implemented;
+- disabled-revision metadata and smoke validation is reproducible through the
+  content-safe verifier in `scripts/verify_disabled_myscript_revision.py`;
 - all current frontend/backend validation passes.
 
 Not safe to claim yet:
