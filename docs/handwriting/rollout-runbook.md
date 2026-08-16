@@ -3,8 +3,8 @@
 **Status date:** 2026-08-16
 **Current decision:** Gemini remains the only enabled production recognizer.
 **MyScript status:** backend deployed in disabled revision
-`verity-ai-00018-fdv`; frontend POC wiring is disabled by default; live traffic
-is prohibited until the readiness gates pass.
+`verity-ai-00018-fdv`; frontend POC wiring is disabled by default. A separate
+local 30-call synthetic smoke completed without changing Cloud Run traffic.
 
 ## 1. Safety model
 
@@ -31,7 +31,7 @@ from contaminating latency and accuracy measurements. Generic hybrid and shadow
 classes remain testable infrastructure, but the environment configuration does
 not construct them for MyScript.
 
-## 2. Preconditions before any live provider call
+## 2. Preconditions before student or deployed provider traffic
 
 All items must have an owner and attached evidence:
 
@@ -39,14 +39,14 @@ All items must have an owner and attached evidence:
    transient processing, minor/student use, FERPA/COPPA, subprocessors,
    retention, deletion, residency, attribution, and publicity terms.
 2. VerityAI privacy/legal owner records approval for the exact POC data class.
-3. A 30–50-case synthetic or expressly approved internal smoke corpus passes
-   fixture validation; every record names MyScript in `approved_providers`.
+3. A reviewed target-device corpus passes fixture validation; every record
+   names MyScript in `approved_providers`.
 4. The restricted artifact store, access list, retention date, and deletion
    procedure are approved and exercised.
 5. The vendor dashboard's remaining trial quota is checked without exposing
    credentials.
 6. The replay plan and initialized owner-only durable run ledger enforce the
-   650-attempt maximum across process restarts. Its status is reconciled with
+   explicitly approved attempt maximum across process restarts. Its status is reconciled with
    the provider dashboard before and after the run. The adapter's in-process
    counter is secondary only.
 7. Both Secret Manager environment references are pinned to reviewed numeric
@@ -55,8 +55,9 @@ All items must have an owner and attached evidence:
 8. Real user authentication is reviewed. The existing shared browser header is
    only a crawler deterrent and is not sufficient for a student rollout.
 
-If any item is missing, leave every MyScript flag false and do not make a smoke
-request.
+If any item is missing, leave every MyScript deployment flag false and do not
+send student or production traffic. The completed synthetic-only local smoke is
+documented separately and does not close these rollout gates.
 
 ## 3. Deployment sequence
 
@@ -133,7 +134,7 @@ verify the revision references the expected numeric versions without accessing
 their values, run the content-safe checks below, and only then disable the old
 versions. Never use `latest` as a temporary shortcut.
 
-### Approved internal POC
+### Future deployed internal POC
 
 Only after every precondition passes:
 
@@ -159,6 +160,14 @@ Only after every precondition passes:
 
 Do not enable shadow fan-out, hybrid fallback, a percentage rollout, or student
 traffic during this stage.
+
+### Completed local synthetic POC
+
+On 2026-08-16 an explicitly approved, synthetic-only runner used an owner-only
+repository-external ledger capped at 50 total HTTP attempts. It sent 30
+validated vector fixtures, used 30 attempts with no retries or errors, and left
+all Cloud Run and frontend gates unchanged. See
+[`myscript-synthetic-poc-2026-08-16.md`](myscript-synthetic-poc-2026-08-16.md).
 
 ## 4. Observability and alerts
 

@@ -1,6 +1,6 @@
 # Handwriting Provider Readiness Review
 
-**Evidence date:** 2026-08-14
+**Evidence date:** 2026-08-16
 **Decision scope:** vector handwriting recognition, image fallback, evaluation
 corpus, credentials, privacy, licensing, and bounded proof of concept (POC)
 **Legal status:** engineering due diligence, not legal advice
@@ -15,6 +15,12 @@ and requires a separate commercial agreement before distribution. The current
 DPA describes transient ink processing, but does not expressly address FERPA or
 COPPA. Those points require written vendor answers and an internal privacy/legal
 approval before any real student ink is sent.
+
+The free-trial terms do not require a paid agreement before an internal,
+synthetic-only evaluation. The approved 30-call smoke therefore proceeded
+without student data and is recorded in
+`myscript-synthetic-poc-2026-08-16.md`. Commercial terms are a production and
+distribution gate, not a prerequisite for this synthetic smoke.
 
 Mathpix is the most practical hosted contingency because `v3/strokes` accepts
 digital ink and supports short-lived client tokens. It also remains unapproved
@@ -85,7 +91,7 @@ browser strokes
   -> backend builds one canonical MyScript request body
   -> backend computes HMAC over those exact bytes
   -> MyScript /api/v4.0/iink/recognize
-  -> backend parses JIIX math label / candidate output
+  -> backend parses the documented LaTeX math response
   -> existing frontend recognition contract
 ```
 
@@ -94,9 +100,9 @@ Reasons:
 - The permanent application and HMAC keys never cross the backend boundary.
 - REST matches the current “recognize a completed expression” POC and needs one
   counted call per case/configuration.
-- JIIX can carry structured results and a math LaTeX label in one response, so
-  the evaluator must not make a second request merely to obtain another output
-  format.
+- The current Math recognize example documents `application/x-latex`; one
+  response is sufficient and the evaluator must not make a second request for
+  another output format.
 - WebSocket can eventually improve provisional latency, but MyScript's public
   browser examples require an HMAC-capable client. VerityAI will not copy the
   permanent HMAC key into JavaScript. Incremental use requires written vendor
@@ -111,9 +117,9 @@ Reasons:
 - Do not send local stroke IDs, pointer IDs, presentation styles, page IDs, or
   expression IDs to MyScript. Translate only ordered coordinate arrays and
   valid optional time/pressure arrays.
-- Request JIIX with `export.jiix.strokes=false`, keep the math solver disabled,
-  and return only the restricted linear-equation normalization from the API
-  route. The provider's raw JIIX/LaTeX is never written to normal logs.
+- Request `application/x-latex`, keep the math solver disabled, and return only
+  the restricted linear-equation normalization from the API route. Provider
+  LaTeX is never written to normal logs.
 - Use a short connect/read timeout and an abort signal.
 - Retry at most once for a transient `429`/`5xx`, and count the retry against
   the evaluation budget. Do not retry authentication, quota, or validation
@@ -248,35 +254,35 @@ approved account/order and legal review.
 ## 6. Evaluation request budget
 
 The public MyScript trial quota is 2,000 requests. REST accounting is one API
-call per request. Before any POC, the operator must inspect the dashboard's
-remaining quota without exposing credentials; this document does not assume the
-account is still at 2,000.
+call per request. The synthetic run's local ledger proves 30 attempts, but the
+provider dashboard was not captured before or after the run; this document does
+not claim the account's exact remaining quota. Dashboard reconciliation is
+required before any later decision corpus.
 
-Use one fixed POC configuration and one JIIX response per fixture:
+Use one fixed POC configuration and one LaTeX response per fixture:
 
 | Stage | Planned fixtures/calls | Maximum |
 |---|---:|---:|
-| Adapter/auth smoke with synthetic or approved internal ink | 30–50 | 50 |
-| Frozen evaluation corpus | 300–500 | 500 |
-| Explicit transient retry allowance | at most 10% | 55 |
-| Configuration/debug reserve | bounded | 45 |
-| **Hard POC cap** |  | **650** |
+| Approved synthetic smoke (completed) | 30 | 30 |
+| Reserved retry/failure allowance | 20 | 20 |
+| **Approved 2026-08-16 hard cap** |  | **50** |
 
 Rules:
 
-- Stop automatically before call 651, regardless of dashboard quota.
+- Stop automatically before attempt 51 for the approved synthetic run,
+  regardless of dashboard quota.
 - A retry and a failed request both consume the local budget counter.
 - The adapter's in-process counter is a secondary fail-closed guard, not a
   durable cross-restart ledger. An approved live POC must also use the frozen
   replay plan, a durable run total, one controlled revision, and before/after
   dashboard checks. Never rely on a restarted Cloud Run process to remember
   prior requests.
-- Run neither the 30–50 smoke nor the 300–500 corpus until each fixture's
-  source, retention, reviewer status, and provider permission pass validation.
+- Run no later decision corpus until each fixture's source, retention, reviewer
+  status, and provider permission pass validation.
 - Do not fan one writer's ink out to multiple providers unless the consent and
   evaluation protocol expressly allow each named provider.
-- Preserve at least 1,350 nominal trial requests for follow-up, minus any usage
-  already shown in the vendor dashboard.
+- The local ledger recorded 30 attempts and 20 unused run slots. Any later
+  300–500-case decision corpus requires a new explicit budget and run identity.
 - Obtain a written commercial quote before forecasting production cost. “Free
   to 2,000” is a trial quota, not production pricing.
 
@@ -286,22 +292,22 @@ Rules:
 |---|---|---|
 | Developer account, app, keys | Complete | User-verified 2026-08-14 |
 | GCP secret storage and runtime IAM | Complete | User-verified 2026-08-14 |
-| Backend REST adapter with mock tests | Implemented; live call blocked | Fixed HMAC vector, exact-body mock, timeout/error/retry/cap tests, bounded schemas, content-safe logging |
+| Backend REST adapter | Live synthetic smoke complete | Fixed HMAC vector, exact-body tests, documented LaTeX response, bounded schemas, content-safe logging, 30/30 live success |
 | Cloud Run secret-to-environment mapping | Complete for disabled revision `verity-ai-00018-fdv` | [Numeric version-`1` references, build guard, revision metadata, and content-safe checks](secret-version-pinning-evidence-2026-08-16.md) |
 | Direct frontend POC adapter | Implemented in PR #35 | Dual-gate config tests, ordered vector payload, no-PNG/no-local-metadata assertion, cancellation and safe-error tests, production-bundle secret scan |
 | Durable POC attempt ledger | Implemented in PR #36 | Owner-only repository-external ledger, concurrent atomic reservations, corruption/identity/cap fail-closed tests, restart persistence, production-factory enforcement |
-| Synthetic/internal smoke corpus (30–50) | Blocked | Approved sources, two-reviewer truth for decision cases, schema validation |
+| Synthetic smoke corpus (30–50) | Complete for technical smoke | 30 deterministic vector fixtures, schema validation, provider approval, repository provenance |
 | Frozen external corpus (300–500) | Blocked | Consent/provenance, restricted store, retention/deletion policy, target devices |
-| MyScript trial data-use clarification | Blocked | Written answer reconciling trial research access with DPA transient processing |
+| MyScript trial data-use clarification | Not required for synthetic smoke; blocked for student ink | Written answer reconciling trial research access with DPA transient processing |
 | FERPA/COPPA/minor use | Blocked | Written vendor answer plus VerityAI privacy/legal approval |
-| Commercial production right and price | Blocked | Signed agreement/quote; attribution and publicity terms approved |
-| POC accuracy/latency report | Blocked by corpus/vendor gates | Reproducible aggregate report; raw artifacts remain restricted |
+| Commercial production right and price | Deferred production gate | Signed agreement/quote before distribution; attribution and publicity terms approved |
+| Synthetic POC accuracy/latency report | Complete; decision-ineligible | [30-call aggregate evidence](myscript-synthetic-poc-2026-08-16.md); raw artifacts remain restricted |
 | Student-facing rollout | Blocked | All prior gates, canary/rollback proof, observability, support/runbook |
 | Gemini student-facing fallback | Blocked | Written contractual/legal resolution of current under-18 restriction |
 
-“Blocked” here prevents external traffic or rollout; it does not prevent merging
-offline adapter code, mocks, schema validation, scorer tooling, or deployment
-configuration with `MYSCRIPT_ENABLED=false`.
+“Blocked” here prevents student traffic or production rollout. It did not
+prevent the explicitly approved synthetic-only free-trial smoke with production
+flags left false.
 
 ## 8. Vendor contact draft — do not send automatically
 
@@ -311,7 +317,7 @@ production terms
 
 > We are evaluating MyScript iink Cloud for a student-facing math and chemistry
 > learning application. We have created a developer application and plan an
-> initial internal evaluation under 650 REST calls using synthetic or expressly
+> initial internal evaluation under 50 REST calls using synthetic or expressly
 > approved fixtures. Before sending any student handwriting or enabling
 > production traffic, please confirm the following in writing:
 >

@@ -4,8 +4,8 @@
 (`156d724`), Phase C/D safe tooling in PR #33 (`e01d28e`), and the disabled
 Phase 3 backend adapter in PR #34 (`949e1ea`); unreachable-by-default frontend
 POC wiring is implemented in PR #35, and durable attempt-ledger enforcement in
-PR #36 (`a584368`), while live Phase 3 still requires written licensing/privacy
-and approved-corpus evidence
+PR #36 (`a584368`). A 30-call synthetic-only live Phase 3 smoke completed on
+2026-08-16; student/production and decision-corpus work remains gated
 **Rule:** One phase per reviewable change unless scope expansion is explicit
 
 ## Phase 0 — Source of truth and safe workspace
@@ -104,15 +104,17 @@ and target-device latency measurement remain explicit follow-up evidence.
 
 **Status:** Safe backend portion merged with both deploy flags false. Direct
 vector-only frontend wiring is implemented behind two additional false-by-default
-gates. PR #36 implements durable cross-restart attempt-ledger enforcement. Live
-traffic, corpus replay, and provider evidence remain blocked.
+gates. PR #36 implements durable cross-restart attempt-ledger enforcement. A
+separate local synthetic smoke completed without enabling deployed traffic;
+decision-corpus and student/production evidence remain blocked.
 
 ### Preconditions
 
 - Complete MyScript account/credentials and backend secret storage (complete).
-- Written licensing/privacy approval before external calls or student data.
-- Fixture corpus with provider-specific consent and expected canonical outputs
-  before live evaluation.
+- Explicit free-trial request budget and synthetic-only provider permission
+  before the technical smoke (complete: 50 cap, 30 attempts).
+- Written licensing/privacy approval before student data or deployed traffic.
+- Reviewed target-device corpus before a provider decision.
 
 The backend adapter, HMAC fixtures, error mapping, request caps, and disabled
 Cloud Run configuration may be implemented with mocks before the external-call
@@ -537,4 +539,36 @@ restricted storage, durable ledger mount/restart proof, dashboard
 reconciliation, target devices, and real authentication remain blocked.
 Next action: merge PR #42 after CI. Keep every MyScript gate false and require
 the named external owners' evidence before any POC traffic.
+```
+
+```text
+Date: 2026-08-16
+Branch/commit: feat/handwriting-myscript-synthetic-poc-50 (pending)
+Phase: 3 live synthetic smoke and Phase 4 non-decision checkpoint
+Implemented: reviewed the merged MyScript boundary; changed the live Math
+response to the currently documented application/x-latex format; added a
+synthetic-only runner with a 50-total-attempt hard cap, fail-fast policy,
+owner-only prediction output, and durable ledger; generated and validated 30
+deterministic vector linear-equation fixtures; and ran the approved free-trial
+smoke without changing Cloud Run or frontend flags.
+Tests and results: 64 focused adapter, ledger, evaluator, and POC-runner tests
+passed; the full backend suite passed 1261 tests with 3 expected xfails and 3
+existing OPSIN warnings. Frontend passed 387 tests across 41 files, lint,
+App.jsx cap (256/260), production build, API-base verification, and provider-
+secret bundle scan. Fixture validation passed for 30 records. The live run
+returned 30/30 successes, zero retries/errors, and used 30/50 ledger slots; a
+fresh-process ledger status check reproduced the same total.
+Measured metrics: normalized exact match 66.67%; deterministic algebra parse
+success 66.67%; mean
+character error 6.254%; provider latency p50 141ms and p95 266.15ms; mean/p95
+request size 2,540.433/3,094.35 bytes. No paid cost was incurred under the free
+trial.
+Known risks: the aggregate is decision-ineligible because fixtures have one
+reviewer, are generator-only, have no same-input Gemini control, and do not
+measure target-device pointer-to-paint latency. Provider dashboard
+reconciliation was not captured. Student/production traffic remains blocked.
+Next action: review the 10 recognition mismatches in the restricted artifact,
+freeze a reviewed target-device corpus, run an identical Gemini control, and
+obtain student/privacy/commercial approvals only before those data/rollout
+stages. Keep every production MyScript flag false.
 ```

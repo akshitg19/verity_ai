@@ -25,8 +25,11 @@ for implementation decisions.
 - [Provider readiness](provider-readiness.md) records current official-source
   licensing, privacy, pricing, secret mapping, POC budget, and rollout gates.
 - [Provider evaluation report](provider-evaluation-report.md) records the
-  current no-decision checkpoint and the mandatory category/device report
+  current synthetic-smoke/no-decision checkpoint and the mandatory category/device report
   contract; `NOT_MEASURED` fields must not be inferred from examples.
+- [MyScript synthetic POC evidence](myscript-synthetic-poc-2026-08-16.md)
+  records the approved 30-call, synthetic-only live run and its aggregate
+  accuracy, latency, and request-budget results.
 - [Rollout runbook](rollout-runbook.md) records the disabled deployment check,
   activation prerequisites, monitoring, outage response, and kill switches.
 - [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
@@ -59,8 +62,9 @@ for implementation decisions.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: the backend MyScript REST adapter and internal route are
-  deployed in disabled revision `verity-ai-00018-fdv`. PR #35 implements
-  unreachable-by-default frontend POC wiring; no live call is enabled.
+  deployed in disabled revision `verity-ai-00018-fdv`. A separate local,
+  synthetic-only 30-call POC proved the live REST boundary; Cloud Run and
+  frontend traffic remain disabled.
 - Recommended vector POC: MyScript iink. The developer application, local
   credential file, GCP secrets, and runtime-service-account secret access are
   complete. Disabled deployment, numeric secret-version pinning, and
@@ -72,8 +76,8 @@ for implementation decisions.
   a fail-closed verifier checks future disabled revisions before any provider
   request can be possible.
 - Next gates: target-device Phase A/B exports; written MyScript commercial and
-  student-privacy answers; approved durable ledger storage and restart proof;
-  and an approved consented raw-stroke corpus before live Phase 3 evaluation.
+  student-privacy answers before student/production use; an approved consented
+  raw-stroke decision corpus; and same-input Gemini control evidence.
 
 ## Working agreement for AI-assisted changes
 

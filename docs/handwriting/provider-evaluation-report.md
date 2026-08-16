@@ -2,13 +2,13 @@
 
 **Status date:** 2026-08-16
 
-**Evidence state:** `NOT_RUN`
+**Evidence state:** `SYNTHETIC_SMOKE_COMPLETE`; decision corpus `NOT_RUN`
 
 **Provider decision:** `NO_DECISION`
 
 This file is the authoritative Phase 4 decision checkpoint and report contract.
-It does not contain provider benchmark results. MyScript has neither passed nor
-failed the VerityAI evaluation, and Gemini remains the deployed control because
+A decision-ineligible 30-case synthetic smoke is complete, but MyScript has
+neither passed nor failed the VerityAI decision evaluation. Gemini remains the deployed control because
 it is the safe default—not because a completed comparison proved it superior.
 
 The three shape examples in `fixtures/cases.example.jsonl` and their copied
@@ -20,7 +20,7 @@ must never be inserted here as accuracy, latency, request, or cost evidence.
 | Path | Current state | Evidence-backed conclusion |
 |---|---|---|
 | Production primary | Gemini image transcription | Retain as rollback-safe control; no new provider traffic |
-| MyScript vector candidate | Engineering boundary implemented, live POC blocked | `NO_DECISION`—not a pass and not a no-go |
+| MyScript vector candidate | 30-case synthetic live POC complete; decision corpus blocked | `NO_DECISION`—technical boundary works, accuracy gate not established |
 | Hybrid vector → Gemini | Infrastructure/mock tests only | Not eligible for production configuration |
 | Image fallback candidate | Gemini retained; GPT-5.6 Luna not evaluated | `NO_DECISION` |
 | Written chemistry | Separate deterministic routing exists | No recognition-provider decision |
@@ -35,15 +35,22 @@ measurement row.
 | Gate | Current state | Owner | Evidence required |
 |---|---|---|---|
 | Disabled Cloud Run revision | Complete | GCP project owner | Build `1210e5a0-58fb-4a1f-9648-656b7d2e2f1a`, current revision `verity-ai-00018-fdv`, and [numeric-pinning/fail-closed evidence](secret-version-pinning-evidence-2026-08-16.md) |
-| MyScript trial/privacy terms | Blocked | MyScript and VerityAI privacy/legal | Written data-use, retention, training, deletion, region, subprocessor, DPA, FERPA/COPPA, attribution, and publicity answers |
-| Commercial rights and cost | Blocked | MyScript and VerityAI commercial owner | Written billing unit, quota, minimum, overage, cancellation, production right, SLA, and quote |
-| Approved smoke corpus | Blocked | VerityAI data/privacy owner | 30–50 approved fixtures, provider-specific permission, provenance, retention, two-reviewer decision truth |
+| MyScript trial/privacy terms | Synthetic smoke allowed; blocked for student ink | MyScript and VerityAI privacy/legal | Written data-use, retention, training, deletion, region, subprocessor, DPA, FERPA/COPPA, attribution, and publicity answers before student use |
+| Commercial rights and cost | Deferred production gate | MyScript and VerityAI commercial owner | Written billing unit, quota, minimum, overage, cancellation, production right, SLA, and quote before distribution |
+| Approved smoke corpus | Complete for technical smoke | VerityAI engineering | 30 deterministic synthetic fixtures, MyScript-specific permission, provenance, retention, validation |
 | Frozen decision corpus | Blocked | VerityAI data/privacy owner | Versioned 300–500 fixtures in restricted storage with approved deletion/access rules |
 | Durable attempt store | Code merged; store not approved or mounted | GCP/data owner | Durable store identity, access policy, initialized ledger, restart proof, dashboard reconciliation procedure |
 | Target devices | Blocked | Product/QA owner | Named tablet/browser groups and consented device-run exports |
 | Authentication | Blocked for student traffic | Security/product owner | Review proving a real user-access boundary; shared browser header is insufficient |
 
 ## 3. Run identity
+
+The completed technical smoke is recorded in
+[`myscript-synthetic-poc-2026-08-16.md`](myscript-synthetic-poc-2026-08-16.md):
+30/30 provider successes, 66.67% normalized exact match and deterministic parse success,
+141 ms p50 and 266.15 ms p95 provider latency, and 30/50 ledger attempts used.
+Its aggregate is `decision_eligible=false` because it has one reviewer, no
+target-device interaction, and no same-input Gemini control.
 
 All values remain `NOT_MEASURED` until a decision-eligible aggregate is
 attached. Do not use `0`, an empty cell, or a copied example value to mean
@@ -103,7 +110,7 @@ measurement. Report both and identify warm/cold conditions.
 
 | Metric | Result |
 |---|---|
-| Planned / reserved / dashboard attempts | `NOT_MEASURED` |
+| Synthetic smoke planned / used / remaining | `50 / 30 / 20` local ledger; dashboard reconciliation not recorded |
 | Success / timeout / error rates | `NOT_MEASURED` |
 | Retry count | `NOT_MEASURED` |
 | Payload mean / p95 | `NOT_MEASURED` |
@@ -135,9 +142,8 @@ request count.
 ## 8. Current recommendation
 
 `NO_DECISION`: keep Gemini-only production behavior and all MyScript frontend
-and backend gates false. Disabled deployment, metadata validation, and numeric
-secret-version pinning are complete. The next permissible provider action
-requires every remaining gate in Section 2; until then, make no smoke request
-and claim no provider accuracy, latency, request count, or cost. The next unlock
-must come from the named privacy/legal, commercial, data, GCP, QA, and security
-owners attaching their required evidence—not from another flag change.
+and backend gates false. The synthetic smoke proves the live technical boundary
+but its 66.67% exact match is not an adoption result. The next provider decision
+action requires a reviewed target-device corpus and same-input Gemini control;
+student traffic additionally requires privacy/legal, commercial, data,
+authentication, and rollout evidence.
