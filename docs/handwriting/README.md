@@ -35,6 +35,9 @@ for implementation decisions.
 - [Secret-version pinning evidence](secret-version-pinning-evidence-2026-08-16.md)
   records the reviewed numeric references, build guard, updated disabled
   revision, and repeated content-safe checks.
+- `scripts/verify_disabled_myscript_revision.py` reproduces the allowlisted
+  revision-metadata and fail-closed smoke checks without accessing Secret
+  Manager values.
 - [Fixture schema](fixtures/fixture.schema.json) defines the machine-readable
   test-case format.
 - [Stroke schema](fixtures/stroke.schema.json) bounds replayable digital ink,
@@ -49,7 +52,9 @@ for implementation decisions.
   #32 (`156d724`), and provider readiness/offline evaluation by PR #33
   (`e01d28e`). The disabled backend adapter was merged by PR #34 (`949e1ea`),
   PR #35 added the disabled frontend POC boundary, PR #36 added the durable
-  attempt ledger, and PR #37 added the explicit evaluation checkpoint.
+  attempt ledger, PR #37 added the explicit evaluation checkpoint, PRs #38–#40
+  deployed and pinned the disabled boundary, and PR #42 adds repeatable
+  disabled-revision verification.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
@@ -63,8 +68,9 @@ for implementation decisions.
   evaluation remain.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
-- Current safe work: numeric secret-version pinning is deployed and verified
-  with both provider gates false and no provider request.
+- Current safe work: numeric secret-version pinning is deployed and verified;
+  a fail-closed verifier checks future disabled revisions before any provider
+  request can be possible.
 - Next gates: target-device Phase A/B exports; written MyScript commercial and
   student-privacy answers; approved durable ledger storage and restart proof;
   and an approved consented raw-stroke corpus before live Phase 3 evaluation.

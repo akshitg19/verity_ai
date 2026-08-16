@@ -7,7 +7,8 @@ backend adapter, and unreachable-by-default frontend wiring are merged through
 PRs #31–#36. PR #37 added the explicit no-decision checkpoint, PR #38 recorded
 the disabled deployment, PR #39 pinned numeric Secret Manager versions, and PR
 #40 recorded revision `verity-ai-00018-fdv`. Provider traffic remains disabled;
-live vector-provider POC and target-device evidence remain unavailable.
+PR #42 adds repeatable content-safe runtime verification. Live vector-provider
+POC and target-device evidence remain unavailable.
 
 **Working branch:** `main`
 
@@ -813,6 +814,8 @@ Safe to review now:
 - stale recognition and judge responses are rejected;
 - pointer-to-paint lifecycle stages are locally observable;
 - client reuse is implemented;
+- disabled-revision metadata and smoke validation is reproducible through the
+  content-safe verifier in `scripts/verify_disabled_myscript_revision.py`;
 - all current frontend/backend validation passes.
 
 Not safe to claim yet:

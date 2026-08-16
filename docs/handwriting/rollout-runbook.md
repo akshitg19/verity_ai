@@ -94,6 +94,29 @@ serves the same verified image with both flags false and both numeric references
 the repeated health, OpenAPI, disabled-route, and frontend checks passed. See
 [the pinning evidence](secret-version-pinning-evidence-2026-08-16.md).
 
+### Repeatable disabled-revision verification
+
+From an authenticated Cloud Shell or operator workstation with `gcloud`, run:
+
+```bash
+python3 scripts/verify_disabled_myscript_revision.py
+```
+
+The verifier calls only `gcloud run services describe` and
+`gcloud run revisions describe`; it never invokes Secret Manager version access.
+It emits an allowlisted JSON report containing revision identity, runtime service
+account, image identity, false flags, numeric secret references, traffic percent,
+and HTTP status classes. Other runtime environment values and response bodies
+are not emitted.
+
+Safety ordering is mandatory: the verifier exits before any HTTP request unless
+the latest-created and latest-ready revision match, that revision serves 100% of
+traffic, the expected runtime identity and image digest exist, both MyScript
+flags equal `false`, and both expected Secret Manager references use positive
+numeric versions. Only then does it check `/health`, OpenAPI route presence, a
+minimal synthetic disabled-route HTTP 404, and the production frontend. Any
+failure returns a stable content-safe code and a nonzero exit status.
+
 ### Secret-version rotation
 
 `cloudbuild.yaml` pins both MyScript Secret Manager references to reviewed
