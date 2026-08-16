@@ -7,8 +7,9 @@ backend adapter, and unreachable-by-default frontend wiring are merged through
 PRs #31–#36. PR #37 added the explicit no-decision checkpoint, PR #38 recorded
 the disabled deployment, PR #39 pinned numeric Secret Manager versions, and PR
 #40 recorded revision `verity-ai-00018-fdv`. Provider traffic remains disabled;
-PR #42 adds repeatable content-safe runtime verification. Live vector-provider
-POC and target-device evidence remain unavailable.
+PR #42 adds repeatable content-safe runtime verification. A separate local
+30-call synthetic MyScript POC completed; target-device and decision-corpus
+evidence remain unavailable.
 
 **Working branch:** `main`
 
@@ -544,7 +545,7 @@ claim should be made about end-to-end p50/p95 improvement until the lifecycle
 events are measured on target tablets. The 300–500ms target still requires a
 working vector provider.
 
-### No live MyScript runtime integration
+### Live adapter smoke complete; deployed integration remains disabled
 
 The MyScript developer application and credentials exist. The credentials remain
 only in the local ignored secret file and two GCP Secret Manager secrets; the
@@ -555,9 +556,12 @@ flags are false. Runtime metadata proves the expected service account and the
 two numeric version-`1` Secret Manager references without reading their values;
 see `secret-version-pinning-evidence-2026-08-16.md`. A direct vector-only
 frontend POC adapter is implemented behind two additional false-by-default gates;
-it has no automatic image fallback. No external provider call, POC corpus run,
-or measured provider result exists; deployed evidence is limited to the
-fail-closed checkpoint. The route additionally requires
+it has no automatic image fallback. A local synthetic-only runner made 30
+successful live REST calls under a 50-attempt durable cap; exact match and
+deterministic parse success were both 66.67%, and provider latency p50/p95 was
+141/266.15ms. See
+`myscript-synthetic-poc-2026-08-16.md`. This result did not enable the deployed
+route or establish a provider decision. The route additionally requires
 the existing API access-control header before it can open. Provider/legal
 evidence, offline evaluation harness, and rollback procedure are in
 `provider-readiness.md`, `fixtures/README.md`, `provider-evaluation-report.md`,
@@ -568,11 +572,11 @@ and `rollout-runbook.md`.
 GPT-5.6 Luna remains an image-fallback benchmark candidate. No OpenAI API key,
 request path, prompt, or production dependency was added.
 
-### No provider benchmark corpus
+### No provider decision corpus
 
-The repository has legacy PNG samples and three schema examples, but not the
-required 30–50 approved smoke fixtures or 300–500 consented decision fixtures.
-No live provider corpus or target-device benchmark has been run.
+The repository now has 30 deterministic synthetic vector smoke fixtures, but
+not the required 300–500 consented, two-reviewer decision fixtures. No
+same-input Gemini control or target-device benchmark has been run.
 
 ### No general row-model rewrite
 
@@ -637,22 +641,20 @@ Tune these with real metrics rather than treating them as final product truth.
 - The backend contract is unchanged and the complete backend suite remains
   green.
 
-The next implementation phase is Phase 3, the MyScript vector POC. Account and
-secret storage are now complete. Live provider work still requires current
-licensing/privacy approval and an approved consented fixture corpus; the backend
-adapter and Cloud Run secret mapping may be implemented and tested with mocks in
-the meantime.
+The Phase 3 technical smoke is complete. The next provider-decision work is a
+reviewed target-device corpus and same-input Gemini control. Student data and
+production distribution still require privacy/legal, consent, retention,
+authentication, and commercial approval.
 
 ## 11. MyScript POC after Phase 2
 
-Preconditions:
+Completed synthetic-smoke preconditions:
 
-- MyScript licensing and privacy review (credentials and GCP secret storage are
-  complete);
+- explicit approval for at most 50 free-trial attempts;
+- synthetic-only fixture data with MyScript-specific permission;
 - backend secret-to-environment mapping and adapter;
-- consented fixture corpus;
-- normalization contract for LaTeX/JIIX;
-- approved provider privacy policy.
+- owner-only repository-external attempt ledger and raw artifacts;
+- normalization contract for LaTeX.
 
 Recommended POC scope:
 
@@ -661,14 +663,14 @@ one linear-equation topic
 existing VerityAI canvas
 raw strokes {x,y,t,p}
 backend MyScript adapter
-LaTeX/JIIX normalization
+LaTeX normalization
 existing deterministic judge
 internal feature flag only
 ```
 
 Do not begin by replacing the full canvas/editor.
 
-Start with 30–50 synthetic or expressly approved internal expressions. Freeze a
+The completed smoke used 30 synthetic expressions and 30 attempts. Freeze a
 300–500 expression decision corpus across writers and target devices only after
 the smoke passes and the provider/privacy gates close. Include fractions,
 exponents, ambiguous symbols, edits, and writing-quality variation.
@@ -820,7 +822,7 @@ Safe to review now:
 
 Not safe to claim yet:
 
-- MyScript works;
+- MyScript is production-ready or accurate enough for adoption;
 - PNG is no longer used;
 - final handwriting latency is 300–500ms;
 - live Gemini accuracy or target-device p95 improved by a measured amount;
@@ -829,7 +831,7 @@ Not safe to claim yet:
 
 The current safe state is disabled revision `verity-ai-00018-fdv`, with both
 provider flags false and both Secret Manager references pinned to reviewed
-numeric version `1`. Live POC calls remain blocked on the written
-licensing/privacy and commercial answers, approved corpora and restricted
-storage, durable ledger mount/restart proof, dashboard reconciliation, target
-devices, and a real user-access boundary in `provider-readiness.md`.
+numeric version `1`. Further decision-corpus or student/deployed traffic remains
+blocked on its separately applicable corpus, privacy/legal, commercial,
+dashboard, target-device, authentication, and rollout gates in
+`provider-readiness.md`.

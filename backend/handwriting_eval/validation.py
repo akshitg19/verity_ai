@@ -345,3 +345,31 @@ def write_restricted_json(path: Path | str, value: dict[str, Any]) -> None:
         output_path.chmod(0o600)
     except OSError as exc:
         raise EvaluationDataError("Could not write restricted JSON artifact") from exc
+
+
+def write_restricted_jsonl(
+    path: Path | str, records: Iterable[dict[str, Any]]
+) -> None:
+    """Write raw provider records as owner-only deterministic JSONL."""
+
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = "".join(
+        json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        + "\n"
+        for record in records
+    )
+    if os.name != "posix":
+        output_path.write_text(payload, encoding="utf-8")
+        return
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(output_path, flags, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output_file:
+            output_file.write(payload)
+        output_path.chmod(0o600)
+    except OSError as exc:
+        raise EvaluationDataError("Could not write restricted JSONL artifact") from exc

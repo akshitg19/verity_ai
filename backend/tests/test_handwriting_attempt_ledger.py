@@ -45,8 +45,8 @@ def settings(*, request_cap=650):
 def success_response(label="x = 3"):
     return httpx.Response(
         200,
-        headers={"Content-Type": "application/vnd.myscript.jiix"},
-        json={"type": "Math", "label": label},
+        headers={"Content-Type": "application/x-latex"},
+        content=label.encode("utf-8"),
     )
 
 

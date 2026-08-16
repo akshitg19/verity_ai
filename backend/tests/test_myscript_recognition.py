@@ -21,6 +21,7 @@ from myscript_recognition import (
     compute_myscript_hmac,
     get_myscript_recognizer,
     parse_myscript_jiix,
+    parse_myscript_latex,
     serialize_myscript_request,
 )
 from schemas import MyScriptRecognizeRequest, Step
@@ -67,8 +68,8 @@ def settings(*, enabled=True, request_cap=650):
 def success_response(label=r"\frac{x}{2} = 3"):
     return httpx.Response(
         200,
-        headers={"Content-Type": "application/vnd.myscript.jiix"},
-        json={"type": "Math", "label": label},
+        headers={"Content-Type": "application/x-latex"},
+        content=label.encode("utf-8"),
     )
 
 
@@ -132,9 +133,7 @@ def test_recognizer_sends_the_signed_exact_body_and_returns_normalized_math():
             SYNTHETIC_APPLICATION_KEY,
             SYNTHETIC_HMAC_KEY,
         )
-        assert provider_request.headers["Accept"] == (
-            "application/vnd.myscript.jiix,application/json"
-        )
+        assert provider_request.headers["Accept"] == "application/x-latex,application/json"
         return success_response()
 
     recognizer = MyScriptRecognizer(
@@ -276,11 +275,19 @@ def test_invalid_jiix_does_not_echo_provider_content():
     assert captured.value.__context__ is None
 
 
+def test_invalid_latex_utf8_does_not_echo_provider_content():
+    with pytest.raises(MyScriptRecognitionError) as captured:
+        parse_myscript_latex(b"\xffprivate")
+
+    assert captured.value.code == "provider_response_invalid"
+    assert "private" not in str(captured.value)
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+
+
 def test_normalized_linear_fraction_is_accepted_by_deterministic_judge():
-    text, _provider_latex, unreadable = parse_myscript_jiix(
-        json.dumps({"type": "Math", "label": r"\frac{x}{2} = 3"}).encode(
-            "utf-8"
-        )
+    text, _provider_latex, unreadable = parse_myscript_latex(
+        rb"\frac{x}{2} = 3"
     )
 
     verdict = MathJudgeDispatcher().check(
@@ -316,7 +323,7 @@ def test_declared_oversized_provider_response_is_rejected_before_parsing():
         return httpx.Response(
             200,
             headers={
-                "Content-Type": "application/vnd.myscript.jiix",
+                "Content-Type": "application/x-latex",
                 "Content-Length": str(2 * 1024 * 1024 + 1),
             },
             content=b"{}",

@@ -29,7 +29,7 @@ MAX_REQUEST_BYTES = 4 * 1024 * 1024
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_PROVIDER_ATTEMPTS = 2
 RETRY_DELAY_SECONDS = 0.1
-JIIX_ACCEPT = "application/vnd.myscript.jiix,application/json"
+LATEX_ACCEPT = "application/x-latex,application/json"
 
 _SAFE_PROVIDER_CODE_RE = re.compile(r"^[a-z0-9._-]{1,120}$")
 _SAFE_LINEAR_EXPRESSION_RE = re.compile(r"^[A-Za-z0-9_+*/^=<>(),.\-\s]*$")
@@ -333,6 +333,32 @@ def parse_myscript_jiix(content: bytes) -> tuple[str, str, bool]:
     return text, provider_latex, False
 
 
+def parse_myscript_latex(content: bytes) -> tuple[str, str, bool]:
+    """Parse the documented Math recognizer response without logging content."""
+
+    if len(content) > MAX_RESPONSE_BYTES:
+        raise MyScriptRecognitionError("provider_response_too_large")
+    provider_latex: str | None = None
+    try:
+        provider_latex = content.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    # Raise outside the except block so invalid provider bytes cannot survive
+    # in an exception context that an upstream logger might serialize.
+    if provider_latex is None:
+        raise MyScriptRecognitionError("provider_response_invalid")
+    if len(provider_latex) > 10_000:
+        raise MyScriptRecognitionError("provider_response_too_large")
+    if not provider_latex.strip():
+        return "", provider_latex, True
+
+    text = normalize_expression(provider_latex, "latex", "math")
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text or "\\" in text or not _SAFE_LINEAR_EXPRESSION_RE.fullmatch(text):
+        raise MyScriptRecognitionError("unsupported_provider_output")
+    return text, provider_latex, False
+
+
 def _safe_provider_error_code(response: httpx.Response) -> str | None:
     if len(response.content) > MAX_RESPONSE_BYTES:
         return None
@@ -457,7 +483,7 @@ class MyScriptRecognizer:
             self.settings.hmac_key,
         )
         headers = {
-            "Accept": JIIX_ACCEPT,
+            "Accept": LATEX_ACCEPT,
             "Content-Type": "application/json",
             "applicationKey": self.settings.application_key,
             "hmac": signature,
@@ -510,14 +536,11 @@ class MyScriptRecognizer:
                     media_type = response.headers.get("content-type", "").split(
                         ";", 1
                     )[0].strip().lower()
-                    if media_type not in {
-                        "application/vnd.myscript.jiix",
-                        "application/json",
-                    }:
+                    if media_type != "application/x-latex":
                         raise MyScriptRecognitionError(
                             "provider_response_content_type_invalid"
                         )
-                    text, provider_latex, unreadable = parse_myscript_jiix(
+                    text, provider_latex, unreadable = parse_myscript_latex(
                         response.content
                     )
                     latency_ms = max(

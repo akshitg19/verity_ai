@@ -1,0 +1,97 @@
+import argparse
+import asyncio
+import json
+import os
+import stat
+from pathlib import Path
+
+import pytest
+
+from handwriting_eval import myscript_poc
+from handwriting_eval.validation import EvaluationDataError
+from myscript_recognition import MyScriptRecognition
+
+
+FIXTURE_ROOT = (
+    Path(__file__).resolve().parents[2]
+    / "docs/handwriting/fixtures/synthetic-myscript-smoke-v1"
+)
+
+
+def args(tmp_path, *, request_cap=30):
+    return argparse.Namespace(
+        manifest=FIXTURE_ROOT / "manifest.jsonl",
+        fixture_root=FIXTURE_ROOT,
+        ledger=tmp_path / "poc.handwriting-ledger.jsonl",
+        run_id="synthetic-poc-test",
+        request_cap=request_cap,
+        output=tmp_path / "predictions.jsonl",
+        initialize_ledger=True,
+    )
+
+
+def test_synthetic_poc_hard_caps_total_attempts_at_fifty(tmp_path):
+    tmp_path.chmod(0o700)
+    with pytest.raises(EvaluationDataError, match="between 1 and 50"):
+        asyncio.run(myscript_poc.run(args(tmp_path, request_cap=51)))
+
+
+def test_parse_success_uses_the_deterministic_algebra_parser():
+    assert myscript_poc._judge_parse_success("2*x+1=5", False) is True
+    assert myscript_poc._judge_parse_success("2+", False) is False
+    assert myscript_poc._judge_parse_success("x=3", True) is False
+
+
+def test_synthetic_poc_reserves_every_attempt_and_writes_owner_only_output(
+    tmp_path, monkeypatch
+):
+    tmp_path.chmod(0o700)
+    class FakeRecognizer:
+        def __init__(self, _settings, *, budget):
+            self.budget = budget
+
+        async def recognize(self, _request):
+            self.budget.reserve()
+            return MyScriptRecognition(
+                text="x=3",
+                provider_latex="x = 3",
+                unreadable=False,
+                attempts=1,
+                latency_ms=12,
+            )
+
+    monkeypatch.setattr(myscript_poc, "MyScriptRecognizer", FakeRecognizer)
+    monkeypatch.setenv("MYSCRIPT_APPLICATION_KEY", "synthetic-app-key")
+    monkeypatch.setenv("MYSCRIPT_HMAC_KEY", "synthetic-hmac-key")
+
+    options = args(tmp_path)
+    result = asyncio.run(myscript_poc.run(options))
+
+    assert result == {
+        "valid": True,
+        "run_id": "synthetic-poc-test",
+        "fixture_count": 30,
+        "prediction_count": 30,
+        "success_count": 30,
+        "error_count": 0,
+        "skipped_count": 0,
+        "request_cap": 30,
+        "attempts_used": 30,
+        "attempts_remaining": 0,
+        "decision_eligible": False,
+    }
+    predictions = [json.loads(line) for line in options.output.read_text().splitlines()]
+    assert len(predictions) == 30
+    assert {prediction["provider"] for prediction in predictions} == {"myscript"}
+    assert {prediction["status"] for prediction in predictions} == {"ok"}
+    if os.name == "posix" and stat.S_ISREG(options.output.stat().st_mode):
+        assert options.output.stat().st_mode & 0o077 == 0
+
+
+def test_synthetic_poc_rejects_raw_prediction_output_inside_repository(tmp_path):
+    tmp_path.chmod(0o700)
+    options = args(tmp_path)
+    options.output = Path(__file__).resolve().parent / "forbidden-predictions.jsonl"
+
+    with pytest.raises(EvaluationDataError, match="share one restricted directory"):
+        asyncio.run(myscript_poc.run(options))
