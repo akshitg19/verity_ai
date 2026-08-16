@@ -559,7 +559,8 @@ see `secret-version-pinning-evidence-2026-08-16.md`. A direct vector-only
 frontend POC adapter is implemented behind two additional false-by-default gates;
 it has no automatic image fallback. A local synthetic-only runner made 30
 successful live REST calls under a 50-attempt durable cap; exact match and
-deterministic parse success were both 66.67%, and provider latency p50/p95 was
+deterministic parse success are both 86.67% under the content-safe `v2` offline
+amendment, and provider latency p50/p95 was
 141/266.15ms. See
 `myscript-synthetic-poc-2026-08-16.md`. This result did not enable the deployed
 route or establish a provider decision. The route additionally requires

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 
-NORMALIZATION_VERSION = "v1"
+NORMALIZATION_VERSION = "v2"
 
 _UNICODE_REPLACEMENTS = str.maketrans(
     {
@@ -34,6 +34,11 @@ def _normalize_latex(text: str) -> str:
     value = value.replace("\\times", "*").replace("\\cdot", "*")
     value = value.replace("\\div", "/")
     value = value.replace("\\,", "").replace("\\;", "").replace("\\!", "")
+    # TeX ignores ordinary whitespace in math mode. In particular, a provider
+    # may serialize one visible multi-digit number as ``1 0`` even though the
+    # rendered glyphs are adjacent. Remove only digit-to-digit math-mode
+    # whitespace; spaces in ASCII/text inputs keep their original meaning.
+    value = re.sub(r"(?<=\d)\s+(?=\d)", "", value)
     # Iterate so a simple inner fraction can be reduced before an outer one.
     for _ in range(20):
         updated = _SIMPLE_FRAC_RE.sub(r"(\1)/(\2)", value)

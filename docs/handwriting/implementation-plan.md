@@ -594,3 +594,33 @@ approval, authentication, and rollout evidence remain blocked.
 Next action: keep every MyScript gate false and review the restricted mismatch
 set before requesting any separately authorized decision corpus.
 ```
+
+```text
+Date: 2026-08-16
+Branch: feat/handwriting-normalization-v2
+Phase: 4 synthetic-smoke mismatch review and normalization amendment
+Implemented: content-safe review classified all 10 v1 failures without emitting
+fixture IDs or provider text. Six were adjacent-digit TeX presentation spaces;
+four were genuine letter-category substitutions. Normalization v2 removes only
+digit-to-digit whitespace in LaTeX math mode, keeps ASCII/text semantics and
+chemistry capitalization unchanged, and does not alter recognition errors. The
+runner now preserves raw LaTeX in restricted artifacts, every scored prediction
+must match the scorer's normalization version, and an owner-only offline
+reprocessor migrates the legacy artifact without a provider call.
+Tests and results: focused evaluator, adapter, runner, and reprocessor suite
+passed 57 tests. The full backend suite passed 1267 tests with 3 expected xfails
+and the existing OPSIN warnings. Frontend passed 387 tests across 41 files,
+lint, App.jsx cap (256/260), production build, API-base verification, and the
+provider-secret bundle scan. The original 30-record restricted artifact was
+migrated and rescored under v2 with provider_request_count=0; schema/input
+validation passed.
+Measured metrics: exact match and deterministic parse success improved from
+20/30 (66.67%) to 26/30 (86.67%); mean character error fell from 6.254% to
+2.9206%. Provider latency and request metrics are unchanged because the same
+provider responses were reused. The approved ledger remains at 30/50 attempts.
+Known risks: four genuine letter substitutions remain; the synthetic corpus is
+single-reviewer and has no target-device or same-input Gemini control evidence.
+Next action: merge the v2 correction, deploy another disabled-only revision,
+and preserve the 20 unused attempts unless a targeted provider question cannot
+be answered offline. Student/production traffic remains blocked.
+```

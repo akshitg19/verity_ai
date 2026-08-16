@@ -84,6 +84,15 @@ def test_synthetic_poc_reserves_every_attempt_and_writes_owner_only_output(
     assert len(predictions) == 30
     assert {prediction["provider"] for prediction in predictions} == {"myscript"}
     assert {prediction["status"] for prediction in predictions} == {"ok"}
+    assert {prediction["normalization_version"] for prediction in predictions} == {
+        "v2"
+    }
+    assert {prediction["output"]["format"] for prediction in predictions} == {
+        "latex"
+    }
+    assert {prediction["output"]["text"] for prediction in predictions} == {
+        "x = 3"
+    }
     if os.name == "posix" and stat.S_ISREG(options.output.stat().st_mode):
         assert options.output.stat().st_mode & 0o077 == 0
 

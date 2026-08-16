@@ -22,6 +22,7 @@ from myscript_recognition import (
     serialize_myscript_request,
 )
 from judge.algebra import _parse_equation
+from handwriting_normalization import NORMALIZATION_VERSION
 from schemas import MyScriptRecognizeRequest
 
 from .ledger import AttemptLedgerError, DurableAttemptLedger
@@ -83,6 +84,7 @@ def _prediction_base(fixture_id: str, run_id: str) -> dict[str, Any]:
         "provider": PROVIDER,
         "model": MODEL,
         "configuration_id": CONFIGURATION_ID,
+        "normalization_version": NORMALIZATION_VERSION,
         "benchmark_eligible": True,
     }
 
@@ -222,8 +224,11 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 **base,
                 "status": "ok",
                 "output": {
-                    "format": "ascii",
-                    "text": result.text,
+                    # Preserve the provider response in the restricted artifact
+                    # so a future normalizer can reproduce scoring without a
+                    # second provider request.
+                    "format": "latex",
+                    "text": result.provider_latex,
                     "candidates": [],
                     "unreadable": result.unreadable,
                 },
