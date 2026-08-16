@@ -644,3 +644,25 @@ corpus, privacy/commercial approval, authentication, and rollout evidence remain
 Next action: preserve the 20 unused attempts and keep all MyScript gates false
 until a separately approved evaluation closes the remaining evidence gaps.
 ```
+
+```text
+Date: 2026-08-16
+Branch: test/handwriting-fallback-hardening
+Phase: 5 provider-neutral hybrid outage and rollback hardening
+Implemented: added direct proof that a usable vector result generates no PNG;
+an eligible primary failure renders the original strokes once through Gemini;
+primary timeout aborts its work before fallback; caller cancellation suppresses
+fallback; and a fallback outage is propagated after exactly one primary and one
+fallback attempt with no recursion.
+Tests and results: 13 focused HybridRecognizer tests passed. The complete
+frontend suite passed 392 tests across 41 files, plus lint, App.jsx line cap
+(256/260), production build, API-base verification, and provider-secret bundle
+scan.
+Measured metrics: deterministic call counts only. No model request, student
+data, provider output, production flag, or latency claim is involved.
+Known risks: the production configuration still defaults to Gemini and does not
+construct a hybrid. Category-level provider evidence, visible correction UX,
+target-device latency, and explicit rollout approval remain required.
+Next action: merge the provider-neutral hardening and keep Gemini-only rollback
+as the shipped configuration.
+```

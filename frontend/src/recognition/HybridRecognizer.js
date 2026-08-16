@@ -82,7 +82,8 @@ export default class HybridRecognizer extends RecognizerAdapter {
       reason = fallbackReason(primaryResult);
       if (!reason) return primaryResult;
     } catch (error) {
-      if (request.signal?.aborted || isAbortError(error)) throw error;
+      if (request.signal?.aborted) throwIfAborted(request.signal);
+      if (isAbortError(error)) throw error;
       reason = error?.code === FALLBACK_REASONS.TIMEOUT
         ? FALLBACK_REASONS.TIMEOUT
         : FALLBACK_REASONS.SERVICE_ERROR;
