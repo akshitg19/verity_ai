@@ -1,6 +1,6 @@
 # Handwriting Provider Evaluation Report
 
-**Status date:** 2026-08-14
+**Status date:** 2026-08-16
 
 **Evidence state:** `NOT_RUN`
 
@@ -34,7 +34,7 @@ measurement row.
 
 | Gate | Current state | Owner | Evidence required |
 |---|---|---|---|
-| Disabled Cloud Run revision | Blocked on Cloud Shell authorization | GCP project owner | Build/revision IDs; runtime identity; both false flags; secret references only; disabled-route smoke |
+| Disabled Cloud Run revision | Complete | GCP project owner | Build `1210e5a0-58fb-4a1f-9648-656b7d2e2f1a`, revision `verity-ai-00017-phb`, and [content-safe deployment evidence](disabled-deployment-evidence-2026-08-16.md) |
 | MyScript trial/privacy terms | Blocked | MyScript and VerityAI privacy/legal | Written data-use, retention, training, deletion, region, subprocessor, DPA, FERPA/COPPA, attribution, and publicity answers |
 | Commercial rights and cost | Blocked | MyScript and VerityAI commercial owner | Written billing unit, quota, minimum, overage, cancellation, production right, SLA, and quote |
 | Approved smoke corpus | Blocked | VerityAI data/privacy owner | 30–50 approved fixtures, provider-specific permission, provenance, retention, two-reviewer decision truth |

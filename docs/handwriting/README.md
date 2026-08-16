@@ -29,6 +29,9 @@ for implementation decisions.
   contract; `NOT_MEASURED` fields must not be inferred from examples.
 - [Rollout runbook](rollout-runbook.md) records the disabled deployment check,
   activation prerequisites, monitoring, outage response, and kill switches.
+- [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
+  records the exact build, revision, false flags, secret references, image
+  digest, and content-safe rollout checks without reading secret values.
 - [Fixture schema](fixtures/fixture.schema.json) defines the machine-readable
   test-case format.
 - [Stroke schema](fixtures/stroke.schema.json) bounds replayable digital ink,
@@ -42,24 +45,26 @@ for implementation decisions.
 - Architecture status: Phase 0–2 merged by PR #31 (`cfa06e0`), Phase A/B by PR
   #32 (`156d724`), and provider readiness/offline evaluation by PR #33
   (`e01d28e`). The disabled backend adapter was merged by PR #34 (`949e1ea`),
-  and PR #35 adds the disabled frontend POC boundary.
+  PR #35 added the disabled frontend POC boundary, PR #36 added the durable
+  attempt ledger, and PR #37 added the explicit evaluation checkpoint.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: the backend MyScript REST adapter and internal route are
-  merged. PR #35 implements unreachable-by-default frontend POC wiring; no live
-  call is enabled.
+  deployed in disabled revision `verity-ai-00017-phb`. PR #35 implements
+  unreachable-by-default frontend POC wiring; no live call is enabled.
 - Recommended vector POC: MyScript iink. The developer application, local
   credential file, GCP secrets, and runtime-service-account secret access are
-  complete. Disabled deployment mapping is merged; revision-metadata
-  verification, licensing/privacy approval, and evaluation remain.
+  complete. Disabled deployment and revision-metadata verification are
+  complete; licensing/privacy approval and evaluation remain.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
-- Current safe work: PR #37 adds the explicit `NOT_RUN`/`NO_DECISION` provider
-  report checkpoint and evidence-completeness contract.
+- Current safe work: the disabled Cloud Run deployment checkpoint is complete
+  with both provider gates false and no provider request.
 - Next gates: target-device Phase A/B exports; written MyScript commercial and
-  student-privacy answers; deployed false-flag/secret-mapping validation; and an
-  approved, consented raw-stroke corpus before live Phase 3 evaluation.
+  student-privacy answers; numeric secret versions, approved durable ledger
+  storage, and an approved consented raw-stroke corpus before live Phase 3
+  evaluation.
 
 ## Working agreement for AI-assisted changes
 
