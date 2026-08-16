@@ -103,8 +103,9 @@ for implementation decisions.
   boundary; PR #56 freezes the deterministic 300-case v2 corpus and gates; and
   PR #57 records the completed run, reconciliation, and content-free results.
   PR #59 repairs and hardens schema-v2 paired target-device A/B evidence. PR
-  #61 adds the fail-closed production activation evidence gate; current `main`
-  is deployed as the verified disabled revision `verity-ai-00021-glp`.
+  #61 adds the fail-closed production activation evidence gate; PR #63 records
+  the verified disabled deployment of runtime source `b9b1d76` as revision
+  `verity-ai-00021-glp`.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
