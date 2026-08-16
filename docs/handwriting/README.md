@@ -74,7 +74,9 @@ for implementation decisions.
   PR #45 adds normalization `v2`, versioned prediction evidence, and
   zero-request offline reprocessing; PR #46 records the exact post-POC disabled
   revision; PR #47 hardens the one-shot hybrid fallback; PR #48 adds synthetic
-  chemistry routing evidence; and PR #49 adds the 23-item completion audit.
+  chemistry routing evidence; PR #49 adds the 23-item completion audit; PR #50
+  proves visible correction and freezes public MyScript terms; and PR #51
+  completes the bounded paired `x/X` geometry probe.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
