@@ -19,6 +19,11 @@ unavailable.
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
+The current requirement-by-requirement status and named external unblock package
+are maintained in `completion-audit-2026-08-16.md`. Treat that audit as the
+authoritative completion checkpoint rather than inferring readiness from a green
+CI run or the synthetic POC alone.
+
 > Historical note: references below to `feat/handwriting-architecture-v2` and
 > `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-v2` describe the
 > already-merged Phase 0–2 work. That temporary worktree was removed after PR
