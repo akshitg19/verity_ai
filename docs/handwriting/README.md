@@ -27,6 +27,9 @@ for implementation decisions.
   Gemini scheduling comparison and content-free export workflow.
 - [Provider readiness](provider-readiness.md) records current official-source
   licensing, privacy, pricing, secret mapping, POC budget, and rollout gates.
+- [MyScript public terms checkpoint](myscript-public-terms-checkpoint-2026-08-16.md)
+  separates facts verified from the current pricing, V.8 license, and May 2026
+  DPA from the shorter set of written vendor/internal approvals still missing.
 - [Provider evaluation report](provider-evaluation-report.md) records the
   current synthetic-smoke/no-decision checkpoint and the mandatory category/device report
   contract; `NOT_MEASURED` fields must not be inferred from examples.
@@ -67,8 +70,11 @@ for implementation decisions.
   attempt ledger, PR #37 added the explicit evaluation checkpoint, PRs #38–#40
   deployed and pinned the disabled boundary, and PR #42 adds repeatable
   disabled-revision verification. PR #43 adds the bounded synthetic POC and its
-  reviewed adapter/evaluation fixes; PR #45 adds normalization `v2`, versioned
-  prediction evidence, and zero-request offline reprocessing.
+  reviewed adapter/evaluation fixes; PR #44 documents the disabled deployment;
+  PR #45 adds normalization `v2`, versioned prediction evidence, and
+  zero-request offline reprocessing; PR #46 records the exact post-POC disabled
+  revision; PR #47 hardens the one-shot hybrid fallback; PR #48 adds synthetic
+  chemistry routing evidence; and PR #49 adds the 23-item completion audit.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
@@ -86,7 +92,8 @@ for implementation decisions.
 - Current safe work: numeric secret-version pinning is deployed and verified;
   a fail-closed verifier checks future disabled revisions before any provider
   request can be possible.
-- Next gates: target-device Phase A/B exports; written MyScript commercial and
+- Next gates: target-device Phase A/B exports; internal approval of the public
+  terms checkpoint plus written MyScript reconciliation/commercial and
   student-privacy answers before student/production use; an approved consented
   raw-stroke decision corpus; and same-input Gemini control evidence.
 

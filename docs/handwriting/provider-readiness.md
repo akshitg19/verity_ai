@@ -12,9 +12,14 @@ from the VerityAI backend. It is not approved for student traffic or production
 distribution yet. The current free-trial license is limited to internal testing
 and evaluation, permits MyScript to access trial results for internal research,
 and requires a separate commercial agreement before distribution. The current
-DPA describes transient ink processing, but does not expressly address FERPA or
-COPPA. Those points require written vendor answers and an internal privacy/legal
-approval before any real student ink is sent.
+DPA describes transient ink processing, a 12-month IP-log period, and the
+listed processing locations/subprocessors, but does not expressly address
+FERPA or COPPA. V.8 separately permits temporary end-user-input access for
+technical analysis. The exact public facts and remaining reconciliation
+questions are frozen in
+[`myscript-public-terms-checkpoint-2026-08-16.md`](myscript-public-terms-checkpoint-2026-08-16.md).
+Written vendor answers and internal privacy/legal approval remain required
+before any real student ink is sent.
 
 The free-trial terms do not require a paid agreement before an internal,
 synthetic-only evaluation. The approved 30-call smoke therefore proceeded
@@ -210,10 +215,13 @@ and Brevo in the EU as subprocessors.
 
 The license and DPA need reconciliation before student data is used. The free
 trial license allows MyScript to access recognition results for internal use and
-research to improve the service, while the DPA describes transient handwriting
-processing. No official document reviewed here expressly commits to FERPA,
-COPPA, a US student-data agreement, a minimum end-user age for the developer
-API, or exclusion of trial results from model/service improvement.
+research to improve the service; V.8 Section 18.3 also allows temporary access
+to end-user input for technical-error analysis and recognition improvement,
+with express-permission responsibility assigned to the customer. The DPA,
+meanwhile, describes transient handwriting processing unless storage is
+expressly requested. No official document reviewed here expressly commits to
+FERPA, COPPA, a US student-data agreement, a minor-consent model for the
+developer API, or exclusion of inputs/results from model/service improvement.
 
 The current license also requires a discoverable MyScript copyright attribution,
 states that production distribution requires a commercial agreement, contains
@@ -298,7 +306,7 @@ Rules:
 | Durable POC attempt ledger | Implemented in PR #36 | Owner-only repository-external ledger, concurrent atomic reservations, corruption/identity/cap fail-closed tests, restart persistence, production-factory enforcement |
 | Synthetic smoke corpus (30–50) | Complete for technical smoke | 30 deterministic vector fixtures, schema validation, provider approval, repository provenance |
 | Frozen external corpus (300–500) | Blocked | Consent/provenance, restricted store, retention/deletion policy, target devices |
-| MyScript trial data-use clarification | Not required for synthetic smoke; blocked for student ink | Written answer reconciling trial research access with DPA transient processing |
+| MyScript trial data-use clarification | Public facts frozen; blocked for student ink | Internal legal review plus written answer reconciling trial-result research and technical-input access with DPA transient processing |
 | FERPA/COPPA/minor use | Blocked | Written vendor answer plus VerityAI privacy/legal approval |
 | Commercial production right and price | Deferred production gate | Signed agreement/quote before distribution; attribution and publicity terms approved |
 | Synthetic POC accuracy/latency report | Complete; decision-ineligible | [30-call aggregate evidence](myscript-synthetic-poc-2026-08-16.md); raw artifacts remain restricted |
@@ -321,33 +329,31 @@ production terms
 > approved fixtures. Before sending any student handwriting or enabling
 > production traffic, please confirm the following in writing:
 >
-> 1. Does the May 2026 DPA apply to math recognition through
->    `/api/v4.0/iink/recognize/`, even though its Services definition refers to
->    “text recognition” and its processing schedule describes handwritten notes
->    transformed to typed text?
-> 2. During the 2,000-request free trial, can handwriting, JIIX/LaTeX results, or
->    derived data be accessed, retained, or used to improve models/services?
->    Please reconcile Section 7.1 of the V.8 license with DPA Section 13.3.2's
->    statement that unstructured data is not stored.
-> 3. Can trial and paid accounts contractually opt out of all training, research,
->    human review, QA retention, and secondary use of inputs and outputs?
-> 4. What exact content and metadata are retained, where, for how long, and by
->    which subprocessors? Can the 12-month end-user IP retention be disabled or
->    replaced by the backend service IP?
-> 5. Do you offer FERPA, COPPA, and US state student-privacy terms or a student
+> 1. Please reconcile V.8 Sections 7.1 and 18.3 with DPA Section 13.3.2 for
+>    `/api/v4.0/iink/recognize`: what inputs, recognition results, and derived
+>    data may be accessed, retained, human-reviewed, or used for research,
+>    technical analysis, or service improvement, and which terms control?
+> 2. Can trial and paid accounts contractually opt out of all research,
+>    technical review, retention, and secondary use of inputs, outputs, and
+>    derived data? What deletion process covers each class?
+> 3. Please confirm the exact metadata retained for our backend REST
+>    configuration, including whether the logged end-user IP is our Cloud Run
+>    egress identity. Can the published 12-month IP retention be shortened or
+>    disabled?
+> 4. Do you offer FERPA, COPPA, and US state student-privacy terms or a student
 >    data privacy agreement? What age restrictions and parental/school consent
 >    requirements apply to end users?
-> 6. Is US-only or another chosen processing region available? Please identify
+> 5. Is US-only or another chosen processing region available? Please identify
 >    all subprocessors and cross-border transfers for our configuration.
-> 7. What production pricing, request accounting, rate limits, SLA, support, and
+> 6. What production pricing, request accounting, rate limits, SLA, support, and
 >    overage controls apply at our expected volume?
-> 8. What exact copyright attribution, “Powered by MyScript” display, trademark
+> 7. What exact copyright attribution, “Powered by MyScript” display, trademark
 >    approval, customer-logo/publicity right, and end-user EULA terms would a
 >    commercial agreement require? Can publicity/logo use be opt-in?
-> 9. Is there a supported ephemeral-token or session-credential design for
+> 8. Is there a supported ephemeral-token or session-credential design for
 >    browser WebSocket recognition that never exposes the permanent application
 >    or HMAC key? If not, do you recommend a backend WebSocket relay?
-> 10. Please confirm API version support/deprecation notice, deletion request
+> 9. Please confirm API version support/deprecation notice, deletion request
 >     process, breach-notification terms, audit materials, and availability of a
 >     security report or questionnaire.
 >
@@ -356,7 +362,8 @@ production terms
 
 ## 9. Primary sources
 
-All sources below were accessed 2026-08-14.
+The MyScript pricing, V.8 license, and May 2026 DPA were rechecked on
+2026-08-16. Other sources below were accessed 2026-08-14.
 
 ### MyScript
 
@@ -365,7 +372,7 @@ All sources below were accessed 2026-08-14.
 - Production-readiness guidance:
   https://developer.myscript.com/support/account/being-production-ready
 - V.8 August 2025 license terms:
-  https://developer.myscript.com/legal-docs/License-terms-of-use-and-sale.pdf
+  https://developer.myscript.com/pdf/License-terms-of-use-and-sale.pdf
 - May 2026 DPA:
   https://www.myscript.com/dpa/
 - REST architecture and HMAC:
