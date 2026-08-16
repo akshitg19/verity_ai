@@ -29,7 +29,7 @@ Required categories:
 | Calculus notation | Limits, derivatives, integrals, bounds |
 | Trigonometry | Function names, Greek symbols, powers |
 | Written chemistry | Capitalization, subscripts, charges, arrows |
-| Ambiguity | `1/l/I`, `0/O`, `x/×`, `-/=`, decimal points |
+| Ambiguity | `1/l/I`, `0/O`, `x/×`, lowercase/full-height `x/X`, `-/=`, decimal points |
 | Writing quality | Neat, fast, cursive, cramped, overwritten |
 | Editing | Erased/replaced symbols and out-of-order correction strokes |
 

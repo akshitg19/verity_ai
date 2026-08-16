@@ -22,10 +22,10 @@ Written vendor answers and internal privacy/legal approval remain required
 before any real student ink is sent.
 
 The free-trial terms do not require a paid agreement before an internal,
-synthetic-only evaluation. The approved 30-call smoke therefore proceeded
+synthetic-only evaluation. The approved synthetic-only POC therefore proceeded
 without student data and is recorded in
 `myscript-synthetic-poc-2026-08-16.md`. Commercial terms are a production and
-distribution gate, not a prerequisite for this synthetic smoke.
+distribution gate, not a prerequisite for this synthetic POC.
 
 Mathpix is the most practical hosted contingency because `v3/strokes` accepts
 digital ink and supports short-lived client tokens. It also remains unapproved
@@ -262,7 +262,7 @@ approved account/order and legal review.
 ## 6. Evaluation request budget
 
 The public MyScript trial quota is 2,000 requests. REST accounting is one API
-call per request. The synthetic run's local ledger proves 30 attempts, but the
+call per request. The synthetic run's local ledger proves 50 attempts, but the
 provider dashboard was not captured before or after the run; this document does
 not claim the account's exact remaining quota. Dashboard reconciliation is
 required before any later decision corpus.
@@ -271,13 +271,13 @@ Use one fixed POC configuration and one LaTeX response per fixture:
 
 | Stage | Planned fixtures/calls | Maximum |
 |---|---:|---:|
-| Approved synthetic smoke (completed) | 30 | 30 |
-| Reserved retry/failure allowance | 20 | 20 |
+| Initial synthetic smoke (completed) | 30 | 30 |
+| Paired `x/X` geometry probe (completed) | 20 | 20 |
 | **Approved 2026-08-16 hard cap** |  | **50** |
 
 Rules:
 
-- Stop automatically before attempt 51 for the approved synthetic run,
+- The ledger is exhausted at 50/50 and must reject attempt 51 for the approved synthetic run,
   regardless of dashboard quota.
 - A retry and a failed request both consume the local budget counter.
 - The adapter's in-process counter is a secondary fail-closed guard, not a
@@ -289,7 +289,7 @@ Rules:
   status, and provider permission pass validation.
 - Do not fan one writer's ink out to multiple providers unless the consent and
   evaluation protocol expressly allow each named provider.
-- The local ledger recorded 30 attempts and 20 unused run slots. Any later
+- The local ledger recorded all 50 approved attempts. Any later synthetic or
   300–500-case decision corpus requires a new explicit budget and run identity.
 - Obtain a written commercial quote before forecasting production cost. “Free
   to 2,000” is a trial quota, not production pricing.
@@ -304,12 +304,12 @@ Rules:
 | Cloud Run secret-to-environment mapping | Complete for disabled revision `verity-ai-00020-zwl` | [Current numeric version-`1` references, build/revision identity, and content-safe checks](current-disabled-deployment-evidence-2026-08-16.md) |
 | Direct frontend POC adapter | Implemented in PR #35 | Dual-gate config tests, ordered vector payload, no-PNG/no-local-metadata assertion, cancellation and safe-error tests, production-bundle secret scan |
 | Durable POC attempt ledger | Implemented in PR #36 | Owner-only repository-external ledger, concurrent atomic reservations, corruption/identity/cap fail-closed tests, restart persistence, production-factory enforcement |
-| Synthetic smoke corpus (30–50) | Complete for technical smoke | 30 deterministic vector fixtures, schema validation, provider approval, repository provenance |
+| Synthetic POC corpus (50) | Complete for technical evidence | 30 deterministic smoke fixtures plus 20 paired `x/X` geometry fixtures, schema validation, provider approval, repository provenance |
 | Frozen external corpus (300–500) | Blocked | Consent/provenance, restricted store, retention/deletion policy, target devices |
 | MyScript trial data-use clarification | Public facts frozen; blocked for student ink | Internal legal review plus written answer reconciling trial-result research and technical-input access with DPA transient processing |
 | FERPA/COPPA/minor use | Blocked | Written vendor answer plus VerityAI privacy/legal approval |
 | Commercial production right and price | Deferred production gate | Signed agreement/quote before distribution; attribution and publicity terms approved |
-| Synthetic POC accuracy/latency report | Complete; decision-ineligible | [30-call aggregate evidence](myscript-synthetic-poc-2026-08-16.md); raw artifacts remain restricted |
+| Synthetic POC accuracy/latency report | Complete; decision-ineligible | [50-call smoke and paired-probe evidence](myscript-synthetic-poc-2026-08-16.md); raw artifacts remain restricted |
 | Student-facing rollout | Blocked | All prior gates, canary/rollback proof, observability, support/runbook |
 | Gemini student-facing fallback | Blocked | Written contractual/legal resolution of current under-18 restriction |
 

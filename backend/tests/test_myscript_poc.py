@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from handwriting_eval import myscript_poc
+from handwriting_eval.ledger import DurableAttemptLedger
 from handwriting_eval.validation import EvaluationDataError
 from myscript_recognition import MyScriptRecognition
 
@@ -15,6 +16,10 @@ from myscript_recognition import MyScriptRecognition
 FIXTURE_ROOT = (
     Path(__file__).resolve().parents[2]
     / "docs/handwriting/fixtures/synthetic-myscript-smoke-v1"
+)
+X_CASE_FIXTURE_ROOT = (
+    Path(__file__).resolve().parents[2]
+    / "docs/handwriting/fixtures/synthetic-myscript-x-case-v1"
 )
 
 
@@ -95,6 +100,56 @@ def test_synthetic_poc_reserves_every_attempt_and_writes_owner_only_output(
     }
     if os.name == "posix" and stat.S_ISREG(options.output.stat().st_mode):
         assert options.output.stat().st_mode & 0o077 == 0
+
+
+def test_x_case_probe_consumes_only_the_twenty_remaining_run_attempts(
+    tmp_path, monkeypatch
+):
+    tmp_path.chmod(0o700)
+    ledger_path = tmp_path / "poc.handwriting-ledger.jsonl"
+    ledger = DurableAttemptLedger(
+        ledger_path,
+        run_id="synthetic-poc-continuation",
+        provider="myscript",
+        request_cap=50,
+    )
+    ledger.initialize()
+    for _ in range(30):
+        ledger.reserve()
+
+    class FakeRecognizer:
+        def __init__(self, _settings, *, budget):
+            self.budget = budget
+
+        async def recognize(self, _request):
+            self.budget.reserve()
+            return MyScriptRecognition(
+                text="x=3",
+                provider_latex="x = 3",
+                unreadable=False,
+                attempts=1,
+                latency_ms=12,
+            )
+
+    monkeypatch.setattr(myscript_poc, "MyScriptRecognizer", FakeRecognizer)
+    monkeypatch.setenv("MYSCRIPT_APPLICATION_KEY", "synthetic-app-key")
+    monkeypatch.setenv("MYSCRIPT_HMAC_KEY", "synthetic-hmac-key")
+    options = argparse.Namespace(
+        manifest=X_CASE_FIXTURE_ROOT / "manifest.jsonl",
+        fixture_root=X_CASE_FIXTURE_ROOT,
+        ledger=ledger_path,
+        run_id="synthetic-poc-continuation",
+        request_cap=50,
+        output=tmp_path / "x-case-predictions.jsonl",
+        initialize_ledger=False,
+    )
+
+    result = asyncio.run(myscript_poc.run(options))
+
+    assert result["fixture_count"] == 20
+    assert result["success_count"] == 20
+    assert result["attempts_used"] == 50
+    assert result["attempts_remaining"] == 0
 
 
 def test_synthetic_poc_rejects_raw_prediction_output_inside_repository(tmp_path):

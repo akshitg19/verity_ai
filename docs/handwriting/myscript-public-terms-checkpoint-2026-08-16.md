@@ -11,7 +11,7 @@ as reviewed on 2026-08-16:
 
 | Topic | Public evidence | Engineering consequence |
 |---|---|---|
-| Free allowance | The pricing page and V.8 terms list 2,000 cloud requests. A REST call counts as one request. | The account-level allowance is not a VerityAI run budget. The approved synthetic run remains capped at 50 total attempts and has used 30. |
+| Free allowance | The pricing page and V.8 terms list 2,000 cloud requests. A REST call counts as one request. | The account-level allowance is not a VerityAI run budget. The approved synthetic run is exhausted at its separate 50-attempt cap. |
 | Trial purpose | V.8 Section 7.1 limits the free trial to internal testing and evaluation. | Synthetic internal POC work fits the stated purpose; distribution does not. |
 | Trial-result use | V.8 Section 7.1 permits MyScript to access trial recognition results for internal research and service improvement, subject to confidentiality. | Do not send student or otherwise sensitive ink under the trial without written reconciliation and internal approval. |
 | Commercial use | V.8 Section 7.2 requires contacting MyScript for a commercial agreement before distributing an application using the service or exceeding 2,000 requests. Public pricing above the free allowance is quote-only. | No purchase is needed for the completed synthetic smoke. A written commercial agreement and quote remain production gates. |
@@ -70,4 +70,3 @@ The vendor/privacy owner should now ask MyScript only to:
   https://developer.myscript.com/pdf/License-terms-of-use-and-sale.pdf
 - May 2026 DPA:
   https://www.myscript.com/dpa/
-

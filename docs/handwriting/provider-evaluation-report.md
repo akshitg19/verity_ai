@@ -20,7 +20,7 @@ must never be inserted here as accuracy, latency, request, or cost evidence.
 | Path | Current state | Evidence-backed conclusion |
 |---|---|---|
 | Production primary | Gemini image transcription | Retain as rollback-safe control; no new provider traffic |
-| MyScript vector candidate | 30-case synthetic live POC complete; decision corpus blocked | `NO_DECISION`—technical boundary works, accuracy gate not established |
+| MyScript vector candidate | 30-case smoke plus 20-case paired `x/X` geometry probe complete; decision corpus blocked | `NO_DECISION`—technical boundary works and synthetic casing sensitivity is characterized, but the accuracy gate is not established |
 | Hybrid vector → Gemini | One-shot fallback and visible-correction mechanisms regression-tested; no enabled canary | Not eligible for production configuration |
 | Image fallback candidate | Gemini retained; GPT-5.6 Luna not evaluated | `NO_DECISION` |
 | Written chemistry | Separate deterministic routing exists | No recognition-provider decision |
@@ -45,12 +45,13 @@ measurement row.
 
 ## 3. Run identity
 
-The completed technical smoke is recorded in
+The completed technical smoke and targeted geometry probe are recorded in
 [`myscript-synthetic-poc-2026-08-16.md`](myscript-synthetic-poc-2026-08-16.md):
-30/30 provider successes, 86.67% normalized exact match and deterministic parse success,
-141 ms p50 and 266.15 ms p95 provider latency, and 30/50 ledger attempts used.
-Its aggregate is `decision_eligible=false` because it has one reviewer, no
-target-device interaction, and no same-input Gemini control.
+the initial set had 30/30 provider successes and 86.67% normalized exact/parse;
+the paired probe had 20/20 provider successes, 100% for ten explicit lowercase
+x-height cases, and 90% for ten full-height cases. The shared ledger is 50/50
+and exhausted. Both aggregates are `decision_eligible=false` because they have
+one reviewer, no target-device interaction, and no same-input Gemini control.
 
 All values remain `NOT_MEASURED` until a decision-eligible aggregate is
 attached. Do not use `0`, an empty cell, or a copied example value to mean
@@ -110,7 +111,7 @@ measurement. Report both and identify warm/cold conditions.
 
 | Metric | Result |
 |---|---|
-| Synthetic smoke planned / used / remaining | `50 / 30 / 20` local ledger; dashboard reconciliation not recorded |
+| Synthetic POC cap / used / remaining | `50 / 50 / 0` local ledger; dashboard reconciliation not recorded |
 | Success / timeout / error rates | `NOT_MEASURED` |
 | Retry count | `NOT_MEASURED` |
 | Payload mean / p95 | `NOT_MEASURED` |

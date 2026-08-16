@@ -54,9 +54,10 @@ minimal route check stops inside VerityAI and does not contact MyScript.
 ## 4. Scope of this evidence
 
 This proves deployment integrity and a fail-closed production state only. The
-separate 30-call synthetic POC remains decision-ineligible at 86.67% normalized
-exact match and 86.67% deterministic parse success after the zero-request `v2`
-offline amendment. Student or production
+separate initial 30-case synthetic POC remains decision-ineligible at 86.67%
+normalized exact/parse after the zero-request `v2` amendment. A later 20-case
+paired `x/X` geometry probe exhausted the same 50-attempt ledger without
+changing this deployed revision or its false flags. Student or production
 provider traffic still requires the target-device/control corpus, privacy and
 commercial approvals, real authentication, and rollout evidence named in
 `provider-readiness.md`.

@@ -4,8 +4,9 @@
 (`156d724`), Phase C/D safe tooling in PR #33 (`e01d28e`), and the disabled
 Phase 3 backend adapter in PR #34 (`949e1ea`); unreachable-by-default frontend
 POC wiring is implemented in PR #35, and durable attempt-ledger enforcement in
-PR #36 (`a584368`). A 30-call synthetic-only live Phase 3 smoke completed on
-2026-08-16; student/production and decision-corpus work remains gated
+PR #36 (`a584368`). A 50-call synthetic-only live Phase 3 POC completed on
+2026-08-16, comprising the initial 30-case smoke and a paired 20-case `x/X`
+geometry probe; student/production and decision-corpus work remains gated.
 **Rule:** One phase per reviewable change unless scope expansion is explicit
 
 ## Phase 0 — Source of truth and safe workspace
@@ -112,7 +113,7 @@ decision-corpus and student/production evidence remain blocked.
 
 - Complete MyScript account/credentials and backend secret storage (complete).
 - Explicit free-trial request budget and synthetic-only provider permission
-  before the technical smoke (complete: 50 cap, 30 attempts).
+  before the technical POC (complete and exhausted: 50 cap, 50 attempts).
 - Written licensing/privacy approval before student data or deployed traffic.
 - Reviewed target-device corpus before a provider decision.
 
@@ -737,4 +738,37 @@ FERPA/COPPA/student-data approval, a production quote/SLA, real auth, target
 devices, a two-reviewer corpus, same-input control, and enabled canary remain.
 Next action: merge the evidence hardening after remote gates. Keep all MyScript
 flags false and retain the 30/50 ledger state.
+```
+
+```text
+Date: 2026-08-16
+Branch: feat/handwriting-x-case-probe
+Phase: 3 bounded synthetic `x/X` geometry follow-up
+Implemented: content-safe mismatch classification showed all four remaining
+initial-smoke failures were lowercase x returned as uppercase X. Refused to
+hide mathematical case through normalization. Added a deterministic 20-case
+paired corpus: ten equations with identical full-height and explicit lowercase
+x-height variants, preserving all non-x strokes, timestamps, and jitter within
+each pair. Added schema tags and tests proving the paired invariant and exact
+30-used + 20-new = 50 attempt ledger boundary.
+Tests and results before traffic: manifest and every stroke validated; the set
+is decision-ineligible solely for one reviewer; 18 focused evaluator/runner
+tests passed; generator re-run was deterministic and preserved the initial
+manifest hash. The live run then returned 20/20 successes, no retry/error, and
+the content-free ledger status is now 50/50 with zero remaining. After the run,
+the full backend suite passed 1270 tests with 3 expected xfails and the existing
+OPSIN warnings; the real exhausted ledger rejected an attempted 51st local
+reservation before any provider connection.
+Measured metrics: explicit lowercase x-height reached 10/10 exact and parse,
+0% mean CER, latency p50/p95 143/245.55ms. Full-height x reached 9/10 exact and
+parse, 2% mean CER, latency p50/p95 135.5/505.7ms. The sole failure was again a
+full-height x returned as uppercase X; paired overall was 19/20, 1% mean CER,
+139.5/398.7ms p50/p95. Manifest SHA-256:
+cc81fbed5a124331f45d992d2efd6ba4bb3f8b3eaefac593d72d84433c893fad.
+Known risks: shape sensitivity is characterized only for synthetic one-reviewer
+fixtures. It does not establish real-writer accuracy, a same-input Gemini
+comparison, target-device latency, provider adoption, or student-data approval.
+Next action: merge the corpus/evidence after full regression and remote gates.
+Reject attempt 51; any later provider run needs new explicit authorization and
+run identity. Keep all production MyScript flags false.
 ```

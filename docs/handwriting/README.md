@@ -34,8 +34,8 @@ for implementation decisions.
   current synthetic-smoke/no-decision checkpoint and the mandatory category/device report
   contract; `NOT_MEASURED` fields must not be inferred from examples.
 - [MyScript synthetic POC evidence](myscript-synthetic-poc-2026-08-16.md)
-  records the approved 30-call, synthetic-only live run and its aggregate
-  accuracy, latency, and request-budget results.
+  records the approved 50-call synthetic-only run: the initial 30-case smoke,
+  paired 20-case `x/X` geometry probe, and separate aggregate results.
 - [Rollout runbook](rollout-runbook.md) records the disabled deployment check,
   activation prerequisites, monitoring, outage response, and kill switches.
 - [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
@@ -80,8 +80,8 @@ for implementation decisions.
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: the backend MyScript REST adapter and internal route are
   deployed in disabled revision `verity-ai-00020-zwl`. A separate local,
-  synthetic-only 30-call POC proved the live REST boundary; Cloud Run and
-  frontend traffic remain disabled.
+  synthetic-only 50-call POC proved the live REST boundary and characterized
+  `x/X` geometry sensitivity; Cloud Run and frontend traffic remain disabled.
 - Recommended vector POC: MyScript iink. The developer application, local
   credential file, GCP secrets, and runtime-service-account secret access are
   complete. Disabled deployment, numeric secret-version pinning, and
