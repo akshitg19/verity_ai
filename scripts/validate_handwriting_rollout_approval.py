@@ -198,6 +198,21 @@ def validate_committed_evidence(
                 capture_output=True,
                 timeout=10,
             )
+            diff_result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repository_root),
+                    "diff",
+                    "--quiet",
+                    source_commit,
+                    "--",
+                    item["path"],
+                ],
+                check=False,
+                capture_output=True,
+                timeout=10,
+            )
         except (OSError, subprocess.SubprocessError):
             raise RolloutApprovalError(
                 f"evidence_not_pinned_to_commit__{name}"
@@ -206,6 +221,12 @@ def validate_committed_evidence(
             blob_result.returncode != 0
             or hashlib.sha256(blob_result.stdout).hexdigest() != item["sha256"]
         ):
+            raise RolloutApprovalError(
+                f"evidence_hash_mismatch__{name}"
+            )
+        if diff_result.returncode == 1:
+            raise RolloutApprovalError(f"evidence_worktree_drift__{name}")
+        if diff_result.returncode != 0:
             raise RolloutApprovalError(
                 f"evidence_not_pinned_to_commit__{name}"
             )
@@ -256,9 +277,7 @@ def _validate_evidence(
         if evidence[name]["path"] != expected_path:
             raise RolloutApprovalError(f"authoritative_evidence_path_invalid__{name}")
     for name, item in evidence.items():
-        path = _repository_file(repository_root, item["path"])
-        if _sha256_file(path) != item["sha256"]:
-            raise RolloutApprovalError(f"evidence_hash_mismatch__{name}")
+        _repository_file(repository_root, item["path"])
 
 
 def _validate_ledger_path(value: str, repository_root: Path) -> None:
@@ -302,6 +321,9 @@ def validate_rollout_approval(
 
     _validate_approvals(manifest["approvals"])
     _validate_evidence(manifest["evidence"], repository_root)
+    validate_committed_evidence(
+        manifest["evidence"], repository_root, expected_source_commit
+    )
 
     operations = manifest["operations"]
     if operations["ledger_run_id"] != decision["run_id"]:
@@ -369,11 +391,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             schema,
             repository_root=Path(args.repository_root),
             expected_source_commit=args.expected_source_commit,
-        )
-        validate_committed_evidence(
-            manifest["evidence"],
-            Path(args.repository_root),
-            checked_out_commit,
         )
     except RolloutApprovalError as exc:
         print(

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import subprocess
 import sys
 from copy import deepcopy
 from datetime import date, timedelta
@@ -78,10 +79,39 @@ def valid_manifest(repository_root):
             "reviewed_at": date.today().isoformat(),
             "valid_through": (date.today() + timedelta(days=90)).isoformat(),
         }
+    if not (repository_root / ".git").exists():
+        subprocess.run(
+            ["git", "init", "--quiet", str(repository_root)],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(repository_root), "add", "docs/handwriting"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository_root),
+                "-c",
+                "user.name=Verity Test",
+                "-c",
+                "user.email=verity-test@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "Add synthetic evidence",
+            ],
+            check=True,
+            capture_output=True,
+        )
+    source_commit = repository_head(repository_root)
     return {
         "schema_version": 1,
         "release_id": "myscript-linear-canary-v1",
-        "source_commit": SOURCE_COMMIT,
+        "source_commit": source_commit,
         "provider": "myscript",
         "rollout_scope": "internal_canary",
         "decision": {
@@ -120,7 +150,8 @@ def valid_manifest(repository_root):
     }
 
 
-def validate(manifest, repository_root, expected_commit=SOURCE_COMMIT):
+def validate(manifest, repository_root, expected_commit=None):
+    expected_commit = expected_commit or manifest["source_commit"]
     return validate_rollout_approval(
         manifest,
         SCHEMA,
@@ -129,7 +160,7 @@ def validate(manifest, repository_root, expected_commit=SOURCE_COMMIT):
     )
 
 
-def assert_code(expected, manifest, repository_root, expected_commit=SOURCE_COMMIT):
+def assert_code(expected, manifest, repository_root, expected_commit=None):
     with pytest.raises(RolloutApprovalError) as captured:
         validate(manifest, repository_root, expected_commit)
     assert captured.value.code == expected
@@ -144,7 +175,7 @@ def test_complete_content_free_rollout_manifest_passes(tmp_path):
         "schema_version": 1,
         "status": "PASS",
         "release_id": "myscript-linear-canary-v1",
-        "source_commit": SOURCE_COMMIT,
+        "source_commit": manifest["source_commit"],
         "provider": "myscript",
         "rollout_scope": "internal_canary",
         "decision": "CATEGORY_LIMITED_GO",
@@ -224,20 +255,34 @@ def test_repository_head_is_a_full_commit_hash():
 
 def test_repository_evidence_must_exist_in_the_exact_commit():
     path = ROOT / "docs/handwriting/provider-evaluation-report.md"
+    commit = repository_head(ROOT)
+    blob = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "cat-file",
+            "blob",
+            f"{commit}:docs/handwriting/provider-evaluation-report.md",
+        ],
+        check=True,
+        capture_output=True,
+    ).stdout
     evidence = {
         "decision_report": {
             "path": "docs/handwriting/provider-evaluation-report.md",
-            "sha256": sha256(path),
+            "sha256": hashlib.sha256(blob).hexdigest(),
         }
     }
 
-    validate_committed_evidence(evidence, ROOT, repository_head(ROOT))
+    assert path.is_file()
+    validate_committed_evidence(evidence, ROOT, commit)
 
     evidence["decision_report"]["sha256"] = "0" * 64
     with pytest.raises(RolloutApprovalError) as captured:
-        validate_committed_evidence(evidence, ROOT, repository_head(ROOT))
+        validate_committed_evidence(evidence, ROOT, commit)
     assert captured.value.code == (
-        "evidence_not_pinned_to_commit__decision_report"
+        "evidence_hash_mismatch__decision_report"
     )
 
 
