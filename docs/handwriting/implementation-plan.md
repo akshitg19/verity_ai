@@ -837,3 +837,32 @@ Next action: merge after remote CI, run the frozen manifest once from the
 owner-only v2 directory, score without X-to-x folding, and reconcile the
 post-run dashboard counter.
 ```
+
+```text
+Date: 2026-08-16
+Branch: agent/myscript-synthetic-v2-results
+Phase: synthetic v2 execution and reconciliation
+Implemented: executed the frozen 300-case manifest exactly once using the
+owner-only append-only ledger and artifact directory; scored it offline with
+normalization v2; classified mismatches without X-to-x folding; refreshed the
+read-only MyScript dashboard counter; and recorded only content-free aggregate
+evidence in Git. Corrected the unavailable jsonschema 4.26.0 dependency pin to
+the installable 4.25.1 release discovered while creating the isolated runner.
+Tests and results: 300/300 provider calls succeeded with zero retry/error. The
+ledger moved from 0/1500 to 300/1500 and the dashboard moved from 50 to 350,
+for zero discrepancy. All raw artifacts remain repository-external at mode
+0600; production and route flags remain false.
+Measured metrics: overall exact 285/300 (95.00%), parse 289/300 (96.33%), and
+provider latency p50/p95 141/237 ms. Standard, narrow, wide, and tall lowercase
+groups all passed frozen 95% exact, 95% parse, and p95 <500 ms gates. The
+descriptive full-height group was 51/60 exact and contained all eight case-only
+mismatches.
+Known risks: this remains deterministic synthetic, single-reviewer,
+linear-equation evidence with no target-device writer variation or same-input
+Gemini control. It cannot authorize provider adoption, student data, paid use,
+authentication bypass, or rollout.
+Next action: merge the content-free evidence after regression and remote gates.
+No further MyScript request is needed for this diagnostic; retain all disabled
+flags and wait for the target-device, restricted-corpus, privacy/legal,
+authentication, control-cost, and canary approvals.
+```

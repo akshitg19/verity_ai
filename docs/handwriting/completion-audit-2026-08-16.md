@@ -1,7 +1,7 @@
 # Handwriting v2 Definition-of-Done Audit
 
 **Audit date:** 2026-08-16  
-**Audited through:** PR #52 merge `5dac97efadf456e5a98c443cf6d6f749b0f0d04e`
+**Audited through:** PR #56 merge `cc0f611`
 **Goal status:** active; production-ready completion is not yet proven.
 
 This audit uses the 23-item Definition of Done from the user-approved completion
@@ -22,12 +22,12 @@ evidence or approval.
   initial 30-case set reports 26/30 exact/parse (86.67%), while the paired
   `x/X` probe reports 10/10 for explicit lowercase x-height and 9/10 for
   full-height `x`. All 50 provider calls succeeded with zero retry/error.
-- A separate [v2 synthetic authorization](myscript-synthetic-authorization-2026-08-16-v2.md)
-  now permits at most 1,500 attempts. Its owner-only repository-external ledger
-  is initialized at `1500 / 0 / 1500`; no v2 provider request has occurred.
-  The [before-run dashboard counter](myscript-dashboard-quota-evidence-2026-08-16.md)
-  reports 50 total requests, exactly matching v1 and proving 1,950 of the
-  published 2,000-request allowance remain.
+- The separate [300-case v2 synthetic diagnostic](myscript-synthetic-v2-results-2026-08-16.md)
+  completed with 300/300 provider successes, zero retry/error, 95.00% overall
+  exact match, and 96.33% parse success. All four lowercase geometry groups
+  passed their frozen exact/parse/latency gates. The owner-only ledger is now
+  `1500 / 300 / 1200`; the dashboard moved from 50 to 350 requests, a
+  discrepancy of zero, leaving 1,650 of the published 2,000-request allowance.
 - Frontend and backend production health returned HTTP 200 at audit time.
 - The original landing-page worktree still contains the same six unrelated
   modified/untracked paths and was not edited, stashed, reset, or merged.
@@ -43,17 +43,17 @@ evidence or approval.
 | 5 | Reproducible validation/replay/scoring harness | Complete | Schemas, content-safe scorer, durable ledger, MyScript runner, normalization-version enforcement, and offline reprocessor are merged and tested. |
 | 6 | Approved versioned decision corpus | External evidence required | A versioned 300-case synthetic v2 geometry corpus is frozen and MyScript-approved for diagnostic use, but it remains single-reviewer and decision-ineligible. No approved 300–500-case, two-reviewer, target-device corpus with restricted-store policy exists. |
 | 7 | Provider commercial/privacy/security terms verified | Public evidence complete; internal/vendor approval external | [Public terms checkpoint](myscript-public-terms-checkpoint-2026-08-16.md) verifies the 2,000-request internal-evaluation limit, trial-result research use, DPA cloud-recognition scope, transient content handling, 12-month IP logs, subprocessors/regions, no public uptime guarantee, and attribution/publicity terms. Written reconciliation of V.8 access clauses with the DPA, FERPA/COPPA/student-data approval, production quote, negotiated SLA/support, and acceptable publicity terms remain missing. |
-| 8 | MyScript category evaluation or evidence-backed no-go | External evidence required | The bounded synthetic POC proves the REST boundary and shows full-height `x` is more case-ambiguous than explicit lowercase x-height, but both corpora are decision-ineligible. No category/device comparison against Gemini exists, so neither adoption nor rejection is justified. |
+| 8 | MyScript category evaluation or evidence-backed no-go | External evidence required | The bounded synthetic POC and frozen 300-case diagnostic prove the REST boundary. Every lowercase geometry group passed its diagnostic gates, while the descriptive full-height group contained all eight case-only mismatches. The corpora remain decision-ineligible and no category/device comparison against Gemini exists, so neither adoption nor rejection is justified. |
 | 9 | Alternative evaluated if MyScript rejected | Not yet applicable | MyScript has not received a valid go/no-go decision. Provider-neutral alternative screening is documented, but no replacement benchmark is authorized. |
-| 10 | Selected fast path passes accuracy/parse gate | External evidence required | Initial synthetic MyScript reaches 86.67%; the paired geometry probe reaches 100% for explicit lowercase x-height and 90% for full-height `x`. No predeclared production tolerance or eligible same-input Gemini category baseline exists. |
+| 10 | Selected fast path passes accuracy/parse gate | External evidence required | In the 300-case diagnostic, standard/narrow/wide/tall lowercase groups each passed predeclared 95% exact, 95% parse, and p95 <500 ms gates. This remains synthetic, single-reviewer evidence; no production tolerance or eligible same-input Gemini target-device baseline exists. |
 | 11 | Latency, stale, and duplicate gates measured | Partially complete; target evidence external | Stale and duplicate behavior is regression-tested and content-free lifecycle stages exist. Target-device provisional/final/verdict p50/p95 are unmeasured. |
 | 12 | One-shot observable/correctable rollback-safe hybrid | Mechanism complete; enabled canary external | PR #47 proves one primary, at most one fallback, no normal-path PNG, timeout abort, cancellation, outage propagation, and no recursion. Component/workflow regressions prove each recognized math line is visibly editable, correction invalidates the old verdict, and only the edited transcription is rechecked. An approved authenticated enabled canary remains untested. |
 | 13 | Evidence-backed image-fallback provider decision | External evidence required | Gemini remains the safe default. No approved difficult-fallback corpus or identical-image Gemini/Luna benchmark exists. |
 | 14 | Written chemistry and structures are separate | Routing complete; recognition evidence external | Existing app tests plus [synthetic chemistry routing fixtures](fixtures/synthetic-chemistry-routing-v1/manifest.jsonl) separate `chemistry_text/text` from `chemistry_structure/smiles`. Target-device recognition accuracy/latency is missing. |
 | 15 | No raw content in ordinary logs | Complete for implemented paths | Content-safe metrics, aggregate reports, adapter errors, reprocessor failures, and disabled verifier are covered by tests. Raw prediction artifacts remain outside Git in an owner-only directory. |
 | 16 | No provider secret in Git/frontend/build/docs/logs | Complete for current state | Production bundle scan passes; secrets are backend Secret Manager references; local credential file is ignored and was never read or printed. |
-| 17 | Relevant local and remote checks pass | Complete for merged work | Backend passes 1270 tests / 3 expected xfails; frontend's latest unchanged result is 394 tests across 41 files plus lint, App.jsx cap, production build/API-base check, and provider-secret bundle scan. Linux, Windows, frontend, and Vercel checks all passed for PR #51. |
-| 18 | Reviewable PRs merged to current main | Complete for safe deliverables | PRs #31–#51 are merged; latest audited merge is `294d190005dcbe57cd744f451fadc3b8bda1e1fd`. |
+| 17 | Relevant local and remote checks pass | Complete for merged work | Backend passes 1272 tests / 3 expected xfails after a clean dependency install; frontend's latest unchanged result is 394 tests across 41 files plus lint, App.jsx cap, production build/API-base check, and provider-secret bundle scan. Linux, Windows, frontend, and Vercel checks all passed through PR #56. |
+| 18 | Reviewable PRs merged to current main | Complete for safe deliverables | PRs #31–#56 are merged; latest audited merge is `cc0f611`. |
 | 19 | Preview/staging smoke tests pass | Partially complete | Vercel previews and disabled Cloud Run health/OpenAPI/route/frontend checks pass. No target-device enabled-provider preview is authorized. |
 | 20 | Production rollout completed or fully rollout-ready | External evidence required | The safe state is fully disabled with exact activation gates documented, but provider selection, eligible categories, authentication, decision corpus, privacy/commercial approval, and canary evidence are missing. |
 | 21 | Rollback commands verified | Mechanism complete; enabled rollback external | [Runbook](rollout-runbook.md) contains frontend/backend kill switches; every reviewed Cloud Build restores false flags; live disabled verifier passes. An enabled-provider rollback cannot be exercised before an enabled canary is approved. |
@@ -67,7 +67,7 @@ evidence or approval.
 | Product/QA owner | Named tablet/browser matrix; 3–5 consenting internal testers; completed content-free Phase A/B exports | Run the documented baseline/A-B tasks and attach aggregate exports without handwriting content or identifiers. |
 | Data/privacy owner | Approved restricted store; access list; retention/deletion policy; provenance/consent; 300–500 frozen cases; two reviewers for ambiguous cases | Approve the store and annotation protocol, then provide a manifest that passes `--decision-run`. Do not put real ink in Git. |
 | MyScript legal/privacy/commercial owner | Internal approval of the [public terms checkpoint](myscript-public-terms-checkpoint-2026-08-16.md); written reconciliation of trial research/technical access with DPA transient processing; FERPA/COPPA/student-data terms; quote and negotiated production/SLA/support/publicity terms | Send the shortened vendor questionnaire only after user approval; attach the response and internal go/no-go review. No purchase or contract is authorized here. |
-| Product/finance owner | The synthetic-only v2 identity and 1,500-attempt cap are approved and initialized at 0 used. The before-run dashboard snapshot passes at 50 used / 1,950 free; the 300-case diagnostic manifest and thresholds are frozen. The after-run snapshot remains pending. This approval does not cover real handwriting or paid usage. | Execute the frozen manifest once, then reconcile the dashboard total to both ledgers and stop on any discrepancy. |
+| Product/finance owner | The synthetic-only v2 run is complete at 300/1,500 attempts. Dashboard reconciliation passed at 350 total requests with zero discrepancy and 1,650 published free requests remaining. This approval does not cover real handwriting, paid usage, production, or a new corpus. | No further MyScript request is needed for this diagnostic. Retain the unused ledger capacity until a separately reviewed purpose is approved. |
 | Security/product owner | Real user authentication and internal-preview access boundary | Replace/review the shared browser header before any deployed provider route can open. |
 | Product/model-cost owner | Approval for same-input Gemini control and, only if needed, a difficult-fallback Luna benchmark | Approve exact sample count, provider(s), cost cap, artifact path, and no-student-data boundary before any new model requests. |
 
@@ -75,8 +75,8 @@ evidence or approval.
 
 1. Capture the target-device Gemini baseline and internal scheduling A/B export.
 2. Freeze and validate the two-reviewer decision corpus and durable-store ledger.
-3. Reconcile provider dashboard quota and execute the predeclared same-input
-   MyScript/Gemini comparison under the newly approved cap.
+3. Freeze the provider decision protocol, then execute a separately approved
+   same-input MyScript/Gemini comparison on the eligible corpus.
 4. Record a category-specific MyScript go/no-go without weakening thresholds.
 5. If a category passes, run an authenticated internal hybrid canary and prove
    visible correction, outage handling, and rollback; otherwise retain Gemini
@@ -86,5 +86,5 @@ evidence or approval.
 
 Until those owners attach evidence, keep all MyScript flags false, never modify
 or reuse the exhausted v1 ledger, and do not send student handwriting to a new
-provider. The v2 authorization permits bounded synthetic evaluation only after
-its dashboard and manifest gates pass.
+provider. The completed v2 authorization remains synthetic-only and does not
+authorize a new corpus, real handwriting, paid usage, or production activation.
