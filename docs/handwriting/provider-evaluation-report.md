@@ -135,8 +135,9 @@ request count.
 ## 8. Current recommendation
 
 `NO_DECISION`: keep Gemini-only production behavior and all MyScript frontend
-and backend gates false. The next permissible engineering action is deployment
-and metadata validation of the fully disabled backend revision after explicit
-Cloud Shell authorization. The next permissible provider action requires every
-gate in Section 2; until then, make no smoke request and claim no provider
-accuracy, latency, request count, or cost.
+and backend gates false. Disabled deployment, metadata validation, and numeric
+secret-version pinning are complete. The next permissible provider action
+requires every remaining gate in Section 2; until then, make no smoke request
+and claim no provider accuracy, latency, request count, or cost. The next unlock
+must come from the named privacy/legal, commercial, data, GCP, QA, and security
+owners attaching their required evidence—not from another flag change.

@@ -1,16 +1,17 @@
 # VerityAI Handwriting v2 — Complete Handoff
 
-**Handoff date:** 2026-08-14
+**Handoff date:** 2026-08-16
 
 **Status:** Phases 0–2, Phase A/B, provider readiness, the disabled MyScript
 backend adapter, and unreachable-by-default frontend wiring are merged through
-PRs #31–#36. The durable POC attempt-ledger guardrail is merged without enabling
-provider traffic. PR #37 adds the explicit no-decision provider report
-checkpoint; live vector-provider POC and target-device evidence remain unavailable.
+PRs #31–#36. PR #37 added the explicit no-decision checkpoint, PR #38 recorded
+the disabled deployment, PR #39 pinned numeric Secret Manager versions, and PR
+#40 recorded revision `verity-ai-00018-fdv`. Provider traffic remains disabled;
+live vector-provider POC and target-device evidence remain unavailable.
 
-**Working branch:** `docs/handwriting-evaluation-checkpoint`
+**Working branch:** `main`
 
-**Base:** `origin/main` at `a584368`
+**Base:** `origin/main` at `c90a935`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
@@ -109,8 +110,10 @@ historical worktree was then removed. Current continuation work is isolated in
 merged by PR #32 at `156d724`, and provider readiness/offline evaluation was
 merged by PR #33 at `e01d28e`. The backend adapter was merged by PR #34 at
 `949e1ea`, and the dual-gated frontend POC boundary was merged by PR #35 at
-`5e40375`. Current work is on `feat/handwriting-poc-ledger`. The dirty landing-
-page worktree remains intact.
+`5e40375`. The durable ledger, evaluation checkpoint, disabled deployment,
+numeric secret-version guard, and runtime evidence were subsequently merged
+through PR #40 at `c90a935`. The clean continuation worktree is on `main`; the
+dirty landing-page worktree remains intact.
 
 The obsolete `verity_ai-frontend-polish` worktree was removed on 2026-08-14
 after verifying that it was clean and its branch was already an ancestor of
@@ -821,8 +824,9 @@ Not safe to claim yet:
 - Luna is better than Gemini;
 - complex chemistry or full undergraduate math is supported.
 
-The current safe change is the dual-gated frontend MyScript POC adapter and
-rollout runbook. Deploy the already-merged disabled backend revision only after
-Cloud Shell authorization, then verify false flags and secret references without
-reading values. Live POC calls remain blocked on the written licensing/privacy
-answers and approved corpus in `provider-readiness.md`.
+The current safe state is disabled revision `verity-ai-00018-fdv`, with both
+provider flags false and both Secret Manager references pinned to reviewed
+numeric version `1`. Live POC calls remain blocked on the written
+licensing/privacy and commercial answers, approved corpora and restricted
+storage, durable ledger mount/restart proof, dashboard reconciliation, target
+devices, and a real user-access boundary in `provider-readiness.md`.
