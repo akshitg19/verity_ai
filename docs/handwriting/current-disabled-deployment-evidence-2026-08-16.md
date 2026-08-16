@@ -4,6 +4,9 @@
 
 **Result:** `PASS` for the post-POC disabled-revision deployment gate.
 
+This record is historical. The latest-`main` disabled deployment is recorded
+in [the current-main evidence](current-main-disabled-deployment-evidence-2026-08-16.md).
+
 This checkpoint deploys the reviewed synthetic-POC implementation from current
 `main` while keeping MyScript unreachable from production. It does not enable
 provider traffic, make another MyScript request, or change the `NO_DECISION`

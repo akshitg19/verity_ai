@@ -63,8 +63,12 @@ for implementation decisions.
   records the reviewed numeric references, build guard, updated disabled
   revision, and repeated content-safe checks.
 - [Current disabled deployment evidence](current-disabled-deployment-evidence-2026-08-16.md)
-  records the post-POC `main` build, image digest, revision, false flags,
+  records the historical post-POC build, image digest, revision, false flags,
   numeric secret references, and repeated content-safe checks.
+- [Current-main disabled deployment evidence](current-main-disabled-deployment-evidence-2026-08-16.md)
+  records build `a5703e61-48d6-487a-8fe2-9e35c06aeb51`, revision
+  `verity-ai-00021-glp`, the exact latest-`main` image/digest, false flags,
+  numeric secret references, and the repeated fail-closed verifier result.
 - `scripts/verify_disabled_myscript_revision.py` reproduces the allowlisted
   revision-metadata and fail-closed smoke checks without accessing Secret
   Manager values.
@@ -98,12 +102,14 @@ for implementation decisions.
   cross-phase audit; PRs #53–#55 authorize and align the 1,500-attempt v2
   boundary; PR #56 freezes the deterministic 300-case v2 corpus and gates; and
   PR #57 records the completed run, reconciliation, and content-free results.
-  PR #59 repairs and hardens schema-v2 paired target-device A/B evidence.
+  PR #59 repairs and hardens schema-v2 paired target-device A/B evidence. PR
+  #61 adds the fail-closed production activation evidence gate; current `main`
+  is deployed as the verified disabled revision `verity-ai-00021-glp`.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: the backend MyScript REST adapter and internal route are
-  deployed in disabled revision `verity-ai-00020-zwl`. A separate local,
+  deployed in disabled revision `verity-ai-00021-glp`. A separate local,
   synthetic-only 50-call POC proved the live REST boundary and characterized
   `x/X` geometry sensitivity. The separate v2 synthetic diagnostic completed
   300/300 calls with a 300/1500 ledger; the account-wide counter reconciles at

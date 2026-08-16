@@ -892,9 +892,10 @@ Known risks: session pairing proves that two exports share one browser-tab
 session, not a human identity. Device measurements and voluntary teammate runs
 remain external; this remains qualitative scheduling evidence rather than a
 provider benchmark.
-Next action: run the full frontend/backend gates and merge; then collect 3–5
-target-device pairs with --require-ready. Separately, complete Google OAuth to
-deploy and verify the latest disabled Cloud Run revision.
+Next action at this checkpoint: run the full frontend/backend gates and merge;
+then collect 3–5 target-device pairs with --require-ready. Operator OAuth and
+the refreshed disabled deployment were completed in the later deployment entry
+below.
 ```
 
 ```text
@@ -928,7 +929,32 @@ cost, or production traffic was generated.
 Known risks: hashes and machine checks cannot prove the substantive quality of
 human approvals. The manifest is a required release guard, not an approval
 authority or substitute for legal/security/product review.
-Next action: keep flags false until a valid manifest and explicit activation
-approval exist. Collect the remaining owner/device evidence; separately
-complete Google OAuth for the latest disabled deployment.
+Next action at this checkpoint: keep flags false until a valid manifest and
+explicit activation approval exist. Collect the remaining owner/device
+evidence. Operator OAuth and the refreshed disabled deployment were completed
+in the later deployment entry below.
+```
+
+```text
+Date: 2026-08-16
+Branch: docs/handwriting-main-disabled-evidence
+Phase: latest-main disabled deployment
+Implemented: cloned and verified clean exact main commit
+b9b1d76a7bc103749dbfdb8561406606280884a2 in a fresh Cloud Shell temporary
+directory, submitted the reviewed cloudbuild.yaml with traceable tag b9b1d76,
+and deployed revision verity-ai-00021-glp. Cloud Build
+a5703e61-48d6-487a-8fe2-9e35c06aeb51 completed SUCCESS. Both MyScript flags
+remain false and both Secret Manager references remain pinned to version 1.
+Tests and results: the fail-closed verifier returned PASS for the expected
+runtime service account and image digest, 100% traffic to the ready revision,
+health/OpenAPI/frontend HTTP 200, route presence, and a synthetic disabled-route
+HTTP 404. No secret value was accessed and no MyScript request occurred.
+Measured metrics: deployment integrity only; no provider accuracy, latency,
+device, student, or production-recognition traffic was generated.
+Known risks: this proves the latest implementation is deployed safely disabled,
+not that MyScript is selected or production-ready. Target-device/same-input
+evidence, eligible consented data, authentication, restricted storage, five
+current approvals, and enabled canary/rollback evidence remain external.
+Next action: merge this content-free deployment evidence. Keep all activation
+flags false until the external package and rollout-approval manifest are valid.
 ```
