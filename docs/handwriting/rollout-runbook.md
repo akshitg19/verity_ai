@@ -5,8 +5,8 @@
 **MyScript status:** backend deployed in disabled revision
 `verity-ai-00021-glp`; frontend POC wiring is disabled by default. Separate
 50-call v1 and 300-call v2 synthetic diagnostics completed without changing
-Cloud Run traffic. The deployed image is current `main` at `b9b1d76`; the
-repeatable disabled verifier returned `PASS`.
+Cloud Run traffic. The deployed runtime source is `b9b1d76`; PR #63 records
+the deployment evidence, and the repeatable disabled verifier returned `PASS`.
 
 ## 1. Safety model
 
