@@ -881,8 +881,9 @@ CLI, policy drift, unsafe/malformed-field non-disclosure, incomplete/unpaired/
 mismatched sessions, and a successful three-pair gate. The full frontend suite
 passes 402 tests across 41 files; lint, App.jsx 256/260, development and
 production builds, API-base inspection, and provider-secret bundle scan pass.
-The unchanged backend passes 1272 tests with 3 expected xfails. Remote checks
-remain to be recorded before merge.
+The unchanged backend passes 1272 tests with 3 expected xfails. GitHub Linux,
+Windows, and frontend checks plus the Vercel preview passed; PR #59 merged as
+`be9f023`.
 Measured metrics: no target-device result was fabricated. A completed evidence
 set now requires 3–5 matched Legacy/Current sessions, balanced first-variant
 order, exactly 12 committed painted results and provider requests per run, and

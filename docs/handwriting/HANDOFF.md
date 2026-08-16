@@ -3,7 +3,7 @@
 **Handoff date:** 2026-08-16
 
 **Status:** Safe provider-neutral foundations and disabled MyScript integration
-work are merged through PR #58. The 50-call v1 smoke/probe and separate
+work are merged through PR #59. The 50-call v1 smoke/probe and separate
 300-call v2 synthetic diagnostic completed with no production flag change; the
 v2 run had 300/300 provider successes, 95.00% overall exact match, 96.33% parse
 success, and zero ledger/dashboard discrepancy. These corpora remain
@@ -12,11 +12,13 @@ single-reviewer and decision-ineligible, so the provider decision is still
 disabled but predates the latest merged source; a new disabled deployment is
 pending refreshed operator OAuth. Target-device, eligible decision-corpus,
 privacy/legal, real-authentication, same-input control, and enabled-canary
-evidence remain unavailable.
+evidence remain unavailable. PR #59 repaired and hardened the internal Gemini
+scheduling comparison so 3–5 anonymous paired device sessions can now produce
+strict, content-free, machine-checked evidence rather than unverified exports.
 
-**Working branch:** `feat/handwriting-ab-evidence-integrity`
+**Resume branch:** `main`
 
-**Current merged base:** `origin/main` at `08fce92`
+**Current merged base:** `origin/main` at `be9f023`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 

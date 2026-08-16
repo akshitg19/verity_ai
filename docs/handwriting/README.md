@@ -94,6 +94,7 @@ for implementation decisions.
   cross-phase audit; PRs #53–#55 authorize and align the 1,500-attempt v2
   boundary; PR #56 freezes the deterministic 300-case v2 corpus and gates; and
   PR #57 records the completed run, reconciliation, and content-free results.
+  PR #59 repairs and hardens schema-v2 paired target-device A/B evidence.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
