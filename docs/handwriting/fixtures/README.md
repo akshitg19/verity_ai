@@ -43,6 +43,14 @@ files do not exist and its records must not be included in accuracy totals.
 scoring pipeline. Its records set `benchmark_eligible` to false and must never be
 reported as provider evidence.
 
+`synthetic-myscript-smoke-v1/` contains the original 30 deterministic
+single-line vector fixtures. `synthetic-myscript-x-case-v1/` adds ten paired
+full-height/lowercase-height `x` comparisons. Within a pair the equation,
+timestamps, jitter, and every non-`x` stroke are identical. Both sets are
+synthetic, one-reviewer, MyScript-approved technical POC evidence and remain
+ineligible for a provider decision. Their live aggregate is documented in
+`../myscript-synthetic-poc-2026-08-16.md`; raw predictions are not in Git.
+
 `synthetic-chemistry-routing-v1/` is a committed, deterministic routing corpus
 with eight written-chemistry and two molecular-structure records. Every record
 contains both bounded vector strokes and a generated PNG. It covers chemistry

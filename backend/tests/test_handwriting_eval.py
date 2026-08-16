@@ -21,6 +21,9 @@ PREDICTION_SCHEMA = ROOT / "docs/handwriting/fixtures/prediction.schema.json"
 CHEMISTRY_ROUTING_ROOT = (
     ROOT / "docs/handwriting/fixtures/synthetic-chemistry-routing-v1"
 )
+MYSCRIPT_X_CASE_ROOT = (
+    ROOT / "docs/handwriting/fixtures/synthetic-myscript-x-case-v1"
+)
 
 
 def write_json(path, value):
@@ -147,6 +150,50 @@ def test_load_manifest_validates_schema_inputs_and_decision_readiness(tmp_path):
 
     assert result.decision_eligible is True
     assert [record["id"] for record in result.records] == ["math-001"]
+
+
+def test_myscript_x_case_probe_is_paired_and_changes_only_x_strokes():
+    result = load_manifest(
+        MYSCRIPT_X_CASE_ROOT / "manifest.jsonl",
+        FIXTURE_SCHEMA,
+        fixture_root=MYSCRIPT_X_CASE_ROOT,
+        stroke_schema_path=STROKE_SCHEMA,
+        require_inputs=True,
+        require_decision_ready=False,
+    )
+
+    assert len(result.records) == 20
+    assert result.decision_eligible is False
+    by_id = {record["id"]: record for record in result.records}
+    for pair_index in range(1, 11):
+        prefix = f"synthetic-x-case-{pair_index:02d}"
+        full = by_id[f"{prefix}-full-height"]
+        lower = by_id[f"{prefix}-lowercase-height"]
+        assert full["expected"] == lower["expected"]
+        assert full["consent"]["approved_providers"] == ["myscript"]
+        assert lower["consent"]["approved_providers"] == ["myscript"]
+
+        full_strokes = json.loads(
+            (MYSCRIPT_X_CASE_ROOT / full["inputs"]["strokes"]).read_text()
+        )["strokes"]
+        lower_strokes = json.loads(
+            (MYSCRIPT_X_CASE_ROOT / lower["inputs"]["strokes"]).read_text()
+        )["strokes"]
+        changed = [
+            (full_stroke, lower_stroke)
+            for full_stroke, lower_stroke in zip(
+                full_strokes, lower_strokes, strict=True
+            )
+            if full_stroke != lower_stroke
+        ]
+        assert len(changed) == 2
+        for full_stroke, lower_stroke in changed:
+            full_y = [point["y"] for point in full_stroke["points"]]
+            lower_y = [point["y"] for point in lower_stroke["points"]]
+            assert max(lower_y) - min(lower_y) < max(full_y) - min(full_y)
+            assert [point["t"] for point in lower_stroke["points"]] == [
+                point["t"] for point in full_stroke["points"]
+            ]
 
 
 def test_load_manifest_rejects_path_traversal(tmp_path):

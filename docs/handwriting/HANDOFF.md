@@ -564,11 +564,11 @@ flags are false. Runtime metadata proves the expected service account and the
 two numeric version-`1` Secret Manager references without reading their values;
 see `secret-version-pinning-evidence-2026-08-16.md`. A direct vector-only
 frontend POC adapter is implemented behind two additional false-by-default gates;
-it has no automatic image fallback. A local synthetic-only runner made 30
-successful live REST calls under a 50-attempt durable cap; exact match and
-deterministic parse success are both 86.67% under the content-safe `v2` offline
-amendment, and provider latency p50/p95 was
-141/266.15ms. See
+it has no automatic image fallback. A local synthetic-only runner made 50/50
+successful live REST calls under the exhausted durable cap. The initial
+30-case set reached 86.67% exact/parse under normalization `v2`; the paired
+20-case `x/X` probe reached 100% for explicit lowercase x-height and 90% for
+full-height `x`. See
 `myscript-synthetic-poc-2026-08-16.md`. This result did not enable the deployed
 route or establish a provider decision. The route additionally requires
 the existing API access-control header before it can open. Provider/legal
@@ -583,8 +583,9 @@ request path, prompt, or production dependency was added.
 
 ### No provider decision corpus
 
-The repository now has 30 deterministic synthetic vector smoke fixtures, but
-not the required 300–500 consented, two-reviewer decision fixtures. No
+The repository now has 30 deterministic vector smoke fixtures and 20 paired
+synthetic `x/X` geometry fixtures, but not the required 300–500 consented,
+two-reviewer decision fixtures. No
 same-input Gemini control or target-device benchmark has been run.
 
 ### No general row-model rewrite
@@ -679,10 +680,11 @@ internal feature flag only
 
 Do not begin by replacing the full canvas/editor.
 
-The completed smoke used 30 synthetic expressions and 30 attempts. Freeze a
-300–500 expression decision corpus across writers and target devices only after
-the smoke passes and the provider/privacy gates close. Include fractions,
-exponents, ambiguous symbols, edits, and writing-quality variation.
+The completed synthetic POC used all 50 authorized attempts: 30 initial
+expressions plus a 20-case paired `x/X` geometry probe. Freeze a 300–500
+expression decision corpus across writers and target devices only after a new
+budget/run identity is approved and the provider/privacy gates close. Include
+fractions, exponents, ambiguous symbols, edits, and writing-quality variation.
 
 The vector provider becomes primary only if category-level exact match,
 parse-success rate, latency, privacy, licensing, and fallback-rate gates pass.

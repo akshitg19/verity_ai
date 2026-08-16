@@ -4,7 +4,7 @@
 **Current decision:** Gemini remains the only enabled production recognizer.
 **MyScript status:** backend deployed in disabled revision
 `verity-ai-00020-zwl`; frontend POC wiring is disabled by default. A separate
-local 30-call synthetic smoke completed without changing Cloud Run traffic.
+local 50-call synthetic POC completed without changing Cloud Run traffic.
 
 ## 1. Safety model
 
@@ -181,9 +181,10 @@ traffic during this stage.
 ### Completed local synthetic POC
 
 On 2026-08-16 an explicitly approved, synthetic-only runner used an owner-only
-repository-external ledger capped at 50 total HTTP attempts. It sent 30
-validated vector fixtures, used 30 attempts with no retries or errors, and left
-all Cloud Run and frontend gates unchanged. See
+repository-external ledger capped at 50 total HTTP attempts. It sent 30 initial
+smoke fixtures and 20 paired `x/X` geometry fixtures, used all 50 attempts with
+no retries or errors, and left all Cloud Run and frontend gates unchanged. The
+ledger is exhausted and must reject any further attempt under this run. See
 [`myscript-synthetic-poc-2026-08-16.md`](myscript-synthetic-poc-2026-08-16.md).
 
 ## 4. Observability and alerts
