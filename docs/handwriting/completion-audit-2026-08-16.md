@@ -1,7 +1,7 @@
 # Handwriting v2 Definition-of-Done Audit
 
 **Audit date:** 2026-08-16  
-**Audited through:** PR #51 merge `294d190005dcbe57cd744f451fadc3b8bda1e1fd`
+**Audited through:** PR #52 merge `5dac97efadf456e5a98c443cf6d6f749b0f0d04e`
 **Goal status:** active; production-ready completion is not yet proven.
 
 This audit uses the 23-item Definition of Done from the user-approved completion
@@ -22,6 +22,11 @@ evidence or approval.
   initial 30-case set reports 26/30 exact/parse (86.67%), while the paired
   `x/X` probe reports 10/10 for explicit lowercase x-height and 9/10 for
   full-height `x`. All 50 provider calls succeeded with zero retry/error.
+- A separate [v2 synthetic authorization](myscript-synthetic-authorization-2026-08-16-v2.md)
+  now permits at most 1,500 attempts. Its owner-only repository-external ledger
+  is initialized at `1500 / 0 / 1500`; no v2 provider request has occurred.
+  A MyScript dashboard snapshot proving sufficient free allowance remains a
+  mandatory pre-request gate.
 - Frontend and backend production health returned HTTP 200 at audit time.
 - The original landing-page worktree still contains the same six unrelated
   modified/untracked paths and was not edited, stashed, reset, or merged.
@@ -61,7 +66,7 @@ evidence or approval.
 | Product/QA owner | Named tablet/browser matrix; 3–5 consenting internal testers; completed content-free Phase A/B exports | Run the documented baseline/A-B tasks and attach aggregate exports without handwriting content or identifiers. |
 | Data/privacy owner | Approved restricted store; access list; retention/deletion policy; provenance/consent; 300–500 frozen cases; two reviewers for ambiguous cases | Approve the store and annotation protocol, then provide a manifest that passes `--decision-run`. Do not put real ink in Git. |
 | MyScript legal/privacy/commercial owner | Internal approval of the [public terms checkpoint](myscript-public-terms-checkpoint-2026-08-16.md); written reconciliation of trial research/technical access with DPA transient processing; FERPA/COPPA/student-data terms; quote and negotiated production/SLA/support/publicity terms | Send the shortened vendor questionnaire only after user approval; attach the response and internal go/no-go review. No purchase or contract is authorized here. |
-| Product/finance owner | Explicit budget and request cap for a decision corpus; dashboard quota snapshot before and after | Approve a new run identity and cap. The existing authorization and ledger are exhausted at 50/50; they do not authorize attempt 51 or a 300–500-case run. |
+| Product/finance owner | The synthetic-only v2 identity and 1,500-attempt cap are approved and initialized at 0 used. A dashboard quota snapshot before and after remains missing; this approval does not cover real handwriting or paid usage. | Before any v2 request, attach a content-free dashboard snapshot proving at least 1,500 free requests remain. If fewer remain, lower the ledger cap before traffic. Then approve a useful predeclared synthetic manifest rather than spending the allowance by default. |
 | Security/product owner | Real user authentication and internal-preview access boundary | Replace/review the shared browser header before any deployed provider route can open. |
 | Product/model-cost owner | Approval for same-input Gemini control and, only if needed, a difficult-fallback Luna benchmark | Approve exact sample count, provider(s), cost cap, artifact path, and no-student-data boundary before any new model requests. |
 
@@ -78,6 +83,7 @@ evidence or approval.
 6. Benchmark written chemistry, molecular structures, and difficult image
    fallback as separate categories before any expansion.
 
-Until those owners attach evidence, keep all MyScript flags false, make no
-further provider request under the exhausted run, and do not send student
-handwriting to a new provider.
+Until those owners attach evidence, keep all MyScript flags false, never modify
+or reuse the exhausted v1 ledger, and do not send student handwriting to a new
+provider. The v2 authorization permits bounded synthetic evaluation only after
+its dashboard and manifest gates pass.

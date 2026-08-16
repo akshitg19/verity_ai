@@ -36,6 +36,10 @@ for implementation decisions.
 - [MyScript synthetic POC evidence](myscript-synthetic-poc-2026-08-16.md)
   records the approved 50-call synthetic-only run: the initial 30-case smoke,
   paired 20-case `x/X` geometry probe, and separate aggregate results.
+- [MyScript synthetic v2 authorization](myscript-synthetic-authorization-2026-08-16-v2.md)
+  records the separate 1,500-attempt synthetic-only ceiling, zero-use ledger,
+  dashboard pre-request gate, and exclusions for student data, production, and
+  paid usage.
 - [Rollout runbook](rollout-runbook.md) records the disabled deployment check,
   activation prerequisites, monitoring, outage response, and kill switches.
 - [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
@@ -76,14 +80,18 @@ for implementation decisions.
   revision; PR #47 hardens the one-shot hybrid fallback; PR #48 adds synthetic
   chemistry routing evidence; PR #49 adds the 23-item completion audit; PR #50
   proves visible correction and freezes public MyScript terms; and PR #51
-  completes the bounded paired `x/X` geometry probe.
+  completes the bounded paired `x/X` geometry probe. PR #52 finalizes the
+  cross-phase audit against the completed probe.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: the backend MyScript REST adapter and internal route are
   deployed in disabled revision `verity-ai-00020-zwl`. A separate local,
   synthetic-only 50-call POC proved the live REST boundary and characterized
-  `x/X` geometry sensitivity; Cloud Run and frontend traffic remain disabled.
+  `x/X` geometry sensitivity. A newly authorized v2 synthetic run has a
+  separate 0/1500 ledger but cannot make its first request until the
+  account-wide free allowance is reconciled; Cloud Run and frontend traffic
+  remain disabled.
 - Recommended vector POC: MyScript iink. The developer application, local
   credential file, GCP secrets, and runtime-service-account secret access are
   complete. Disabled deployment, numeric secret-version pinning, and
@@ -97,7 +105,9 @@ for implementation decisions.
 - Next gates: target-device Phase A/B exports; internal approval of the public
   terms checkpoint plus written MyScript reconciliation/commercial and
   student-privacy answers before student/production use; an approved consented
-  raw-stroke decision corpus; and same-input Gemini control evidence.
+  raw-stroke decision corpus; same-input Gemini control evidence; and, before
+  any v2 synthetic request, a dashboard snapshot plus a reviewed predeclared
+  manifest.
 
 ## Working agreement for AI-assisted changes
 

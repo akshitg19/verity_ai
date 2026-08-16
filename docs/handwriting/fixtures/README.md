@@ -94,7 +94,7 @@ python -m handwriting_eval.cli plan \
   --fixture-root /approved/store \
   --provider myscript \
   --run-id myscript-rest-poc-1 \
-  --request-cap 650 \
+  --request-cap 1500 \
   --output /approved/store/runs/myscript-rest-poc-1.plan.json \
   --decision-run
 ```
@@ -107,7 +107,7 @@ python -m handwriting_eval.cli ledger-init \
   --ledger /approved/store/runs/myscript-rest-poc-1.handwriting-ledger.jsonl \
   --provider myscript \
   --run-id myscript-rest-poc-1 \
-  --request-cap 650
+  --request-cap 1500
 ```
 
 Every replay executor must reserve exactly one ledger sequence immediately
@@ -122,12 +122,12 @@ python -m handwriting_eval.cli ledger-reserve \
   --ledger /approved/store/runs/myscript-rest-poc-1.handwriting-ledger.jsonl \
   --provider myscript \
   --run-id myscript-rest-poc-1 \
-  --request-cap 650
+  --request-cap 1500
 ```
 
 Use `ledger-status` with the same arguments for a content-free before/after
 record. The append-only sequence survives executor restarts and stops before
-attempt 651. It fails closed on corruption, identity mismatch, owner-permission
+attempt 1501. It fails closed on corruption, identity mismatch, owner-permission
 violations, an existing lock, or an exhausted cap. A reservation abandoned by a
 crash still consumes budget. Do not delete a stale lock or edit/reset a ledger
 without a recorded operator review and reconciliation with the provider

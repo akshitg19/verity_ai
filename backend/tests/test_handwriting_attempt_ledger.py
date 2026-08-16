@@ -33,7 +33,7 @@ def recognize_request():
     )
 
 
-def settings(*, request_cap=650):
+def settings(*, request_cap=1500):
     return MyScriptSettings(
         enabled=True,
         application_key="synthetic-application-key",
@@ -113,9 +113,17 @@ def test_ledger_stops_before_attempt_over_cap(tmp_path):
     assert budget.status().used == 1
 
 
-def test_myscript_cap_cannot_exceed_650(tmp_path):
+def test_myscript_cap_accepts_approved_1500_and_rejects_1501(tmp_path):
+    approved = ledger(tmp_path, cap=1500)
+    assert approved.initialize().remaining == 1500
+
     with pytest.raises(AttemptLedgerError, match="request_cap_invalid"):
-        ledger(tmp_path, cap=651)
+        DurableAttemptLedger(
+            tmp_path / "over-cap.handwriting-ledger.jsonl",
+            run_id="myscript-over-cap",
+            provider="myscript",
+            request_cap=1501,
+        )
 
 
 def test_ledger_rejects_repository_relative_or_missing_parent_paths(tmp_path):

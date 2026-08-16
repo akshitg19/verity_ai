@@ -280,7 +280,7 @@ is replayed. The backend production factory also requires an initialized,
 owner-only attempt ledger on an approved durable store before the provider can
 be enabled. Each HTTP attempt reserves one append-only sequence before opening
 the connection; corruption, mismatched run identity, lock failure, or attempt
-651 stops traffic. An ephemeral container filesystem is not an acceptable
+1501 stops traffic. An ephemeral container filesystem is not an acceptable
 ledger store.
 
 ### Image fallback

@@ -122,7 +122,7 @@ steps:
       - '--timeout=300'
       # This replaces the whole environment rather than adding to it, so every
       # variable the service needs has to be named here every time.
-      - '--set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=${_CORS_ORIGINS},CORS_ORIGIN_REGEX=${_CORS_ORIGIN_REGEX},VERITY_API_SECRET=${_API_SECRET},MYSCRIPT_ENABLED=false,MYSCRIPT_POC_ROUTE_ENABLED=false,MYSCRIPT_RECOGNITION_URL=https://cloud.myscript.com/api/v4.0/iink/recognize,MYSCRIPT_TIMEOUT_SECONDS=3,MYSCRIPT_EVAL_REQUEST_CAP=650'
+      - '--set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=${_CORS_ORIGINS},CORS_ORIGIN_REGEX=${_CORS_ORIGIN_REGEX},VERITY_API_SECRET=${_API_SECRET},MYSCRIPT_ENABLED=false,MYSCRIPT_POC_ROUTE_ENABLED=false,MYSCRIPT_RECOGNITION_URL=https://cloud.myscript.com/api/v4.0/iink/recognize,MYSCRIPT_TIMEOUT_SECONDS=3,MYSCRIPT_EVAL_REQUEST_CAP=1500'
       # Secret values are resolved by Cloud Run into backend-only environment
       # variables. They never become Cloud Build substitutions or image layers.
       - '--update-secrets=MYSCRIPT_APPLICATION_KEY=verity-myscript-application-key:${_MYSCRIPT_APPLICATION_KEY_VERSION},MYSCRIPT_HMAC_KEY=verity-myscript-hmac-key:${_MYSCRIPT_HMAC_KEY_VERSION}'

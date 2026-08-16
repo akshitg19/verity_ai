@@ -9,7 +9,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .ledger import AttemptLedgerError, DurableAttemptLedger
+from .ledger import (
+    MYSCRIPT_POC_ATTEMPT_CAP,
+    AttemptLedgerError,
+    DurableAttemptLedger,
+)
 from .scoring import score_run
 from .validation import (
     EvaluationDataError,
@@ -125,8 +129,14 @@ def _plan_command(args: argparse.Namespace) -> dict[str, Any]:
         raise EvaluationDataError(
             f"Run plans {planned_requests} requests, exceeding cap {args.request_cap}"
         )
-    if args.provider == "myscript" and args.request_cap > 650:
-        raise EvaluationDataError("MyScript POC request-cap cannot exceed 650")
+    if (
+        args.provider == "myscript"
+        and args.request_cap > MYSCRIPT_POC_ATTEMPT_CAP
+    ):
+        raise EvaluationDataError(
+            "MyScript POC request-cap cannot exceed "
+            f"{MYSCRIPT_POC_ATTEMPT_CAP}"
+        )
 
     requests = []
     for repeat_index in range(args.repeat):

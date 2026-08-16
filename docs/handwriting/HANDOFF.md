@@ -686,6 +686,15 @@ expression decision corpus across writers and target devices only after a new
 budget/run identity is approved and the provider/privacy gates close. Include
 fractions, exponents, ambiguous symbols, edits, and writing-quality variation.
 
+The product owner subsequently approved a separate synthetic-only run,
+`myscript-synthetic-poc-20260816-v2`, capped at 1,500 attempts. Its independent
+owner-only ledger is initialized at 0/1500; v1 remains immutable at 50/50. This
+does not approve student/tester ink, production activation, distribution,
+payment, or a contract. Before the first v2 request, reconcile the account-wide
+2,000-request free allowance in the MyScript dashboard and prove at least 1,500
+free requests remain; otherwise lower the v2 cap before traffic. See
+`myscript-synthetic-authorization-2026-08-16-v2.md`.
+
 The vector provider becomes primary only if category-level exact match,
 parse-success rate, latency, privacy, licensing, and fallback-rate gates pass.
 

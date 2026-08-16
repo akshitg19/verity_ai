@@ -137,7 +137,8 @@ preconditions close.
 - Output is compatible with the deterministic judge.
 - Provider errors are typed and recoverable.
 - Every live HTTP attempt must reserve a content-free durable ledger sequence;
-  attempt 651 and every ledger integrity failure stop before provider I/O.
+  the current approved ceiling rejects attempt 1501, and every ledger integrity
+  failure stops before provider I/O.
 - Results can be reproduced from stored consented fixtures.
 
 ## Phase 4 — Shadow evaluation
@@ -771,4 +772,28 @@ comparison, target-device latency, provider adoption, or student-data approval.
 Next action: merge the corpus/evidence after full regression and remote gates.
 Reject attempt 51; any later provider run needs new explicit authorization and
 run identity. Keep all production MyScript flags false.
+```
+
+```text
+Date: 2026-08-16
+Branch: feat/myscript-1500-cap
+Phase: bounded synthetic v2 authorization
+Implemented: recorded product approval for run
+myscript-synthetic-poc-20260816-v2 at a strict 1,500-attempt ceiling; raised
+the shared MyScript ledger/adapter/CLI maximum from 650 to 1,500; initialized a
+separate owner-only repository-external ledger at 0/1500 without modifying the
+exhausted v1 ledger.
+Tests and results: Python syntax and diff checks pass; a pure offline ledger
+proof reserved sequences 1..1500 and rejected attempt 1501 before provider
+code. No provider request, secret read, student data, deployment, or paid action
+occurred.
+Measured metrics: authorization and ledger state only. No new accuracy,
+latency, quota, cost, or provider-response measurement.
+Known risks: the account-wide 2,000-request dashboard has not been reconciled;
+a useful predeclared synthetic manifest is not selected; this run remains
+decision-ineligible and does not close privacy, authentication, target-device,
+commercial, or rollout gates.
+Next action: obtain a content-free dashboard snapshot proving at least 1,500
+free requests remain, then review the exact synthetic manifest before spending
+any v2 request. Keep both production MyScript flags false.
 ```

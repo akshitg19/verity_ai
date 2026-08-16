@@ -112,6 +112,7 @@ measurement. Report both and identify warm/cold conditions.
 | Metric | Result |
 |---|---|
 | Synthetic POC cap / used / remaining | `50 / 50 / 0` local ledger; dashboard reconciliation not recorded |
+| Synthetic v2 cap / used / remaining | `1500 / 0 / 1500` separate local ledger; no request until a dashboard snapshot proves at least 1,500 free requests remain |
 | Success / timeout / error rates | `NOT_MEASURED` |
 | Retry count | `NOT_MEASURED` |
 | Payload mean / p95 | `NOT_MEASURED` |

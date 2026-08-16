@@ -56,7 +56,7 @@ def recognize_request(*, times=(100.4, 101.6), pressures=(0.0, 0.5)):
     )
 
 
-def settings(*, enabled=True, request_cap=650):
+def settings(*, enabled=True, request_cap=1500):
     return MyScriptSettings(
         enabled=enabled,
         application_key=SYNTHETIC_APPLICATION_KEY,
