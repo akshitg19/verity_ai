@@ -38,6 +38,9 @@ for implementation decisions.
 - [Secret-version pinning evidence](secret-version-pinning-evidence-2026-08-16.md)
   records the reviewed numeric references, build guard, updated disabled
   revision, and repeated content-safe checks.
+- [Current disabled deployment evidence](current-disabled-deployment-evidence-2026-08-16.md)
+  records the post-POC `main` build, image digest, revision, false flags,
+  numeric secret references, and repeated content-safe checks.
 - `scripts/verify_disabled_myscript_revision.py` reproduces the allowlisted
   revision-metadata and fail-closed smoke checks without accessing Secret
   Manager values.
@@ -57,12 +60,13 @@ for implementation decisions.
   PR #35 added the disabled frontend POC boundary, PR #36 added the durable
   attempt ledger, PR #37 added the explicit evaluation checkpoint, PRs #38–#40
   deployed and pinned the disabled boundary, and PR #42 adds repeatable
-  disabled-revision verification.
+  disabled-revision verification. PR #43 adds the bounded synthetic POC and its
+  reviewed adapter/evaluation fixes.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: the backend MyScript REST adapter and internal route are
-  deployed in disabled revision `verity-ai-00018-fdv`. A separate local,
+  deployed in disabled revision `verity-ai-00019-nj7`. A separate local,
   synthetic-only 30-call POC proved the live REST boundary; Cloud Run and
   frontend traffic remain disabled.
 - Recommended vector POC: MyScript iink. The developer application, local
