@@ -480,3 +480,30 @@ reconciliation, target devices, and real authentication remain blocked.
 Next action: merge this evidence checkpoint. Keep every MyScript gate false and
 obtain the remaining external evidence before an approved internal POC.
 ```
+
+```text
+Date: 2026-08-16
+Source/revision: 7171a12bc768d7612140c434702babca6c01d107 / verity-ai-00018-fdv
+Phase: 3 numeric Secret Manager version checkpoint
+Implemented: pinned both MyScript environment references to reviewed numeric
+version 1; added a pre-image-build validator that rejects empty, latest, zero,
+leading-zero, and non-numeric values; documented the metadata-only rotation
+procedure; and updated the disabled Cloud Run service without rebuilding the
+previously verified image.
+Tests and results: 36 focused MyScript tests passed; the full backend suite
+passed 1244 tests with 3 expected failures; frontend lint, line-count guard,
+387 tests, and build passed; the production-bundle API-base and provider-secret
+scan passed; PR #39 passed five of five CI/Vercel checks. Revision metadata
+showed the expected service account, both false flags, both secret references at
+version 1, 100% traffic to the ready revision, and the unchanged image digest.
+/health and the production frontend returned HTTP 200; OpenAPI contained the
+MyScript route; and a minimal valid synthetic stroke returned HTTP 404.
+Measured metrics: configuration and fail-closed behavior only. No secret value,
+MyScript request, live Gemini recognition request, provider accuracy, target-
+device latency, quota, request count, or cost result is claimed.
+Known risks: vendor/legal and commercial approvals, approved corpora and
+restricted storage, durable ledger mount/restart proof, dashboard
+reconciliation, target devices, and real authentication remain blocked.
+Next action: merge this evidence checkpoint. Keep every MyScript gate false and
+obtain the remaining external evidence before an approved internal POC.
+```

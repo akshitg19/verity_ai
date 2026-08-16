@@ -3,7 +3,7 @@
 **Status date:** 2026-08-16
 **Current decision:** Gemini remains the only enabled production recognizer.
 **MyScript status:** backend deployed in disabled revision
-`verity-ai-00017-phb`; frontend POC wiring is disabled by default; live traffic
+`verity-ai-00018-fdv`; frontend POC wiring is disabled by default; live traffic
 is prohibited until the readiness gates pass.
 
 ## 1. Safety model
@@ -87,6 +87,12 @@ identity, both false flags, and only the two expected Secret Manager references.
 Health and the production frontend returned HTTP 200, the OpenAPI route was
 present, and a minimal valid synthetic stroke returned a content-safe HTTP 404.
 See [the deployment evidence](disabled-deployment-evidence-2026-08-16.md).
+
+PR #39 then pinned both references to numeric version `1` and added a pre-build
+guard against mutable or malformed versions. Revision `verity-ai-00018-fdv`
+serves the same verified image with both flags false and both numeric references;
+the repeated health, OpenAPI, disabled-route, and frontend checks passed. See
+[the pinning evidence](secret-version-pinning-evidence-2026-08-16.md).
 
 ### Secret-version rotation
 
