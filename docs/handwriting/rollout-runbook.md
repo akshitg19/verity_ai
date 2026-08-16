@@ -88,6 +88,22 @@ Health and the production frontend returned HTTP 200, the OpenAPI route was
 present, and a minimal valid synthetic stroke returned a content-safe HTTP 404.
 See [the deployment evidence](disabled-deployment-evidence-2026-08-16.md).
 
+### Secret-version rotation
+
+`cloudbuild.yaml` pins both MyScript Secret Manager references to reviewed
+positive numeric versions and rejects `latest`, empty values, zero, leading
+zeroes, and non-numeric overrides before the image build starts. Version
+numbers are metadata; secret values must never enter source control, build
+substitutions, logs, or frontend code.
+
+For a rotation, create the new Secret Manager version outside this repository,
+then use metadata-only commands to identify its numeric version and confirm it
+is enabled. Update the two `_MYSCRIPT_*_VERSION` substitutions in a reviewed PR,
+keeping both provider flags false. After merge, deploy the disabled revision,
+verify the revision references the expected numeric versions without accessing
+their values, run the content-safe checks below, and only then disable the old
+versions. Never use `latest` as a temporary shortcut.
+
 ### Approved internal POC
 
 Only after every precondition passes:

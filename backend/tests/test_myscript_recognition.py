@@ -1,5 +1,7 @@
 import asyncio
 import json
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -525,13 +527,19 @@ def test_route_gate_requires_both_explicit_flag_and_api_access_control(monkeypat
         assert main._myscript_poc_route_is_enabled() is False
 
 
-def test_cloud_build_maps_existing_secrets_with_provider_disabled():
+def test_cloud_build_pins_existing_secrets_with_provider_disabled():
     repository_root = Path(__file__).resolve().parents[2]
     cloudbuild = (repository_root / "cloudbuild.yaml").read_text(encoding="utf-8")
     deploy_script = (repository_root / "deploy.ps1").read_text(encoding="utf-8")
 
     assert "MYSCRIPT_ENABLED=false" in cloudbuild
     assert "MYSCRIPT_POC_ROUTE_ENABLED=false" in cloudbuild
+    assert "_MYSCRIPT_APPLICATION_KEY_VERSION: '1'" in cloudbuild
+    assert "_MYSCRIPT_HMAC_KEY_VERSION: '1'" in cloudbuild
+    assert "_MYSCRIPT_APPLICATION_KEY_VERSION: latest" not in cloudbuild
+    assert "_MYSCRIPT_HMAC_KEY_VERSION: latest" not in cloudbuild
+    assert "validate-secret-versions" in cloudbuild
+    assert "scripts/validate_myscript_secret_versions.py" in cloudbuild
     assert (
         "MYSCRIPT_APPLICATION_KEY=verity-myscript-application-key:"
         "${_MYSCRIPT_APPLICATION_KEY_VERSION}" in cloudbuild
@@ -544,3 +552,48 @@ def test_cloud_build_maps_existing_secrets_with_provider_disabled():
     assert "gcloud secrets describe" in deploy_script
     assert "secrets versions access" not in deploy_script.lower()
     assert ".secrets/myscript.env" not in deploy_script
+
+
+@pytest.mark.parametrize(
+    "versions",
+    [
+        ("", "1"),
+        ("0", "1"),
+        ("01", "1"),
+        ("latest", "1"),
+        ("1a", "1"),
+        ("1", ""),
+        ("1", "latest"),
+        ("1", "-1"),
+    ],
+)
+def test_cloud_build_secret_version_validator_rejects_unpinned_values(versions):
+    repository_root = Path(__file__).resolve().parents[2]
+    validator = repository_root / "scripts/validate_myscript_secret_versions.py"
+
+    result = subprocess.run(
+        [sys.executable, str(validator), *versions],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "positive numeric Secret Manager version" in result.stderr
+    assert all(value not in result.stderr for value in versions if value)
+
+
+def test_cloud_build_secret_version_validator_accepts_positive_numeric_versions():
+    repository_root = Path(__file__).resolve().parents[2]
+    validator = repository_root / "scripts/validate_myscript_secret_versions.py"
+
+    result = subprocess.run(
+        [sys.executable, str(validator), "1", "27"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert result.stderr == ""
