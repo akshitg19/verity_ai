@@ -3,10 +3,10 @@
 **Status date:** 2026-08-16
 **Current decision:** Gemini remains the only enabled production recognizer.
 **MyScript status:** backend deployed in disabled revision
-`verity-ai-00020-zwl`; frontend POC wiring is disabled by default. Separate
+`verity-ai-00021-glp`; frontend POC wiring is disabled by default. Separate
 50-call v1 and 300-call v2 synthetic diagnostics completed without changing
-Cloud Run traffic. The deployed revision predates current `main`; a refreshed
-disabled deployment is pending operator OAuth.
+Cloud Run traffic. The deployed image is current `main` at `b9b1d76`; the
+repeatable disabled verifier returned `PASS`.
 
 ## 1. Safety model
 
@@ -161,6 +161,16 @@ zero-request offline reprocessor. Build
 `verity-ai-00020-zwl`. The same verifier returned `PASS` for the new digest,
 100% traffic, false flags, version-`1` references, and HTTP sequence
 200/200/404/200. No Secret Manager value or MyScript response was accessed.
+
+After PRs #47–#62 completed hybrid safety, chemistry routing, completion audit,
+the 300-case synthetic v2 diagnostic, A/B evidence integrity, and the rollout
+approval gate, build `a5703e61-48d6-487a-8fe2-9e35c06aeb51` deployed exact
+current `main` commit `b9b1d76a7bc103749dbfdb8561406606280884a2` as disabled
+revision `verity-ai-00021-glp`. The verifier returned `PASS`: the `b9b1d76`
+image digest serves 100% of traffic, both flags are false, both secret
+references remain pinned to version `1`, and the HTTP sequence is
+200/200/404/200. No MyScript request occurred. See
+[the current-main deployment evidence](current-main-disabled-deployment-evidence-2026-08-16.md).
 
 ### Repeatable disabled-revision verification
 

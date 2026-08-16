@@ -3,14 +3,14 @@
 **Handoff date:** 2026-08-16
 
 **Status:** Safe provider-neutral foundations and disabled MyScript integration
-work are merged through PR #59. The 50-call v1 smoke/probe and separate
+work are merged through PR #62. The 50-call v1 smoke/probe and separate
 300-call v2 synthetic diagnostic completed with no production flag change; the
 v2 run had 300/300 provider successes, 95.00% overall exact match, 96.33% parse
 success, and zero ledger/dashboard discrepancy. These corpora remain
 single-reviewer and decision-ineligible, so the provider decision is still
-`NO_DECISION`. Current Cloud Run revision `verity-ai-00020-zwl` remains fully
-disabled but predates the latest merged source; a new disabled deployment is
-pending refreshed operator OAuth. Target-device, eligible decision-corpus,
+`NO_DECISION`. Current Cloud Run revision `verity-ai-00021-glp` deploys exact
+current `main` at `b9b1d76` and remains fully disabled; the repeatable verifier
+returned `PASS`. Target-device, eligible decision-corpus,
 privacy/legal, real-authentication, same-input control, and enabled-canary
 evidence remain unavailable. PR #59 repaired and hardened the internal Gemini
 scheduling comparison so 3–5 anonymous paired device sessions can now produce
@@ -18,7 +18,7 @@ strict, content-free, machine-checked evidence rather than unverified exports.
 
 **Resume branch:** `main`
 
-**Current merged base:** `origin/main` at `be9f023`
+**Current merged base:** `origin/main` at `b9b1d76`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
@@ -562,7 +562,7 @@ The MyScript developer application and credentials exist. The credentials remain
 only in the local ignored secret file and two GCP Secret Manager secrets; the
 Cloud Run runtime service account has accessor permission. A backend protocol
 client, typed route, shared normalizer, and Cloud Run secret mapping are merged
-and deployed in disabled revision `verity-ai-00020-zwl`; both provider and route
+and deployed in disabled revision `verity-ai-00021-glp`; both provider and route
 flags are false. Runtime metadata proves the expected service account and the
 two numeric version-`1` Secret Manager references without reading their values;
 see `secret-version-pinning-evidence-2026-08-16.md`. A direct vector-only
@@ -853,7 +853,7 @@ Not safe to claim yet:
 - Luna is better than Gemini;
 - complex chemistry or full undergraduate math is supported.
 
-The current safe state is disabled revision `verity-ai-00020-zwl`, with both
+The current safe state is disabled revision `verity-ai-00021-glp`, with both
 provider flags false and both Secret Manager references pinned to reviewed
 numeric version `1`. Further decision-corpus or student/deployed traffic remains
 blocked on its separately applicable corpus, privacy/legal, commercial,
