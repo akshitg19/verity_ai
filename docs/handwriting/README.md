@@ -12,6 +12,9 @@ for implementation decisions.
 
 - [Complete handoff](HANDOFF.md) consolidates the discussion, implemented work,
   validation evidence, workspace state, and exact continuation steps.
+- [Definition-of-Done audit](completion-audit-2026-08-16.md) maps all 23 goal
+  requirements to current evidence, named external owners, and exact unblock
+  actions without claiming production readiness prematurely.
 - [Architecture](architecture-v2.md) defines responsibilities, contracts,
   data flow, fallback rules, metrics, privacy boundaries, and decisions.
 - [Implementation plan](implementation-plan.md) divides the work into

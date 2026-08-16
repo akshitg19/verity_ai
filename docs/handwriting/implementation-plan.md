@@ -690,3 +690,23 @@ engineering reviewer, and do not close chemistry recognition gates.
 Next action: merge the routing fixtures, then require two-reviewer target-device
 chemistry evidence before any provider or topic rollout.
 ```
+
+```text
+Date: 2026-08-16
+Branch: docs/handwriting-completion-audit
+Phase: cross-phase Definition-of-Done evidence audit
+Implemented: mapped every one of the 23 user-approved completion requirements
+to authoritative current evidence, partial evidence, or a named external owner.
+Recorded the exact QA, corpus/privacy, MyScript legal/commercial, budget,
+security/authentication, and model-control packages required to resume.
+Tests and results: documentation relative links and git diff checks pass;
+production frontend and backend health return HTTP 200; current main and the
+untouched landing-page worktree were rechecked read-only.
+Measured metrics: audit status only; no provider request, student data, secret
+access, production flag, cost, accuracy, or latency measurement was added.
+Known risks: the goal is not complete. Target-device/A-B exports, a two-reviewer
+decision corpus, written vendor terms, same-input control, authentication,
+category decisions, correction UX, and enabled-canary rollback evidence remain.
+Next action: keep the goal active and resume in the six-step order documented in
+completion-audit-2026-08-16.md when the named owners attach evidence.
+```
