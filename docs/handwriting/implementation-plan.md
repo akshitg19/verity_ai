@@ -543,7 +543,7 @@ the named external owners' evidence before any POC traffic.
 
 ```text
 Date: 2026-08-16
-Branch/commit: feat/handwriting-myscript-synthetic-poc-50 (pending)
+Branch/commit: feat/handwriting-myscript-synthetic-poc-50 at 9df19b7
 Phase: 3 live synthetic smoke and Phase 4 non-decision checkpoint
 Implemented: reviewed the merged MyScript boundary; changed the live Math
 response to the currently documented application/x-latex format; added a
