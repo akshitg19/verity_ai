@@ -3,8 +3,10 @@
 **Status date:** 2026-08-16
 **Current decision:** Gemini remains the only enabled production recognizer.
 **MyScript status:** backend deployed in disabled revision
-`verity-ai-00020-zwl`; frontend POC wiring is disabled by default. A separate
-local 50-call synthetic POC completed without changing Cloud Run traffic.
+`verity-ai-00020-zwl`; frontend POC wiring is disabled by default. Separate
+50-call v1 and 300-call v2 synthetic diagnostics completed without changing
+Cloud Run traffic. The deployed revision predates current `main`; a refreshed
+disabled deployment is pending operator OAuth.
 
 ## 1. Safety model
 
@@ -58,6 +60,54 @@ All items must have an owner and attached evidence:
 If any item is missing, leave every MyScript deployment flag false and do not
 send student or production traffic. The completed synthetic-only local smoke is
 documented separately and does not close these rollout gates.
+
+### Executable activation-approval gate
+
+Before an activation PR may change either MyScript flag, create a content-free
+approval manifest outside raw/restricted data and validate it against
+[`rollout-approval.schema.json`](rollout-approval.schema.json):
+
+```bash
+python3 scripts/validate_handwriting_rollout_approval.py \
+  --manifest /approved/path/myscript-rollout-approval.json \
+  --repository-root . \
+  --expected-source-commit "$(git rev-parse HEAD)"
+```
+
+The validator fails closed unless all of the following are simultaneously
+true:
+
+- the exact 40-character source commit matches both the manifest and the
+  checked-out repository `HEAD`, and a `GO` or `CATEGORY_LIMITED_GO` decision
+  is pinned;
+- the decision corpus has at least 300 cases, and its version, hash,
+  normalization, run ID, and allowed categories are frozen;
+- privacy/legal, commercial, security/authentication, data-governance, and
+  product-rollout owners each have a distinct approved evidence ID, artifact
+  hash, non-future review date, and non-expired validity date;
+- the authoritative provider report, target-device report, rollout runbook,
+  and rollback-test evidence exist inside the repository, match their
+  declared SHA-256 hashes, and match the blobs committed at the approved
+  source commit;
+- the durable ledger is under `/mnt/verity-handwriting/`, outside the
+  repository, uses the decision run ID, and has a cap between one and two
+  attempts per frozen sample;
+- the pre-run dashboard count plus cap cannot exceed the recorded account
+  limit;
+- rollout categories exactly match the decision, Gemini remains the single
+  fallback, primary/fallback attempts remain one each, and canary exposure is
+  at most 5%; and
+- the manifest explicitly names both activation flags as `true`, preventing a
+  partial-gate manifest from being mistaken for an enabled release.
+
+On success the tool prints only an allowlisted summary. It does not print
+approval IDs, evidence hashes/paths, ledger paths, or restricted content. On
+failure it prints only a stable code. Passing the JSON schema alone is not
+approval; passing the semantic validator also does not replace human review.
+No valid rollout manifest is committed today because the provider decision and
+external approvals are still missing. `cloudbuild.yaml` continues to hardcode
+both MyScript flags to `false`; an eventual activation PR must attach the
+validator's `PASS` output and every referenced content-free evidence artifact.
 
 ## 3. Deployment sequence
 
@@ -186,6 +236,12 @@ smoke fixtures and 20 paired `x/X` geometry fixtures, used all 50 attempts with
 no retries or errors, and left all Cloud Run and frontend gates unchanged. The
 ledger is exhausted and must reject any further attempt under this run. See
 [`myscript-synthetic-poc-2026-08-16.md`](myscript-synthetic-poc-2026-08-16.md).
+
+The separately approved v2 run then used 300/1,500 attempts with 300/300
+provider successes, zero retry/error, and zero ledger/dashboard discrepancy.
+Its lowercase geometry groups passed their frozen diagnostic gates, but the
+single-reviewer synthetic corpus remains decision-ineligible. See
+[`myscript-synthetic-v2-results-2026-08-16.md`](myscript-synthetic-v2-results-2026-08-16.md).
 
 ## 4. Observability and alerts
 

@@ -27,8 +27,8 @@ Local:
 - `http://localhost:5173/math?hwr_ab=legacy`
 - `http://localhost:5173/math?hwr_ab=current`
 
-Vercel preview base URL for PR #32:
-`https://verity-ai-git-feat-handwriting-completion-verity-ai2.vercel.app`.
+Vercel preview base URL for the schema-v2 tooling merged by PR #59:
+`https://verity-ai-git-feat-handwriting-ab-evidence-integrity-verity-ai2.vercel.app`.
 Use that same base URL followed by `/math?hwr_ab=legacy` or
 `/math?hwr_ab=current`; do not compare two different code revisions or
 providers. The preview is protected by Vercel Authentication, so each teammate
