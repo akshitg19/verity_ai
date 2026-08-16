@@ -1,7 +1,7 @@
 # Handwriting v2 Definition-of-Done Audit
 
 **Audit date:** 2026-08-16  
-**Repository baseline:** `origin/main` at `653efebeae870bc0a4fa4c4771ef0dac461d8656`
+**Audited through:** PR #51 merge `294d190005dcbe57cd744f451fadc3b8bda1e1fd`
 **Goal status:** active; production-ready completion is not yet proven.
 
 This audit uses the 23-item Definition of Done from the user-approved completion
@@ -46,8 +46,8 @@ evidence or approval.
 | 14 | Written chemistry and structures are separate | Routing complete; recognition evidence external | Existing app tests plus [synthetic chemistry routing fixtures](fixtures/synthetic-chemistry-routing-v1/manifest.jsonl) separate `chemistry_text/text` from `chemistry_structure/smiles`. Target-device recognition accuracy/latency is missing. |
 | 15 | No raw content in ordinary logs | Complete for implemented paths | Content-safe metrics, aggregate reports, adapter errors, reprocessor failures, and disabled verifier are covered by tests. Raw prediction artifacts remain outside Git in an owner-only directory. |
 | 16 | No provider secret in Git/frontend/build/docs/logs | Complete for current state | Production bundle scan passes; secrets are backend Secret Manager references; local credential file is ignored and was never read or printed. |
-| 17 | Relevant local and remote checks pass | Complete locally; new probe PR pending | Backend passes 1270 tests / 3 expected xfails; frontend's latest unchanged result is 394 tests across 41 files plus lint, App.jsx cap, production build/API-base check, and provider-secret bundle scan. Linux, Windows, frontend, and Vercel checks passed through PR #50; the current probe change requires its own remote gates. |
-| 18 | Reviewable PRs merged to current main | Complete for safe deliverables | PRs #31–#50 are merged; latest merge is `653efebeae870bc0a4fa4c4771ef0dac461d8656`. |
+| 17 | Relevant local and remote checks pass | Complete for merged work | Backend passes 1270 tests / 3 expected xfails; frontend's latest unchanged result is 394 tests across 41 files plus lint, App.jsx cap, production build/API-base check, and provider-secret bundle scan. Linux, Windows, frontend, and Vercel checks all passed for PR #51. |
+| 18 | Reviewable PRs merged to current main | Complete for safe deliverables | PRs #31–#51 are merged; latest audited merge is `294d190005dcbe57cd744f451fadc3b8bda1e1fd`. |
 | 19 | Preview/staging smoke tests pass | Partially complete | Vercel previews and disabled Cloud Run health/OpenAPI/route/frontend checks pass. No target-device enabled-provider preview is authorized. |
 | 20 | Production rollout completed or fully rollout-ready | External evidence required | The safe state is fully disabled with exact activation gates documented, but provider selection, eligible categories, authentication, decision corpus, privacy/commercial approval, and canary evidence are missing. |
 | 21 | Rollback commands verified | Mechanism complete; enabled rollback external | [Runbook](rollout-runbook.md) contains frontend/backend kill switches; every reviewed Cloud Build restores false flags; live disabled verifier passes. An enabled-provider rollback cannot be exercised before an enabled canary is approved. |
