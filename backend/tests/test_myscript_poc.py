@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import os
 import stat
 from pathlib import Path
 
@@ -83,7 +84,7 @@ def test_synthetic_poc_reserves_every_attempt_and_writes_owner_only_output(
     assert len(predictions) == 30
     assert {prediction["provider"] for prediction in predictions} == {"myscript"}
     assert {prediction["status"] for prediction in predictions} == {"ok"}
-    if stat.S_ISREG(options.output.stat().st_mode):
+    if os.name == "posix" and stat.S_ISREG(options.output.stat().st_mode):
         assert options.output.stat().st_mode & 0o077 == 0
 
 
