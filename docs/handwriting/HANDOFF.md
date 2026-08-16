@@ -545,11 +545,15 @@ working vector provider.
 The MyScript developer application and credentials exist. The credentials remain
 only in the local ignored secret file and two GCP Secret Manager secrets; the
 Cloud Run runtime service account has accessor permission. A backend protocol
-client, typed route, shared normalizer, and Cloud Run secret mapping are merged,
-but both provider and route flags are false. A direct vector-only frontend POC
+client, typed route, shared normalizer, and Cloud Run secret mapping are merged
+and deployed in disabled revision `verity-ai-00017-phb`; both provider and route
+flags are false. Runtime metadata proves the expected service account and the
+two Secret Manager references without reading their values; see
+`disabled-deployment-evidence-2026-08-16.md`. A direct vector-only frontend POC
 adapter is implemented behind two additional false-by-default frontend gates;
-it has no automatic image fallback. No external call, deployed-revision metadata
-proof, POC corpus run, or measured result exists. The route additionally requires
+it has no automatic image fallback. No external provider call, POC corpus run,
+or measured provider result exists; deployed evidence is limited to the
+fail-closed checkpoint. The route additionally requires
 the existing API access-control header before it can open. Provider/legal
 evidence, offline evaluation harness, and rollback procedure are in
 `provider-readiness.md`, `fixtures/README.md`, `provider-evaluation-report.md`,

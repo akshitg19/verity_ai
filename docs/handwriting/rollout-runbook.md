@@ -1,9 +1,10 @@
 # Handwriting Recognition Rollout Runbook
 
-**Status date:** 2026-08-14
+**Status date:** 2026-08-16
 **Current decision:** Gemini remains the only enabled production recognizer.
-**MyScript status:** backend merged but not deployed; frontend POC wiring is
-disabled by default; live traffic is prohibited until the readiness gates pass.
+**MyScript status:** backend deployed in disabled revision
+`verity-ai-00017-phb`; frontend POC wiring is disabled by default; live traffic
+is prohibited until the readiness gates pass.
 
 ## 1. Safety model
 
@@ -77,6 +78,15 @@ The GCP project had no Cloud Build trigger when inspected on 2026-08-14. Until a
 repository connection is separately approved and configured, merging `main`
 does not deploy Cloud Run; use the reviewed one-time manual build path and record
 the build and revision IDs.
+
+The disabled sequence completed on 2026-08-16. Build
+`1210e5a0-58fb-4a1f-9648-656b7d2e2f1a` deployed revision
+`verity-ai-00017-phb` from commit
+`22ce718d1c0acebe273d4c78de6e95bd277d1b9c`; metadata showed the expected runtime
+identity, both false flags, and only the two expected Secret Manager references.
+Health and the production frontend returned HTTP 200, the OpenAPI route was
+present, and a minimal valid synthetic stroke returned a content-safe HTTP 404.
+See [the deployment evidence](disabled-deployment-evidence-2026-08-16.md).
 
 ### Approved internal POC
 

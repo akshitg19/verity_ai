@@ -455,3 +455,28 @@ Next action: merge this report checkpoint when CI is green. Then deploy only the
 disabled backend revision after explicit Cloud Shell authorization; keep all
 provider gates false until every report eligibility row closes.
 ```
+
+```text
+Date: 2026-08-16
+Source/build/revision: 22ce718 / 1210e5a0-58fb-4a1f-9648-656b7d2e2f1a / verity-ai-00017-phb
+Phase: 3 disabled Cloud Run deployment checkpoint
+Implemented: deployed the reviewed main commit through cloudbuild.yaml with
+MYSCRIPT_ENABLED=false and MYSCRIPT_POC_ROUTE_ENABLED=false; mapped both
+existing Secret Manager resources as backend-only environment references; and
+preserved Gemini as the only enabled production recognizer.
+Tests and results: Cloud Build succeeded in 3M50S; revision metadata showed the
+expected runtime service account, both false flags, and the two expected secret
+references at latest without reading values; /health and the production
+frontend returned HTTP 200; OpenAPI contained the MyScript route; and a minimal
+valid synthetic stroke returned a content-safe HTTP 404. The deployed image
+digest was sha256:a535527fdd58f55ea2963d7f6ded8ebcbdbc24113323d19311a2e66bb0913041.
+Measured metrics: deployment and fail-closed behavior only. No MyScript request,
+Gemini live recognition request, provider accuracy, target-device latency,
+quota, request count, or cost result is claimed.
+Known risks: latest secret references are acceptable only while traffic is
+impossible; numeric versions, vendor/legal and commercial approvals, approved
+corpora and restricted storage, durable ledger mount/restart proof, dashboard
+reconciliation, target devices, and real authentication remain blocked.
+Next action: merge this evidence checkpoint. Keep every MyScript gate false and
+obtain the remaining external evidence before an approved internal POC.
+```

@@ -286,7 +286,7 @@ Rules:
 | Developer account, app, keys | Complete | User-verified 2026-08-14 |
 | GCP secret storage and runtime IAM | Complete | User-verified 2026-08-14 |
 | Backend REST adapter with mock tests | Implemented; live call blocked | Fixed HMAC vector, exact-body mock, timeout/error/retry/cap tests, bounded schemas, content-safe logging |
-| Cloud Run secret-to-environment mapping | Implemented in deploy config; runtime verification pending | Revision metadata showing both mappings and both false flags, never values |
+| Cloud Run secret-to-environment mapping | Complete for disabled revision `verity-ai-00017-phb` | [Build, revision, mappings, false flags, and content-safe smoke evidence](disabled-deployment-evidence-2026-08-16.md); numeric versions still required before traffic |
 | Direct frontend POC adapter | Implemented in PR #35 | Dual-gate config tests, ordered vector payload, no-PNG/no-local-metadata assertion, cancellation and safe-error tests, production-bundle secret scan |
 | Durable POC attempt ledger | Implemented in PR #36 | Owner-only repository-external ledger, concurrent atomic reservations, corruption/identity/cap fail-closed tests, restart persistence, production-factory enforcement |
 | Synthetic/internal smoke corpus (30–50) | Blocked | Approved sources, two-reviewer truth for decision cases, schema validation |
