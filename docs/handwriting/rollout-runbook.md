@@ -251,3 +251,11 @@ request count, cost estimate, and a written go/no-go decision. A production
 hybrid requires an additional PR proving one-shot fallback, visible correction,
 outage behavior, and immediate Gemini rollback. No flag change substitutes for
 those evidence gates.
+
+The provider-neutral hybrid implementation is already regression-tested to
+call one primary and at most one fallback, generate no PNG on a usable vector
+result, render the original strokes only after an eligible primary failure,
+abort timed-out primary work, suppress fallback after caller cancellation, and
+propagate a fallback outage without retry or recursion. These tests make the
+mechanism rollout-ready; they do not authorize construction of a production
+hybrid or change any shipped flag.
