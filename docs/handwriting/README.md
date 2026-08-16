@@ -51,6 +51,9 @@ for implementation decisions.
   provider-run output.
 - [Example fixtures](fixtures/cases.example.jsonl) show valid JSONL records. They
   are examples, not benchmark results.
+- [Synthetic chemistry routing fixtures](fixtures/synthetic-chemistry-routing-v1/manifest.jsonl)
+  provide real stroke/PNG files for written-chemistry versus molecular-structure
+  routing tests; they are single-reviewer synthetic evidence, not a benchmark.
 
 ## Status
 

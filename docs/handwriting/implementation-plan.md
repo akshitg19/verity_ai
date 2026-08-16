@@ -666,3 +666,27 @@ target-device latency, and explicit rollout approval remain required.
 Next action: merge the provider-neutral hardening and keep Gemini-only rollback
 as the shipped configuration.
 ```
+
+```text
+Date: 2026-08-16
+Branch: feat/handwriting-chemistry-routing-fixtures
+Phase: 7 provider-neutral chemistry routing fixtures
+Implemented: added a deterministic standard-library generator and a committed
+10-case corpus with both vector strokes and PNGs. Eight written-chemistry cases
+cover Co/CO, Cl/C1, capitalization, subscript, superscript, charge, and reaction
+arrows under chemistry_text/text. Two graph-shaped molecular drawings use the
+separate chemistry_structure/smiles contract. MyScript is not approved for any
+record, and the set cannot become decision evidence with only one reviewer.
+Tests and results: 12 focused evaluator tests passed. The full backend suite
+passed 1268 tests with 3 expected xfails and the existing OPSIN warnings.
+Fixture schema, every stroke file, every PNG signature, domain/format
+separation, input coverage, provider approval, and the decision-eligibility
+guard are covered. Generator re-run is deterministic and the manifest SHA-256 is
+9f520ce299514cfeda3ad1c8a5bf34d3b3753b3ed1fabe9587b74daf738b7a8b.
+Measured metrics: 8 written and 2 structure fixtures; no provider request,
+accuracy, latency, student-data, or cost claim.
+Known risks: synthetic glyphs are not target-device handwriting, have one
+engineering reviewer, and do not close chemistry recognition gates.
+Next action: merge the routing fixtures, then require two-reviewer target-device
+chemistry evidence before any provider or topic rollout.
+```
