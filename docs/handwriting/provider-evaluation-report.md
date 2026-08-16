@@ -47,7 +47,7 @@ measurement row.
 
 The completed technical smoke is recorded in
 [`myscript-synthetic-poc-2026-08-16.md`](myscript-synthetic-poc-2026-08-16.md):
-30/30 provider successes, 66.67% normalized exact match and deterministic parse success,
+30/30 provider successes, 86.67% normalized exact match and deterministic parse success,
 141 ms p50 and 266.15 ms p95 provider latency, and 30/50 ledger attempts used.
 Its aggregate is `decision_eligible=false` because it has one reviewer, no
 target-device interaction, and no same-input Gemini control.
@@ -143,7 +143,7 @@ request count.
 
 `NO_DECISION`: keep Gemini-only production behavior and all MyScript frontend
 and backend gates false. The synthetic smoke proves the live technical boundary
-but its 66.67% exact match is not an adoption result. The next provider decision
+but its 86.67% `v2` exact match is not an adoption result. The next provider decision
 action requires a reviewed target-device corpus and same-input Gemini control;
 student traffic additionally requires privacy/legal, commercial, data,
 authentication, and rollout evidence.

@@ -244,6 +244,14 @@ def score_run(
     """Score one uniform provider run and return an aggregate-only report."""
 
     fixtures = manifest.records
+    prediction_normalization_versions = {
+        prediction.get("normalization_version") for prediction in predictions
+    }
+    if prediction_normalization_versions != {NORMALIZATION_VERSION}:
+        raise EvaluationDataError(
+            "Prediction normalization version is missing, mixed, or does not "
+            "match the scorer"
+        )
     fixture_by_id = {fixture["id"]: fixture for fixture in fixtures}
     prediction_by_id = {
         prediction["fixture_id"]: prediction for prediction in predictions

@@ -105,6 +105,7 @@ def prediction(
         "provider": "candidate",
         "model": "candidate-v1",
         "configuration_id": "rest-v1",
+        "normalization_version": "v2",
         "status": "ok",
         "benchmark_eligible": True,
         "output": {
@@ -209,6 +210,8 @@ def test_stroke_json_rejects_non_standard_numeric_constants(tmp_path):
 
 def test_normalization_is_conservative_and_preserves_chemistry_case():
     assert normalize_expression(r"\(3 \times x + 2 = 5\)", "latex", "math") == "3*x+2=5"
+    assert normalize_expression(r"1 0 - x = 4", "latex", "math") == "10-x=4"
+    assert normalize_expression("1 0 - x = 4", "ascii", "math") == "1 0-x=4"
     assert normalize_expression("NH4+", "text", "chemistry_text") == "NH4+"
     assert normalize_expression("Nh4+", "text", "chemistry_text") == "Nh4+"
 
@@ -287,6 +290,25 @@ def test_score_run_rejects_incomplete_prediction_coverage(tmp_path):
             [prediction("math-001", "3*x + 2 = 5")],
             corpus_version="test-v1",
         )
+
+
+def test_score_run_rejects_stale_or_missing_prediction_normalization(tmp_path):
+    manifest_path = tmp_path / "cases.jsonl"
+    write_jsonl(manifest_path, [fixture_record()])
+    manifest = load_manifest(
+        manifest_path,
+        FIXTURE_SCHEMA,
+        require_inputs=False,
+    )
+    stale = prediction("math-001", "3*x + 2 = 5")
+    stale["normalization_version"] = "v1"
+
+    with pytest.raises(EvaluationDataError, match="normalization version"):
+        score_run(manifest, [stale], corpus_version="test-v1")
+
+    del stale["normalization_version"]
+    with pytest.raises(EvaluationDataError, match="normalization version"):
+        score_run(manifest, [stale], corpus_version="test-v1")
 
 
 def test_cost_estimate_uses_only_observed_cost_samples(tmp_path):

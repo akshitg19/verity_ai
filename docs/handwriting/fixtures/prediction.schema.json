@@ -37,6 +37,10 @@
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9._-]+$"
     },
+    "normalization_version": {
+      "type": "string",
+      "pattern": "^v[1-9][0-9]*$"
+    },
     "status": { "enum": ["ok", "timeout", "error", "skipped"] },
     "benchmark_eligible": { "type": "boolean" },
     "output": {

@@ -13,6 +13,9 @@ because it matches a schema.
   approved restricted artifact store.
 - Keep stroke and image paths relative to the approved fixture-store root.
 - Version the manifest and normalization rules used for every benchmark run.
+- Every scored prediction must declare the exact `normalization_version` used
+  for its cached parser metric. The scorer rejects missing, mixed, or stale
+  versions rather than silently combining incompatible evidence.
 - Name every provider that may process a fixture in
   `consent.approved_providers`; the replay planner fails closed for any other
   provider.
@@ -132,3 +135,18 @@ The scorer reports exact match, top-k inclusion, character error, parser and
 unreadable metrics, p50/p95 latency, failures, payload size, correction/fallback
 rates, observed cost, and category/device/browser breakdowns. It omits raw
 outputs, expected expressions, fixture IDs, and absolute restricted-store paths.
+
+Legacy MyScript smoke predictions can be migrated without another provider
+request. The source and output must be distinct JSONL files in the same
+owner-only directory outside the repository:
+
+```bash
+cd backend
+python -m handwriting_eval.myscript_reprocess \
+  --source /approved/store/predictions-v1.jsonl \
+  --output /approved/store/predictions-v2.jsonl
+```
+
+The command preserves the source, writes an owner-only derived artifact,
+recomputes deterministic algebra parse success, and emits content-free counts
+only. It accepts MyScript math artifacts only.
