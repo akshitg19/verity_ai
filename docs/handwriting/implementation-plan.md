@@ -572,3 +572,25 @@ freeze a reviewed target-device corpus, run an identical Gemini control, and
 obtain student/privacy/commercial approvals only before those data/rollout
 stages. Keep every production MyScript flag false.
 ```
+
+```text
+Date: 2026-08-16
+Source/revision: 7bace8f3e3237de7df05f09e83f0d7998c8ff125 / verity-ai-00019-nj7
+Phase: 3 post-POC disabled deployment verification
+Implemented: deployed the exact PR #43 merge from current main with the reviewed
+cloudbuild.yaml. The resulting image contains the corrected LaTeX adapter,
+bounded synthetic runner, fixtures, tests, and aggregate POC evidence, but both
+Cloud Run MyScript flags remain false.
+Tests and results: Cloud Build ff0cc228-807c-4f8f-98ef-697a43c50298 completed
+SUCCESS in 4M6S. The content-safe verifier returned PASS for the expected
+runtime account, numeric version-1 secret references, revision image digest,
+100% traffic to the latest ready revision, and HTTP sequence 200/200/404/200
+for health, OpenAPI, the disabled synthetic route, and the production frontend.
+Measured metrics: deployment safety only. This checkpoint made no MyScript or
+Gemini recognition request and accessed no Secret Manager value.
+Known risks: the 30-call synthetic result remains decision-ineligible; target
+devices, a same-input control, reviewed real-ink corpus, privacy/commercial
+approval, authentication, and rollout evidence remain blocked.
+Next action: keep every MyScript gate false and review the restricted mismatch
+set before requesting any separately authorized decision corpus.
+```

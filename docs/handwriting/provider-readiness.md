@@ -164,9 +164,9 @@ ID, cap, and monotonically increasing reservation sequence.
 `cloudbuild.yaml` maps the two existing Secret Manager resources to the two
 runtime environment names with Cloud Run's `--update-secrets` option. Both
 references are pinned to reviewed numeric version `1`, and a pre-build validator
-rejects mutable or malformed overrides. Revision `verity-ai-00018-fdv` proves
-the numeric references with both provider flags false; see
-`secret-version-pinning-evidence-2026-08-16.md`. Cloud Run checks the runtime
+rejects mutable or malformed overrides. Current revision `verity-ai-00019-nj7`
+proves the numeric references with both provider flags false; see
+`current-disabled-deployment-evidence-2026-08-16.md`. Cloud Run checks the runtime
 identity's secret access during deployment and resolves environment-variable
 secrets before an instance starts. Do not run a command that reads a secret
 version's value merely to verify the mapping; inspect Cloud Run metadata and
@@ -293,7 +293,7 @@ Rules:
 | Developer account, app, keys | Complete | User-verified 2026-08-14 |
 | GCP secret storage and runtime IAM | Complete | User-verified 2026-08-14 |
 | Backend REST adapter | Live synthetic smoke complete | Fixed HMAC vector, exact-body tests, documented LaTeX response, bounded schemas, content-safe logging, 30/30 live success |
-| Cloud Run secret-to-environment mapping | Complete for disabled revision `verity-ai-00018-fdv` | [Numeric version-`1` references, build guard, revision metadata, and content-safe checks](secret-version-pinning-evidence-2026-08-16.md) |
+| Cloud Run secret-to-environment mapping | Complete for disabled revision `verity-ai-00019-nj7` | [Current numeric version-`1` references, build/revision identity, and content-safe checks](current-disabled-deployment-evidence-2026-08-16.md) |
 | Direct frontend POC adapter | Implemented in PR #35 | Dual-gate config tests, ordered vector payload, no-PNG/no-local-metadata assertion, cancellation and safe-error tests, production-bundle secret scan |
 | Durable POC attempt ledger | Implemented in PR #36 | Owner-only repository-external ledger, concurrent atomic reservations, corruption/identity/cap fail-closed tests, restart persistence, production-factory enforcement |
 | Synthetic smoke corpus (30–50) | Complete for technical smoke | 30 deterministic vector fixtures, schema validation, provider approval, repository provenance |

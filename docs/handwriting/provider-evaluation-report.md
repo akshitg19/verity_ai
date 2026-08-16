@@ -34,7 +34,7 @@ measurement row.
 
 | Gate | Current state | Owner | Evidence required |
 |---|---|---|---|
-| Disabled Cloud Run revision | Complete | GCP project owner | Build `1210e5a0-58fb-4a1f-9648-656b7d2e2f1a`, current revision `verity-ai-00018-fdv`, and [numeric-pinning/fail-closed evidence](secret-version-pinning-evidence-2026-08-16.md) |
+| Disabled Cloud Run revision | Complete | GCP project owner | Build `ff0cc228-807c-4f8f-98ef-697a43c50298`, current revision `verity-ai-00019-nj7`, and [post-POC fail-closed evidence](current-disabled-deployment-evidence-2026-08-16.md) |
 | MyScript trial/privacy terms | Synthetic smoke allowed; blocked for student ink | MyScript and VerityAI privacy/legal | Written data-use, retention, training, deletion, region, subprocessor, DPA, FERPA/COPPA, attribution, and publicity answers before student use |
 | Commercial rights and cost | Deferred production gate | MyScript and VerityAI commercial owner | Written billing unit, quota, minimum, overage, cancellation, production right, SLA, and quote before distribution |
 | Approved smoke corpus | Complete for technical smoke | VerityAI engineering | 30 deterministic synthetic fixtures, MyScript-specific permission, provenance, retention, validation |
