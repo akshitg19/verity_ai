@@ -797,3 +797,21 @@ used / 1,950 free. Review the exact synthetic manifest before spending any v2
 request, then capture the post-run counter. Keep both production MyScript flags
 false.
 ```
+
+```text
+Date: 2026-08-16
+Branch: fix/myscript-v2-runner-cap
+Phase: synthetic v2 runner boundary consistency
+Implemented: removed the stale runner-local 50-attempt maximum and made the
+runner consume the same 1,500-attempt constant as the durable ledger, adapter,
+CLI planner, tests, and deployment template.
+Tests and results: regression coverage asserts the shared cap is 1,500 and the
+runner rejects 1,501 before artifact or provider work. No request, secret read,
+student data, deployment, or paid action occurred.
+Measured metrics: boundary consistency only; v2 remains at 0/1500.
+Known risks: the runner remains intentionally synthetic, vector-only, and
+linear-equation-only; expanding category scope requires separate schema,
+parser, fixture, and scoring review rather than relaxing this guard casually.
+Next action: merge after remote CI, then design the smallest useful predeclared
+synthetic linear-equation ambiguity corpus before any v2 traffic.
+```
