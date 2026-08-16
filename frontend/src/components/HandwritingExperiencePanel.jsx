@@ -6,23 +6,14 @@ import {
 } from "../recognition/handwritingExperienceReport";
 import {
   resolveHandwritingExperienceExperiment,
+  getOrCreateHandwritingExperimentPairToken,
 } from "../recognition/handwritingExperienceExperiment";
+import {
+  HANDWRITING_EXPERIMENT_TASKS,
+} from "../recognition/handwritingExperienceTasks";
 import { RECOGNITION_METRIC_EVENT } from "../recognition/recognitionMetrics";
 
-const TASKS = Object.freeze([
-  ["linear-01", "3x + 2 = 5"],
-  ["linear-02", "3x = 3"],
-  ["linear-03", "x = 1"],
-  ["linear-04", "2(x - 3) = 10"],
-  ["linear-05", "2x - 6 = 10"],
-  ["linear-06", "2x = 16"],
-  ["linear-07", "x = 8"],
-  ["linear-08", "4 - x = 9"],
-  ["linear-09", "-x = 5"],
-  ["linear-10", "x = -5"],
-  ["linear-11", "0.5x + 1 = 3"],
-  ["linear-12", "x/2 + 3 = 7"],
-].map(([id, prompt]) => Object.freeze({ id, prompt })));
+const TASKS = HANDWRITING_EXPERIMENT_TASKS;
 
 const EMPTY_ASSESSMENT = Object.freeze({
   responsiveness: 3,
@@ -65,6 +56,17 @@ export default function HandwritingExperiencePanel() {
   const experiment = useMemo(
     () => resolveHandwritingExperienceExperiment(),
     []
+  );
+  const pairToken = useMemo(
+    () => {
+      if (!experiment.enabled) return null;
+      try {
+        return getOrCreateHandwritingExperimentPairToken();
+      } catch {
+        return null;
+      }
+    },
+    [experiment.enabled]
   );
   const [taskIndex, setTaskIndex] = useState(0);
   const [assessment, setAssessment] = useState({ ...EMPTY_ASSESSMENT });
@@ -116,6 +118,7 @@ export default function HandwritingExperiencePanel() {
       schemaVersion: HANDWRITING_EXPERIMENT_EXPORT_SCHEMA,
       experiment: experiment.name,
       variant: experiment.variant,
+      pairToken,
       exportedAt,
       policy: {
         recognizer: "gemini",
@@ -162,6 +165,12 @@ export default function HandwritingExperiencePanel() {
             "Question before the next pair."}
         {" "}No ink or recognized text is exported.
       </p>
+      {!pairToken && (
+        <p role="alert" style={{ color: "#8a2c20", fontSize: 12 }}>
+          Session storage is required to pair both variants. Enable it and
+          reload this internal preview before starting.
+        </p>
+      )}
       <div style={{ fontSize: 12, color: "#51605b" }}>
         Pair {pairNumber}/6 · task {taskIndex + 1}/{TASKS.length} ·{" "}
         {recordedTaskIds.size} saved
@@ -255,7 +264,7 @@ export default function HandwritingExperiencePanel() {
         <button
           type="button"
           onClick={exportRun}
-          disabled={recordedTaskIds.size !== TASKS.length}
+          disabled={!pairToken || recordedTaskIds.size !== TASKS.length}
         >
           Export JSON
         </button>

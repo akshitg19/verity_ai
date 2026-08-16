@@ -24,7 +24,8 @@ for implementation decisions.
 - [Phase A baseline](baseline-report-2026-08-14.md) records the re-verified test
   baseline, lifecycle coverage, and the outstanding target-device evidence.
 - [Internal A/B comparison](internal-ab-comparison.md) defines the consented
-  Gemini scheduling comparison and content-free export workflow.
+  Gemini scheduling comparison, schema-v2 content-free export, anonymous
+  session pairing, and strict 3–5-pair evidence-readiness workflow.
 - [Provider readiness](provider-readiness.md) records current official-source
   licensing, privacy, pricing, secret mapping, POC budget, and rollout gates.
 - [MyScript public terms checkpoint](myscript-public-terms-checkpoint-2026-08-16.md)

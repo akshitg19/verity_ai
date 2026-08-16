@@ -2,20 +2,21 @@
 
 **Handoff date:** 2026-08-16
 
-**Status:** Phases 0–2, Phase A/B, provider readiness, the disabled MyScript
-backend adapter, and unreachable-by-default frontend wiring are merged through
-PRs #31–#36. PR #37 added the explicit no-decision checkpoint, PR #38 recorded
-the disabled deployment, PR #39 pinned numeric Secret Manager versions, and PR
-#40 recorded revision `verity-ai-00018-fdv`. PR #42 added repeatable
-content-safe runtime verification, PR #43 merged the bounded synthetic POC,
-and PR #45 merged normalization `v2` plus zero-request offline reprocessing.
-Current revision `verity-ai-00020-zwl` deploys that merged source with provider
-traffic still disabled; target-device and decision-corpus evidence remain
-unavailable.
+**Status:** Safe provider-neutral foundations and disabled MyScript integration
+work are merged through PR #58. The 50-call v1 smoke/probe and separate
+300-call v2 synthetic diagnostic completed with no production flag change; the
+v2 run had 300/300 provider successes, 95.00% overall exact match, 96.33% parse
+success, and zero ledger/dashboard discrepancy. These corpora remain
+single-reviewer and decision-ineligible, so the provider decision is still
+`NO_DECISION`. Current Cloud Run revision `verity-ai-00020-zwl` remains fully
+disabled but predates the latest merged source; a new disabled deployment is
+pending refreshed operator OAuth. Target-device, eligible decision-corpus,
+privacy/legal, real-authentication, same-input control, and enabled-canary
+evidence remain unavailable.
 
-**Working branch:** `main`
+**Working branch:** `feat/handwriting-ab-evidence-integrity`
 
-**Base before this deployment-evidence update:** `origin/main` at `3634598`
+**Current merged base:** `origin/main` at `08fce92`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 

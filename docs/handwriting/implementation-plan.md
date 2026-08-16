@@ -866,3 +866,32 @@ No further MyScript request is needed for this diagnostic; retain all disabled
 flags and wait for the target-device, restricted-corpus, privacy/legal,
 authentication, control-cost, and canary approvals.
 ```
+
+```text
+Date: 2026-08-16
+Branch: feat/handwriting-ab-evidence-integrity
+Phase: A/B evidence-integrity hardening
+Implemented: repaired the documented Node ESM aggregation command, upgraded the
+export contract to schema v2, added a browser-session-only random pair token,
+centralized the frozen 12-task list, strictly validated policy/environment/task
+and metric allowlists, and added a machine-readable readiness gate. The
+aggregate omits pair tokens and filenames.
+Tests and results: 14 focused experiment/report tests exercise the real Node
+CLI, policy drift, unsafe/malformed-field non-disclosure, incomplete/unpaired/
+mismatched sessions, and a successful three-pair gate. The full frontend suite
+passes 402 tests across 41 files; lint, App.jsx 256/260, development and
+production builds, API-base inspection, and provider-secret bundle scan pass.
+The unchanged backend passes 1272 tests with 3 expected xfails. Remote checks
+remain to be recorded before merge.
+Measured metrics: no target-device result was fabricated. A completed evidence
+set now requires 3–5 matched Legacy/Current sessions, balanced first-variant
+order, exactly 12 committed painted results and provider requests per run, and
+zero stale/error results; the report includes coarse device/browser breakdowns.
+Known risks: session pairing proves that two exports share one browser-tab
+session, not a human identity. Device measurements and voluntary teammate runs
+remain external; this remains qualitative scheduling evidence rather than a
+provider benchmark.
+Next action: run the full frontend/backend gates and merge; then collect 3–5
+target-device pairs with --require-ready. Separately, complete Google OAuth to
+deploy and verify the latest disabled Cloud Run revision.
+```
