@@ -789,11 +789,11 @@ code. No provider request, secret read, student data, deployment, or paid action
 occurred.
 Measured metrics: authorization and ledger state only. No new accuracy,
 latency, quota, cost, or provider-response measurement.
-Known risks: the account-wide 2,000-request dashboard has not been reconciled;
-a useful predeclared synthetic manifest is not selected; this run remains
+Known risks: a useful predeclared synthetic manifest is not selected; this run remains
 decision-ineligible and does not close privacy, authentication, target-device,
 commercial, or rollout gates.
-Next action: obtain a content-free dashboard snapshot proving at least 1,500
-free requests remain, then review the exact synthetic manifest before spending
-any v2 request. Keep both production MyScript flags false.
+Next action: the read-only before-run dashboard snapshot now reconciles at 50
+used / 1,950 free. Review the exact synthetic manifest before spending any v2
+request, then capture the post-run counter. Keep both production MyScript flags
+false.
 ```

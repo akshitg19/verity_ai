@@ -40,6 +40,9 @@ for implementation decisions.
   records the separate 1,500-attempt synthetic-only ceiling, zero-use ledger,
   dashboard pre-request gate, and exclusions for student data, production, and
   paid usage.
+- [MyScript dashboard quota evidence](myscript-dashboard-quota-evidence-2026-08-16.md)
+  reconciles the read-only before-run account counter (50) to v1 and proves
+  1,950 free requests remain before v2 traffic.
 - [Rollout runbook](rollout-runbook.md) records the disabled deployment check,
   activation prerequisites, monitoring, outage response, and kill switches.
 - [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
@@ -89,9 +92,8 @@ for implementation decisions.
   deployed in disabled revision `verity-ai-00020-zwl`. A separate local,
   synthetic-only 50-call POC proved the live REST boundary and characterized
   `x/X` geometry sensitivity. A newly authorized v2 synthetic run has a
-  separate 0/1500 ledger but cannot make its first request until the
-  account-wide free allowance is reconciled; Cloud Run and frontend traffic
-  remain disabled.
+  separate 0/1500 ledger; the account-wide counter is reconciled at 50 used and
+  1,950 free. Cloud Run and frontend traffic remain disabled.
 - Recommended vector POC: MyScript iink. The developer application, local
   credential file, GCP secrets, and runtime-service-account secret access are
   complete. Disabled deployment, numeric secret-version pinning, and
@@ -105,9 +107,8 @@ for implementation decisions.
 - Next gates: target-device Phase A/B exports; internal approval of the public
   terms checkpoint plus written MyScript reconciliation/commercial and
   student-privacy answers before student/production use; an approved consented
-  raw-stroke decision corpus; same-input Gemini control evidence; and, before
-  any v2 synthetic request, a dashboard snapshot plus a reviewed predeclared
-  manifest.
+  raw-stroke decision corpus; same-input Gemini control evidence; and a reviewed
+  predeclared manifest before any v2 synthetic request.
 
 ## Working agreement for AI-assisted changes
 

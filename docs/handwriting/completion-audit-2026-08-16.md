@@ -25,8 +25,9 @@ evidence or approval.
 - A separate [v2 synthetic authorization](myscript-synthetic-authorization-2026-08-16-v2.md)
   now permits at most 1,500 attempts. Its owner-only repository-external ledger
   is initialized at `1500 / 0 / 1500`; no v2 provider request has occurred.
-  A MyScript dashboard snapshot proving sufficient free allowance remains a
-  mandatory pre-request gate.
+  The [before-run dashboard counter](myscript-dashboard-quota-evidence-2026-08-16.md)
+  reports 50 total requests, exactly matching v1 and proving 1,950 of the
+  published 2,000-request allowance remain.
 - Frontend and backend production health returned HTTP 200 at audit time.
 - The original landing-page worktree still contains the same six unrelated
   modified/untracked paths and was not edited, stashed, reset, or merged.
@@ -66,7 +67,7 @@ evidence or approval.
 | Product/QA owner | Named tablet/browser matrix; 3–5 consenting internal testers; completed content-free Phase A/B exports | Run the documented baseline/A-B tasks and attach aggregate exports without handwriting content or identifiers. |
 | Data/privacy owner | Approved restricted store; access list; retention/deletion policy; provenance/consent; 300–500 frozen cases; two reviewers for ambiguous cases | Approve the store and annotation protocol, then provide a manifest that passes `--decision-run`. Do not put real ink in Git. |
 | MyScript legal/privacy/commercial owner | Internal approval of the [public terms checkpoint](myscript-public-terms-checkpoint-2026-08-16.md); written reconciliation of trial research/technical access with DPA transient processing; FERPA/COPPA/student-data terms; quote and negotiated production/SLA/support/publicity terms | Send the shortened vendor questionnaire only after user approval; attach the response and internal go/no-go review. No purchase or contract is authorized here. |
-| Product/finance owner | The synthetic-only v2 identity and 1,500-attempt cap are approved and initialized at 0 used. A dashboard quota snapshot before and after remains missing; this approval does not cover real handwriting or paid usage. | Before any v2 request, attach a content-free dashboard snapshot proving at least 1,500 free requests remain. If fewer remain, lower the ledger cap before traffic. Then approve a useful predeclared synthetic manifest rather than spending the allowance by default. |
+| Product/finance owner | The synthetic-only v2 identity and 1,500-attempt cap are approved and initialized at 0 used. The before-run dashboard snapshot passes at 50 used / 1,950 free; the after-run snapshot remains pending. This approval does not cover real handwriting or paid usage. | Review a useful predeclared synthetic manifest rather than spending the allowance by default. After execution, reconcile the dashboard total to both ledgers and stop on any discrepancy. |
 | Security/product owner | Real user authentication and internal-preview access boundary | Replace/review the shared browser header before any deployed provider route can open. |
 | Product/model-cost owner | Approval for same-input Gemini control and, only if needed, a difficult-fallback Luna benchmark | Approve exact sample count, provider(s), cost cap, artifact path, and no-student-data boundary before any new model requests. |
 

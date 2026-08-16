@@ -21,11 +21,11 @@ does not contact MyScript or consume a request.
 ## Pre-request gate
 
 MyScript's public free trial is account-wide and capped at 2,000 requests. The
-known VerityAI total would be at most 1,550 if v2 used its full authorization,
-but the account dashboard has not been reconciled for calls outside the local
-ledgers. Before the first v2 request, record a content-free dashboard snapshot
-proving at least 1,500 free requests remain. If fewer remain, reduce the v2 run
-cap before traffic; do not cross into paid usage.
+[before-run dashboard evidence](myscript-dashboard-quota-evidence-2026-08-16.md)
+reported 50 total requests, exactly matching v1 and leaving 1,950 free requests.
+The quota gate therefore passes for v2's 1,500-attempt maximum with a 450-request
+safety margin. Do not cross into paid usage, and reconcile the dashboard again
+after the run.
 
 The run also needs a predeclared, validated synthetic manifest and owner-only
 prediction path. Do not spend requests merely because budget exists. The
@@ -43,4 +43,3 @@ This authorization is not evidence for provider adoption and does not approve:
 - vendor contact, commercial terms, payment, or a contract; or
 - weakening privacy, authentication, accuracy, latency, correction, fallback,
   or rollback gates.
-
