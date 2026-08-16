@@ -690,10 +690,11 @@ The product owner subsequently approved a separate synthetic-only run,
 `myscript-synthetic-poc-20260816-v2`, capped at 1,500 attempts. Its independent
 owner-only ledger is initialized at 0/1500; v1 remains immutable at 50/50. This
 does not approve student/tester ink, production activation, distribution,
-payment, or a contract. Before the first v2 request, reconcile the account-wide
-2,000-request free allowance in the MyScript dashboard and prove at least 1,500
-free requests remain; otherwise lower the v2 cap before traffic. See
-`myscript-synthetic-authorization-2026-08-16-v2.md`.
+payment, or a contract. The read-only before-run MyScript dashboard counter
+reports 50 total requests, exactly matching v1 and leaving 1,950 of the
+account-wide 2,000-request allowance free. See
+`myscript-synthetic-authorization-2026-08-16-v2.md` and
+`myscript-dashboard-quota-evidence-2026-08-16.md`.
 
 The vector provider becomes primary only if category-level exact match,
 parse-success rate, latency, privacy, licensing, and fallback-rate gates pass.
