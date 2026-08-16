@@ -1,6 +1,6 @@
 # Internal Gemini Scheduling A/B Comparison
 
-**Status:** Tooling ready; teammate/device runs pending
+**Status:** Validated schema-v2 tooling ready; teammate/device runs pending
 
 **Experiment:** `gemini-scheduling-ab-v1`
 
@@ -60,14 +60,20 @@ one-worker/two-worker policy.
 The experiment panel displays the same list. It records only task IDs, coarse
 browser/device classes, content-free lifecycle metrics, and the teammate's
 ratings. It never exports ink, images, recognized text, expected text, problem
-text, notebook/page IDs, names, email addresses, or a persistent participant
-identifier.
+text, notebook/page IDs, names, or email addresses. Export schema v2 adds one
+random UUID held only in the browser tab's session storage so the offline tool
+can prove that Legacy and Current came from the same anonymous session. The
+token is not a participant identity, does not survive the tab session, and is
+not copied into the aggregate report.
 
 ## Teammate instructions
 
 1. Open the PR #32 preview link above with one variant query and complete the
    existing Vercel team sign-in if prompted.
 2. Confirm the panel heading names the intended variant.
+   If the panel says session storage is unavailable, enable session storage for
+   this internal preview and reload; export stays disabled until anonymous
+   pairing can be retained.
 3. Use the math notebook. For each pair, write row 1 and row 2 exactly as shown,
    with no pause to wait for recognition between them.
 4. After row 2, wait for both recognition results and verdict painting.
@@ -76,8 +82,10 @@ identifier.
 6. Select **Save row 2 & next pair**, then use **New Question** before drawing
    the next pair.
 7. After all 12 expressions are rated, export the JSON file.
-8. Repeat on the other variant on the same device/browser. Alternate which
-   variant comes first across teammates to reduce order bias.
+8. In the **same browser tab**, change only the query to the other variant and
+   repeat. Keeping the tab open preserves the anonymous pair token; a new tab
+   intentionally creates a different token and will fail the pairing gate.
+   Alternate which variant comes first across teammates to reduce order bias.
 9. Share only the exported JSON files in the approved internal project
    location. Do not add handwriting screenshots or notebook exports.
 
@@ -90,16 +98,31 @@ From `frontend/`, run:
 
 ```bash
 npm run handwriting:aggregate -- \
+  --require-ready \
   /approved/path/verity-hwr-legacy-*.json \
   /approved/path/verity-hwr-current-*.json \
   > /approved/path/handwriting-ab-summary.json
 ```
 
-The machine-readable report contains run/task counts, p50/p95 lifecycle and
-provider-request durations, mean responsiveness/confidence, exact-recognition
-rating, unreadable rate, correction count, and incomplete/flicker count. Inspect
-results by device class before drawing a conclusion; do not turn this small
-internal exercise into provider-selection evidence.
+The command rejects unsupported schemas, policy drift, missing/duplicated task
+ratings, out-of-range values, unsafe fields, invalid environment classes, and
+malformed metrics before aggregation. `--require-ready` returns nonzero unless
+there are 3–5 anonymous Legacy/Current pairs from matching device/browser
+classes, every run has exactly 12 committed painted results and 12 provider
+requests, stale/error counts are zero, and first-variant order is balanced to
+within one pair with no equal/ambiguous export timestamps.
+
+The machine-readable report contains readiness codes, run/task counts, p50/p95
+lifecycle and provider-request durations, mean responsiveness/confidence,
+exact-recognition rating, unreadable rate, correction count, and
+incomplete/flicker count. It includes the same aggregates broken down by the
+validated coarse browser/device class. It contains neither pair tokens nor
+input filenames. Inspect every device-class breakdown before drawing a
+conclusion; do not turn this small internal exercise into provider-selection
+evidence.
+
+Running without `--require-ready` is allowed only to diagnose an incomplete
+collection. Such output must not be attached as completed Phase A/B evidence.
 
 ## Rollback and cleanup
 
