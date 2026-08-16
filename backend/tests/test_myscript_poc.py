@@ -21,6 +21,10 @@ X_CASE_FIXTURE_ROOT = (
     Path(__file__).resolve().parents[2]
     / "docs/handwriting/fixtures/synthetic-myscript-x-case-v1"
 )
+LINEAR_V2_FIXTURE_ROOT = (
+    Path(__file__).resolve().parents[2]
+    / "docs/handwriting/fixtures/synthetic-myscript-linear-v2"
+)
 
 
 def args(tmp_path, *, request_cap=30):
@@ -151,6 +155,46 @@ def test_x_case_probe_consumes_only_the_twenty_remaining_run_attempts(
     assert result["success_count"] == 20
     assert result["attempts_used"] == 50
     assert result["attempts_remaining"] == 0
+
+
+def test_synthetic_poc_accepts_frozen_300_case_v2_with_shared_cap(
+    tmp_path, monkeypatch
+):
+    tmp_path.chmod(0o700)
+
+    class FakeRecognizer:
+        def __init__(self, _settings, *, budget):
+            self.budget = budget
+
+        async def recognize(self, _request):
+            self.budget.reserve()
+            return MyScriptRecognition(
+                text="x=3",
+                provider_latex="x = 3",
+                unreadable=False,
+                attempts=1,
+                latency_ms=12,
+            )
+
+    monkeypatch.setattr(myscript_poc, "MyScriptRecognizer", FakeRecognizer)
+    monkeypatch.setenv("MYSCRIPT_APPLICATION_KEY", "synthetic-app-key")
+    monkeypatch.setenv("MYSCRIPT_HMAC_KEY", "synthetic-hmac-key")
+    options = argparse.Namespace(
+        manifest=LINEAR_V2_FIXTURE_ROOT / "manifest.jsonl",
+        fixture_root=LINEAR_V2_FIXTURE_ROOT,
+        ledger=tmp_path / "v2.handwriting-ledger.jsonl",
+        run_id="synthetic-poc-v2-test",
+        request_cap=1500,
+        output=tmp_path / "v2-predictions.jsonl",
+        initialize_ledger=True,
+    )
+
+    result = asyncio.run(myscript_poc.run(options))
+
+    assert result["fixture_count"] == 300
+    assert result["success_count"] == 300
+    assert result["attempts_used"] == 300
+    assert result["attempts_remaining"] == 1200
 
 
 def test_synthetic_poc_rejects_raw_prediction_output_inside_repository(tmp_path):

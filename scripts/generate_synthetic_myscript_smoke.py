@@ -95,6 +95,7 @@ def strokes_for(
     *,
     x_height_scale: float = 1.0,
     x_y_offset: float = 0.0,
+    x_width_scale: float = 1.0,
 ) -> dict:
     rng = random.Random(20260816 + variant)
     glyph_width = 22 + (variant % 3)
@@ -116,7 +117,15 @@ def strokes_for(
                     if character == "x"
                     else y_value
                 )
-                x = x_origin + x_value * glyph_width + transformed_y * slant + jitter_x
+                transformed_x = x_value
+                if character == "x" and x_width_scale != 1.0:
+                    transformed_x = 0.5 + (x_value - 0.5) * x_width_scale
+                x = (
+                    x_origin
+                    + transformed_x * glyph_width
+                    + transformed_y * slant
+                    + jitter_x
+                )
                 y = y_origin + transformed_y * glyph_height + jitter_y
                 points.append(
                     {
