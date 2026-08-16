@@ -815,3 +815,25 @@ parser, fixture, and scoring review rather than relaxing this guard casually.
 Next action: merge after remote CI, then design the smallest useful predeclared
 synthetic linear-equation ambiguity corpus before any v2 traffic.
 ```
+
+```text
+Date: 2026-08-16
+Branch: eval/myscript-linear-v2-corpus
+Phase: predeclared synthetic v2 corpus
+Implemented: generated 300 deterministic fixtures from 60 linear equations and
+five controlled x geometries; within each group only the two x strokes differ.
+Frozen the manifest hash, one-run exposure, stop rules, lowercase-group gates,
+full-height diagnostic treatment, and post-run ledger/dashboard reconciliation
+before observing provider output.
+Tests and results: all 300 fixture/stroke records validate; paired-invariant
+coverage checks every group; generator re-run is deterministic and leaves v1
+fixtures unchanged. No provider request, secret read, deployment, student data,
+or paid action occurred.
+Measured metrics: corpus composition and integrity only; v2 remains 0/1500.
+Known risks: the corpus is synthetic, single-reviewer, linear-equation-only, and
+decision-ineligible. It cannot close target-device, writer, privacy,
+authentication, commercial, same-input control, or rollout gates.
+Next action: merge after remote CI, run the frozen manifest once from the
+owner-only v2 directory, score without X-to-x folding, and reconcile the
+post-run dashboard counter.
+```

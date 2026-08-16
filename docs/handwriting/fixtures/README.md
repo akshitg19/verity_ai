@@ -51,6 +51,14 @@ synthetic, one-reviewer, MyScript-approved technical POC evidence and remain
 ineligible for a provider decision. Their live aggregate is documented in
 `../myscript-synthetic-poc-2026-08-16.md`; raw predictions are not in Git.
 
+`synthetic-myscript-linear-v2/` contains the separately authorized 300-case
+diagnostic: 60 linear equations across five controlled `x` geometries. Within
+each five-way group only the two `x` strokes may differ. Generate it with
+`python scripts/generate_synthetic_myscript_linear_v2.py`; its frozen manifest
+hash and reporting gates are in
+[`../myscript-synthetic-v2-plan-2026-08-16.md`](../myscript-synthetic-v2-plan-2026-08-16.md).
+It remains single-reviewer synthetic evidence and is not production accuracy.
+
 `synthetic-chemistry-routing-v1/` is a committed, deterministic routing corpus
 with eight written-chemistry and two molecular-structure records. Every record
 contains both bounded vector strokes and a generated PNG. It covers chemistry

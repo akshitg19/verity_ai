@@ -24,6 +24,9 @@ CHEMISTRY_ROUTING_ROOT = (
 MYSCRIPT_X_CASE_ROOT = (
     ROOT / "docs/handwriting/fixtures/synthetic-myscript-x-case-v1"
 )
+MYSCRIPT_LINEAR_V2_ROOT = (
+    ROOT / "docs/handwriting/fixtures/synthetic-myscript-linear-v2"
+)
 
 
 def write_json(path, value):
@@ -194,6 +197,62 @@ def test_myscript_x_case_probe_is_paired_and_changes_only_x_strokes():
             assert [point["t"] for point in lower_stroke["points"]] == [
                 point["t"] for point in full_stroke["points"]
             ]
+
+
+def test_myscript_linear_v2_has_60_five_way_groups_changing_only_x_strokes():
+    result = load_manifest(
+        MYSCRIPT_LINEAR_V2_ROOT / "manifest.jsonl",
+        FIXTURE_SCHEMA,
+        fixture_root=MYSCRIPT_LINEAR_V2_ROOT,
+        stroke_schema_path=STROKE_SCHEMA,
+        require_inputs=True,
+        require_decision_ready=False,
+    )
+
+    assert len(result.records) == 300
+    assert result.decision_eligible is False
+    by_id = {record["id"]: record for record in result.records}
+    geometries = (
+        "lowercase-standard",
+        "lowercase-narrow",
+        "lowercase-wide",
+        "lowercase-tall",
+        "full-height",
+    )
+    for expression_index in range(1, 61):
+        prefix = f"synthetic-linear-v2-{expression_index:03d}"
+        group = [by_id[f"{prefix}-{geometry}"] for geometry in geometries]
+        assert len(
+            {json.dumps(record["expected"], sort_keys=True) for record in group}
+        ) == 1
+        assert {
+            tuple(record["consent"]["approved_providers"]) for record in group
+        } == {
+            ("myscript",)
+        }
+
+        strokes_by_geometry = {}
+        for geometry, record in zip(geometries, group, strict=True):
+            stroke_document = json.loads(
+                (MYSCRIPT_LINEAR_V2_ROOT / record["inputs"]["strokes"]).read_text()
+            )
+            strokes_by_geometry[geometry] = stroke_document["strokes"]
+
+        baseline = strokes_by_geometry["lowercase-standard"]
+        for geometry in geometries[1:]:
+            candidate = strokes_by_geometry[geometry]
+            changed = [
+                (baseline_stroke, candidate_stroke)
+                for baseline_stroke, candidate_stroke in zip(
+                    baseline, candidate, strict=True
+                )
+                if baseline_stroke != candidate_stroke
+            ]
+            assert len(changed) == 2
+            for baseline_stroke, candidate_stroke in changed:
+                assert [point["t"] for point in baseline_stroke["points"]] == [
+                    point["t"] for point in candidate_stroke["points"]
+                ]
 
 
 def test_load_manifest_rejects_path_traversal(tmp_path):

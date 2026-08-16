@@ -43,6 +43,9 @@ for implementation decisions.
 - [MyScript dashboard quota evidence](myscript-dashboard-quota-evidence-2026-08-16.md)
   reconciles the read-only before-run account counter (50) to v1 and proves
   1,950 free requests remain before v2 traffic.
+- [MyScript synthetic linear v2 plan](myscript-synthetic-v2-plan-2026-08-16.md)
+  freezes the 300-case five-way geometry corpus, manifest hash, stop rules, and
+  reporting gates before any v2 provider result is observed.
 - [Rollout runbook](rollout-runbook.md) records the disabled deployment check,
   activation prerequisites, monitoring, outage response, and kill switches.
 - [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
