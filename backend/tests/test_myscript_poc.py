@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from handwriting_eval import myscript_poc
-from handwriting_eval.ledger import DurableAttemptLedger
+from handwriting_eval.ledger import MYSCRIPT_POC_ATTEMPT_CAP, DurableAttemptLedger
 from handwriting_eval.validation import EvaluationDataError
 from myscript_recognition import MyScriptRecognition
 
@@ -35,10 +35,11 @@ def args(tmp_path, *, request_cap=30):
     )
 
 
-def test_synthetic_poc_hard_caps_total_attempts_at_fifty(tmp_path):
+def test_synthetic_poc_uses_shared_1500_cap_and_rejects_1501(tmp_path):
     tmp_path.chmod(0o700)
-    with pytest.raises(EvaluationDataError, match="between 1 and 50"):
-        asyncio.run(myscript_poc.run(args(tmp_path, request_cap=51)))
+    assert MYSCRIPT_POC_ATTEMPT_CAP == 1500
+    with pytest.raises(EvaluationDataError, match="between 1 and 1500"):
+        asyncio.run(myscript_poc.run(args(tmp_path, request_cap=1501)))
 
 
 def test_parse_success_uses_the_deterministic_algebra_parser():

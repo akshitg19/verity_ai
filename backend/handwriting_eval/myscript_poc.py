@@ -25,7 +25,11 @@ from judge.algebra import _parse_equation
 from handwriting_normalization import NORMALIZATION_VERSION
 from schemas import MyScriptRecognizeRequest
 
-from .ledger import AttemptLedgerError, DurableAttemptLedger
+from .ledger import (
+    MYSCRIPT_POC_ATTEMPT_CAP,
+    AttemptLedgerError,
+    DurableAttemptLedger,
+)
 from .validation import (
     EvaluationDataError,
     load_manifest,
@@ -38,7 +42,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_SCHEMA = REPO_ROOT / "docs/handwriting/fixtures/fixture.schema.json"
 STROKE_SCHEMA = REPO_ROOT / "docs/handwriting/fixtures/stroke.schema.json"
 PREDICTION_SCHEMA = REPO_ROOT / "docs/handwriting/fixtures/prediction.schema.json"
-MAX_SYNTHETIC_POC_ATTEMPTS = 50
 PROVIDER = "myscript"
 MODEL = "iink-recognize-v4"
 CONFIGURATION_ID = "math-latex-rest-v1"
@@ -149,8 +152,11 @@ def _validate_artifact_paths(ledger_path: Path, output_path: Path) -> None:
 
 
 async def run(args: argparse.Namespace) -> dict[str, Any]:
-    if not 1 <= args.request_cap <= MAX_SYNTHETIC_POC_ATTEMPTS:
-        raise EvaluationDataError("Synthetic MyScript POC cap must be between 1 and 50")
+    if not 1 <= args.request_cap <= MYSCRIPT_POC_ATTEMPT_CAP:
+        raise EvaluationDataError(
+            "Synthetic MyScript POC cap must be between 1 and "
+            f"{MYSCRIPT_POC_ATTEMPT_CAP}"
+        )
     _validate_artifact_paths(args.ledger, args.output)
     fixture_root = args.fixture_root.resolve(strict=True)
     manifest = load_manifest(
