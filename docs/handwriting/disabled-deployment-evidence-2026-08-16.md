@@ -4,6 +4,10 @@
 
 **Result:** `PASS` for the disabled-revision deployment gate only.
 
+This is the historical first-deployment record. The current disabled revision
+and numeric secret references are recorded in
+[the follow-up pinning evidence](secret-version-pinning-evidence-2026-08-16.md).
+
 This checkpoint proves that the merged MyScript boundary can exist in Cloud
 Run without opening provider traffic. It is not a provider evaluation, does not
 change the `NOT_RUN` / `NO_DECISION` evaluation state, and does not authorize a
@@ -71,8 +75,8 @@ evidence for Gemini-path compatibility.
 
 This deployment closes only the disabled Cloud Run gate. Live MyScript work
 still requires written privacy/legal and commercial answers, an approved
-30–50-case smoke corpus, restricted artifact storage, numeric secret versions,
-an approved durable attempt-ledger mount with restart proof, provider-dashboard
+30–50-case smoke corpus, restricted artifact storage, an approved durable
+attempt-ledger mount with restart proof, provider-dashboard
 reconciliation, target devices, and a real user-access boundary. Keep all
 frontend and backend MyScript gates false until those owners attach the required
 evidence.

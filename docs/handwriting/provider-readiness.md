@@ -156,14 +156,15 @@ the cross-restart budget requirement. The ledger stores only its provider, run
 ID, cap, and monotonically increasing reservation sequence.
 
 `cloudbuild.yaml` maps the two existing Secret Manager resources to the two
-runtime environment names with Cloud Run's `--update-secrets` option. The first
-disabled revision uses `latest` because no MyScript traffic is possible. Before
-an approved POC, override both version substitutions with reviewed numeric
-versions, matching Google's recommendation to pin environment-variable secrets.
-Cloud Run checks the runtime identity's secret access during deployment and
-resolves environment-variable secrets before an instance starts. Do not run a
-command that reads a secret version's value merely to verify the mapping;
-inspect Cloud Run metadata and exercise the disabled route check instead.
+runtime environment names with Cloud Run's `--update-secrets` option. Both
+references are pinned to reviewed numeric version `1`, and a pre-build validator
+rejects mutable or malformed overrides. Revision `verity-ai-00018-fdv` proves
+the numeric references with both provider flags false; see
+`secret-version-pinning-evidence-2026-08-16.md`. Cloud Run checks the runtime
+identity's secret access during deployment and resolves environment-variable
+secrets before an instance starts. Do not run a command that reads a secret
+version's value merely to verify the mapping; inspect Cloud Run metadata and
+exercise the disabled route check instead.
 
 The provider flag and the separate POC-route flag stay false in production until
 the privacy, commercial, corpus, and release gates below are signed off. Even
@@ -286,7 +287,7 @@ Rules:
 | Developer account, app, keys | Complete | User-verified 2026-08-14 |
 | GCP secret storage and runtime IAM | Complete | User-verified 2026-08-14 |
 | Backend REST adapter with mock tests | Implemented; live call blocked | Fixed HMAC vector, exact-body mock, timeout/error/retry/cap tests, bounded schemas, content-safe logging |
-| Cloud Run secret-to-environment mapping | Disabled revision verified; numeric pinning configured | [Build, revision, mappings, false flags, and content-safe smoke evidence](disabled-deployment-evidence-2026-08-16.md); deploy and verify the reviewed version-`1` pins before traffic |
+| Cloud Run secret-to-environment mapping | Complete for disabled revision `verity-ai-00018-fdv` | [Numeric version-`1` references, build guard, revision metadata, and content-safe checks](secret-version-pinning-evidence-2026-08-16.md) |
 | Direct frontend POC adapter | Implemented in PR #35 | Dual-gate config tests, ordered vector payload, no-PNG/no-local-metadata assertion, cancellation and safe-error tests, production-bundle secret scan |
 | Durable POC attempt ledger | Implemented in PR #36 | Owner-only repository-external ledger, concurrent atomic reservations, corruption/identity/cap fail-closed tests, restart persistence, production-factory enforcement |
 | Synthetic/internal smoke corpus (30–50) | Blocked | Approved sources, two-reviewer truth for decision cases, schema validation |

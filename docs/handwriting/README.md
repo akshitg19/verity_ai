@@ -32,6 +32,9 @@ for implementation decisions.
 - [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
   records the exact build, revision, false flags, secret references, image
   digest, and content-safe rollout checks without reading secret values.
+- [Secret-version pinning evidence](secret-version-pinning-evidence-2026-08-16.md)
+  records the reviewed numeric references, build guard, updated disabled
+  revision, and repeated content-safe checks.
 - [Fixture schema](fixtures/fixture.schema.json) defines the machine-readable
   test-case format.
 - [Stroke schema](fixtures/stroke.schema.json) bounds replayable digital ink,
@@ -51,20 +54,20 @@ for implementation decisions.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: the backend MyScript REST adapter and internal route are
-  deployed in disabled revision `verity-ai-00017-phb`. PR #35 implements
+  deployed in disabled revision `verity-ai-00018-fdv`. PR #35 implements
   unreachable-by-default frontend POC wiring; no live call is enabled.
 - Recommended vector POC: MyScript iink. The developer application, local
   credential file, GCP secrets, and runtime-service-account secret access are
-  complete. Disabled deployment and revision-metadata verification are
-  complete; licensing/privacy approval and evaluation remain.
+  complete. Disabled deployment, numeric secret-version pinning, and
+  revision-metadata verification are complete; licensing/privacy approval and
+  evaluation remain.
 - Image fallback candidate: current Gemini implementation.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
-- Current safe work: the disabled Cloud Run deployment checkpoint is complete
+- Current safe work: numeric secret-version pinning is deployed and verified
   with both provider gates false and no provider request.
 - Next gates: target-device Phase A/B exports; written MyScript commercial and
-  student-privacy answers; numeric secret versions, approved durable ledger
-  storage, and an approved consented raw-stroke corpus before live Phase 3
-  evaluation.
+  student-privacy answers; approved durable ledger storage and restart proof;
+  and an approved consented raw-stroke corpus before live Phase 3 evaluation.
 
 ## Working agreement for AI-assisted changes
 
