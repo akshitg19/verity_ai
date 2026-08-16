@@ -43,6 +43,16 @@ files do not exist and its records must not be included in accuracy totals.
 scoring pipeline. Its records set `benchmark_eligible` to false and must never be
 reported as provider evidence.
 
+`synthetic-chemistry-routing-v1/` is a committed, deterministic routing corpus
+with eight written-chemistry and two molecular-structure records. Every record
+contains both bounded vector strokes and a generated PNG. It covers chemistry
+capitalization, letter/digit ambiguity, subscripts, superscripts, ionic charge,
+reaction arrows, and graph-shaped molecular input. Written records use the
+`chemistry_text`/`text` contract; drawings use the separate
+`chemistry_structure`/`smiles` contract. MyScript is deliberately absent from
+`approved_providers`. The one-reviewer synthetic set validates routing and
+harness behavior only and is not provider-decision evidence.
+
 ## Offline evaluation CLI
 
 Run from `backend/` after installing `requirements.txt`.

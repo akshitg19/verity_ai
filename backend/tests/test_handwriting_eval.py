@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_SCHEMA = ROOT / "docs/handwriting/fixtures/fixture.schema.json"
 STROKE_SCHEMA = ROOT / "docs/handwriting/fixtures/stroke.schema.json"
 PREDICTION_SCHEMA = ROOT / "docs/handwriting/fixtures/prediction.schema.json"
+CHEMISTRY_ROUTING_ROOT = (
+    ROOT / "docs/handwriting/fixtures/synthetic-chemistry-routing-v1"
+)
 
 
 def write_json(path, value):
@@ -176,6 +179,38 @@ def test_load_manifest_rejects_non_monotonic_stroke_time(tmp_path):
             fixture_root=tmp_path,
             stroke_schema_path=STROKE_SCHEMA,
         )
+
+
+def test_committed_synthetic_chemistry_corpus_keeps_text_and_structures_separate():
+    result = load_manifest(
+        CHEMISTRY_ROUTING_ROOT / "manifest.jsonl",
+        FIXTURE_SCHEMA,
+        fixture_root=CHEMISTRY_ROUTING_ROOT,
+        stroke_schema_path=STROKE_SCHEMA,
+        require_inputs=True,
+    )
+
+    text_records = [
+        record for record in result.records if record["domain"] == "chemistry_text"
+    ]
+    structure_records = [
+        record
+        for record in result.records
+        if record["domain"] == "chemistry_structure"
+    ]
+    assert len(text_records) == 8
+    assert len(structure_records) == 2
+    assert {record["expected"]["format"] for record in text_records} == {"text"}
+    assert {record["expected"]["format"] for record in structure_records} == {
+        "smiles"
+    }
+    assert all(set(record["inputs"]) == {"strokes", "image"} for record in result.records)
+    assert all(
+        "myscript" not in record["consent"]["approved_providers"]
+        for record in result.records
+    )
+    assert result.decision_eligible is False
+    assert result.ineligibility_reasons == ("fixture_has_fewer_than_two_reviewers",)
 
 
 def test_schema_failure_does_not_echo_provider_output(tmp_path):
