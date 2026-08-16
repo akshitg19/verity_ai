@@ -37,15 +37,18 @@ for implementation decisions.
   records the approved 50-call synthetic-only run: the initial 30-case smoke,
   paired 20-case `x/X` geometry probe, and separate aggregate results.
 - [MyScript synthetic v2 authorization](myscript-synthetic-authorization-2026-08-16-v2.md)
-  records the separate 1,500-attempt synthetic-only ceiling, zero-use ledger,
+  records the separate 1,500-attempt synthetic-only ceiling, initial ledger,
   dashboard pre-request gate, and exclusions for student data, production, and
   paid usage.
 - [MyScript dashboard quota evidence](myscript-dashboard-quota-evidence-2026-08-16.md)
-  reconciles the read-only before-run account counter (50) to v1 and proves
-  1,950 free requests remain before v2 traffic.
+  reconciles the read-only account counter before (50) and after (350) the v2
+  run to both ledgers with zero discrepancy.
 - [MyScript synthetic linear v2 plan](myscript-synthetic-v2-plan-2026-08-16.md)
   freezes the 300-case five-way geometry corpus, manifest hash, stop rules, and
   reporting gates before any v2 provider result is observed.
+- [MyScript synthetic linear v2 results](myscript-synthetic-v2-results-2026-08-16.md)
+  records the content-free 300-case aggregate, frozen-gate outcomes, mismatch
+  classes, quota reconciliation, and continuing `NO_DECISION` boundary.
 - [Rollout runbook](rollout-runbook.md) records the disabled deployment check,
   activation prerequisites, monitoring, outage response, and kill switches.
 - [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
@@ -87,16 +90,18 @@ for implementation decisions.
   chemistry routing evidence; PR #49 adds the 23-item completion audit; PR #50
   proves visible correction and freezes public MyScript terms; and PR #51
   completes the bounded paired `x/X` geometry probe. PR #52 finalizes the
-  cross-phase audit against the completed probe.
+  cross-phase audit; PRs #53–#55 authorize and align the 1,500-attempt v2
+  boundary; and PR #56 freezes the deterministic 300-case v2 corpus and gates.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: the backend MyScript REST adapter and internal route are
   deployed in disabled revision `verity-ai-00020-zwl`. A separate local,
   synthetic-only 50-call POC proved the live REST boundary and characterized
-  `x/X` geometry sensitivity. A newly authorized v2 synthetic run has a
-  separate 0/1500 ledger; the account-wide counter is reconciled at 50 used and
-  1,950 free. Cloud Run and frontend traffic remain disabled.
+  `x/X` geometry sensitivity. The separate v2 synthetic diagnostic completed
+  300/300 calls with a 300/1500 ledger; the account-wide counter reconciles at
+  350 used with zero discrepancy and 1,650 published free requests remaining.
+  Cloud Run and frontend traffic remain disabled.
 - Recommended vector POC: MyScript iink. The developer application, local
   credential file, GCP secrets, and runtime-service-account secret access are
   complete. Disabled deployment, numeric secret-version pinning, and
@@ -111,7 +116,8 @@ for implementation decisions.
   terms checkpoint plus written MyScript reconciliation/commercial and
   student-privacy answers before student/production use; an approved consented
   raw-stroke decision corpus; same-input Gemini control evidence; and a reviewed
-  predeclared manifest before any v2 synthetic request.
+  separately approved eligible corpus and same-input control protocol before
+  any new provider evaluation.
 
 ## Working agreement for AI-assisted changes
 

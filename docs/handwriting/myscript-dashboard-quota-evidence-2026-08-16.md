@@ -34,3 +34,19 @@ authorize paid use, a higher cap, student/end-user ink, production activation,
 or distribution. The post-run dashboard counter must still be recorded and
 reconciled to the v2 ledger before closing the run.
 
+## Post-run reconciliation
+
+**Observed at:** `2026-08-16T19:45:11Z`
+**Operation:** read-only counter refresh after the single frozen v2 run
+
+| Counter | Before | After | Change |
+|---|---:|---:|---:|
+| Requests | 50 | 350 | +300 |
+| Strokes | 407 | 3,352 | +2,945 |
+| Bytes | 125,520 iB | 1,087,591 iB | +962,071 iB |
+
+The v2 append-only ledger reports exactly 300 attempts. The expected account
+total is therefore `50 prior + 300 v2 = 350`, matching the dashboard with a
+discrepancy of zero. The published 2,000-request free allowance has 1,650
+requests remaining. No recognition request was made while reading either
+counter snapshot.

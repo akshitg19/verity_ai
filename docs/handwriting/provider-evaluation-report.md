@@ -2,12 +2,13 @@
 
 **Status date:** 2026-08-16
 
-**Evidence state:** `SYNTHETIC_SMOKE_COMPLETE`; decision corpus `NOT_RUN`
+**Evidence state:** `SYNTHETIC_DIAGNOSTICS_COMPLETE`; decision corpus `NOT_RUN`
 
 **Provider decision:** `NO_DECISION`
 
 This file is the authoritative Phase 4 decision checkpoint and report contract.
-A decision-ineligible 30-case synthetic smoke is complete, but MyScript has
+A decision-ineligible 30-case smoke, 20-case probe, and 300-case geometry
+diagnostic are complete, but MyScript has
 neither passed nor failed the VerityAI decision evaluation. Gemini remains the deployed control because
 it is the safe default—not because a completed comparison proved it superior.
 
@@ -20,7 +21,7 @@ must never be inserted here as accuracy, latency, request, or cost evidence.
 | Path | Current state | Evidence-backed conclusion |
 |---|---|---|
 | Production primary | Gemini image transcription | Retain as rollback-safe control; no new provider traffic |
-| MyScript vector candidate | 30-case smoke plus 20-case paired `x/X` geometry probe complete; decision corpus blocked | `NO_DECISION`—technical boundary works and synthetic casing sensitivity is characterized, but the accuracy gate is not established |
+| MyScript vector candidate | 30-case smoke, 20-case paired `x/X` probe, and 300-case frozen geometry diagnostic complete; decision corpus blocked | `NO_DECISION`—technical boundary works and synthetic casing sensitivity is characterized, but the production accuracy gate is not established |
 | Hybrid vector → Gemini | One-shot fallback and visible-correction mechanisms regression-tested; no enabled canary | Not eligible for production configuration |
 | Image fallback candidate | Gemini retained; GPT-5.6 Luna not evaluated | `NO_DECISION` |
 | Written chemistry | Separate deterministic routing exists | No recognition-provider decision |
@@ -50,8 +51,14 @@ The completed technical smoke and targeted geometry probe are recorded in
 the initial set had 30/30 provider successes and 86.67% normalized exact/parse;
 the paired probe had 20/20 provider successes, 100% for ten explicit lowercase
 x-height cases, and 90% for ten full-height cases. The shared ledger is 50/50
-and exhausted. Both aggregates are `decision_eligible=false` because they have
-one reviewer, no target-device interaction, and no same-input Gemini control.
+and exhausted. Both v1 aggregates are `decision_eligible=false` because they
+have one reviewer, no target-device interaction, and no same-input Gemini
+control. The separate [300-case v2 diagnostic](myscript-synthetic-v2-results-2026-08-16.md)
+also remains decision-ineligible. It had 300/300 provider successes, 95.00%
+overall exact match, and 96.33% parse success. Each of its four lowercase
+geometry groups met the frozen exact/parse/latency gates; the descriptive
+full-height group reached 85.00% exact and contained all eight case-only
+mismatches.
 
 All values remain `NOT_MEASURED` until a decision-eligible aggregate is
 attached. Do not use `0`, an empty cell, or a copied example value to mean
@@ -111,11 +118,11 @@ measurement. Report both and identify warm/cold conditions.
 
 | Metric | Result |
 |---|---|
-| Synthetic POC cap / used / remaining | `50 / 50 / 0` local ledger; dashboard reconciliation not recorded |
-| Synthetic v2 cap / used / remaining | `1500 / 0 / 1500` separate local ledger; before-run dashboard reports 50 total account requests and 1,950 free, exactly reconciling v1 |
-| Success / timeout / error rates | `NOT_MEASURED` |
-| Retry count | `NOT_MEASURED` |
-| Payload mean / p95 | `NOT_MEASURED` |
+| Synthetic POC cap / used / remaining | `50 / 50 / 0` local ledger; the v2 before-run dashboard snapshot reconciled this account total at 50 |
+| Synthetic v2 cap / used / remaining | `1500 / 300 / 1200` separate local ledger; dashboard 50 → 350, discrepancy 0; 1,650 of 2,000 published free requests remain |
+| Synthetic v2 success / timeout + error | 100% / 0% (`n=300`); diagnostic only |
+| Synthetic v2 retry count | 0 |
+| Synthetic v2 payload mean / p95 | 3,206.903 / 4,876.4 bytes |
 | Correction rate | `NOT_MEASURED` |
 | Fallback rate and reasons | `NOT_MEASURED` |
 | Observed test cost | `NOT_MEASURED` |
@@ -144,8 +151,10 @@ request count.
 ## 8. Current recommendation
 
 `NO_DECISION`: keep Gemini-only production behavior and all MyScript frontend
-and backend gates false. The synthetic smoke proves the live technical boundary
-but its 86.67% `v2` exact match is not an adoption result. The next provider decision
-action requires a reviewed target-device corpus and same-input Gemini control;
+and backend gates false. The synthetic diagnostics prove the live technical
+boundary and show that explicit lowercase x-height is materially more reliable
+than full-height crossing strokes, but their results are not an adoption
+benchmark. The next provider decision action requires a reviewed target-device
+corpus and same-input Gemini control;
 student traffic additionally requires privacy/legal, commercial, data,
 authentication, and rollout evidence.

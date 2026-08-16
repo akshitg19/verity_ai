@@ -32,6 +32,17 @@ prediction path. Do not spend requests merely because budget exists. The
 ledger reserves before every HTTP attempt, including retries, and attempt 1,501
 must fail before provider I/O.
 
+## Completed use of this authorization
+
+The frozen 300-case manifest was executed once on 2026-08-16. The run used 300
+attempts with zero retry/error, leaving the ledger at `1500 / 300 / 1200`. The
+read-only dashboard counter moved from 50 to 350 requests, exactly matching the
+two local ledgers and leaving 1,650 of the published 2,000-request allowance.
+The content-free result is recorded in
+[`myscript-synthetic-v2-results-2026-08-16.md`](myscript-synthetic-v2-results-2026-08-16.md).
+Unused capacity remains subject to this document's exclusions and does not
+authorize a different corpus or purpose.
+
 ## What remains unapproved
 
 This authorization is not evidence for provider adoption and does not approve:
