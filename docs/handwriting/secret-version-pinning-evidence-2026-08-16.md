@@ -65,7 +65,22 @@ No MyScript request was initiated. No live Gemini recognition request was run,
 so this checkpoint adds no provider/model accuracy, latency, quota, request, or
 cost claim.
 
-## 4. Remaining gates
+## 4. Repeatable verification
+
+PR #42 adds `scripts/verify_disabled_myscript_revision.py` at immutable commit
+`44f2c4287469eca74537bb52a8e07df7a4dbfb56`. The verifier first requires the
+ready/current revision identity, 100% traffic, expected runtime account, image
+digest, both false flags, and both positive numeric secret references. It exits
+before HTTP if any metadata gate fails and emits only allowlisted fields.
+
+The immutable script was executed from authenticated Cloud Shell against the
+live service on 2026-08-16. It returned `PASS` for revision
+`verity-ai-00018-fdv`, both version-`1` references, unchanged image digest, and
+HTTP status sequence 200 (`/health`), 200 (OpenAPI), 404 (minimal synthetic
+disabled route), and 200 (production frontend). No Secret Manager value,
+provider response, or frontend body was emitted.
+
+## 5. Remaining gates
 
 Numeric secret pinning is complete. Live provider work remains blocked on
 written privacy/legal and commercial approval, an approved 30–50-case corpus,

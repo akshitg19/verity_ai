@@ -507,3 +507,34 @@ reconciliation, target devices, and real authentication remain blocked.
 Next action: merge this evidence checkpoint. Keep every MyScript gate false and
 obtain the remaining external evidence before an approved internal POC.
 ```
+
+```text
+Date: 2026-08-16
+Source/revision: 44f2c4287469eca74537bb52a8e07df7a4dbfb56 / verity-ai-00018-fdv
+Phase: 3 repeatable disabled-revision verification
+Implemented: content-safe operator CLI that reads Cloud Run service/revision
+metadata, emits only allowlisted identity and reference fields, requires the
+latest ready/current revision to serve 100% traffic, verifies the expected
+runtime account and image digest, rejects direct or mutable secret references,
+and refuses all HTTP until both MyScript flags are exactly false. Only after
+those gates pass does it check health, OpenAPI route presence, one minimal
+synthetic disabled-route request, and the production frontend.
+Tests and results: 12 focused tests prove metadata allowlisting, no runtime-value
+echo, false-flag ordering, numeric-version enforcement, direct-value rejection,
+traffic enforcement, content-safe CLI failure, and non-disabled-route failure.
+The full backend suite passed 1256 tests with 3 expected failures; frontend lint,
+line-count guard, 387 tests, production build, API-base verification, and
+provider-secret bundle scan passed. The immutable script returned PASS from
+authenticated Cloud Shell against revision verity-ai-00018-fdv with both false
+flags, both version-1 references, 100% traffic, the expected runtime account,
+unchanged image digest, and HTTP sequence 200/200/404/200. PR #42 contains the
+reviewed change.
+Measured metrics: deployment safety only. No MyScript or live Gemini recognition
+request, provider output, student data, accuracy, latency, quota, request-count,
+or cost claim is included.
+Known risks: vendor/legal and commercial approvals, approved corpora and
+restricted storage, durable ledger mount/restart proof, dashboard
+reconciliation, target devices, and real authentication remain blocked.
+Next action: merge PR #42 after CI. Keep every MyScript gate false and require
+the named external owners' evidence before any POC traffic.
+```

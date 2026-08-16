@@ -52,7 +52,9 @@ for implementation decisions.
   #32 (`156d724`), and provider readiness/offline evaluation by PR #33
   (`e01d28e`). The disabled backend adapter was merged by PR #34 (`949e1ea`),
   PR #35 added the disabled frontend POC boundary, PR #36 added the durable
-  attempt ledger, and PR #37 added the explicit evaluation checkpoint.
+  attempt ledger, PR #37 added the explicit evaluation checkpoint, PRs #38–#40
+  deployed and pinned the disabled boundary, and PR #42 adds repeatable
+  disabled-revision verification.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
