@@ -1,71 +1,70 @@
 import { useEffect, useState } from "react";
-import { WALKTHROUGHS } from "./landingWalkthroughData";
+
+import StructureSketch from "./StructureSketch";
+
+// One walkthrough: a problem on a ruled page, moving through write, read and
+// check, with the lines lighting up as the stage advances.
+//
+// It used to be hard-coded to a single algebra problem and to label its
+// middle stage "MyScript Beta · Vector · 272 ms rehearsal", which is a build
+// detail from a rehearsal and not something a student or a judge has any use
+// for. It takes a `demo` now, so the same component runs the algebra,
+// statistics, balancing and organic walkthroughs from `landingContent.js`,
+// where every line has been through the real judge.
 
 function prefersReducedMotion() {
   return typeof window !== "undefined"
     && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 }
 
-function lineState(stage, index) {
-  if (stage === 0) return index === 0 ? "active" : "pending";
+// Which lines are showing by a given stage. Writing shows the first line
+// being written; reading has the earlier lines settled and the next one
+// arriving; checking shows every verdict at once, which is the point.
+function lineState(demo, stage, index) {
+  const last = demo.lines.length - 1;
+  if (stage === 0) return index === 0 ? "writing" : "pending";
   if (stage === 1) {
-    if (index === 0) return "complete";
-    return index === 1 ? "active" : "pending";
+    if (index < last) return "read";
+    return index === last ? "writing" : "pending";
   }
-  return index < 2 ? "complete" : "review";
+  return demo.lines[index].state;
 }
 
-export default function LandingWorkflowDemo() {
-  const [subject, setSubject] = useState("math");
+export default function LandingWorkflowDemo({ demo, compact = false }) {
   const [stage, setStage] = useState(0);
   const [playing, setPlaying] = useState(true);
 
   useEffect(() => {
     if (!playing || prefersReducedMotion()) return undefined;
     const timer = window.setInterval(
-      () => setStage((current) => (current + 1) % 3),
-      2400,
+      () => setStage((current) => (current + 1) % demo.stages.length),
+      2600,
     );
     return () => window.clearInterval(timer);
-  }, [playing]);
+  }, [playing, demo.stages.length]);
 
-  const walkthrough = WALKTHROUGHS[subject];
-  const [stageLabel, status, source] = walkthrough.stages[stage];
+  const [stageName, headline, note] = demo.stages[stage];
 
   return (
     <aside
-      className={`landing-demo landing-demo--${subject}`}
-      aria-label="Interactive Math and Chemistry feedback walkthrough"
+      className={`landing-demo${compact ? " landing-demo--compact" : ""}`}
+      aria-label={`${demo.eyebrow} walkthrough`}
     >
       <div className="landing-demo__header">
         <div>
-          <span className="landing-demo__eyebrow">{walkthrough.eyebrow}</span>
-          <strong>{walkthrough.title}</strong>
+          <span className="landing-demo__eyebrow">{demo.eyebrow}</span>
+          <strong>{demo.title}</strong>
         </div>
-        <span className="landing-demo__live"><i aria-hidden="true" />Recorded</span>
-      </div>
-
-      <div className="landing-demo__subjects" role="group" aria-label="Walkthrough subject">
-        {Object.entries(WALKTHROUGHS).map(([id, item]) => (
-          <button
-            key={id}
-            type="button"
-            aria-pressed={subject === id}
-            onClick={() => {
-              setSubject(id);
-              setStage(0);
-              setPlaying(false);
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
+        <span className={`landing-demo__live landing-demo__live--${demo.subject}`}>
+          <i aria-hidden="true" />
+          {demo.engine}
+        </span>
       </div>
 
       <div className="landing-demo__stages" role="group" aria-label="Walkthrough stage">
-        {walkthrough.stages.map(([label], index) => (
+        {demo.stages.map(([name], index) => (
           <button
-            key={label}
+            key={name}
             type="button"
             aria-pressed={stage === index}
             onClick={() => {
@@ -74,21 +73,41 @@ export default function LandingWorkflowDemo() {
             }}
           >
             <span>{index + 1}</span>
-            {label}
+            {name}
           </button>
         ))}
       </div>
 
       <div className={`landing-demo__paper landing-demo__paper--stage-${stage + 1}`}>
-        <div className="landing-demo__prompt">{walkthrough.prompt}</div>
-        {walkthrough.lines.map((line, index) => {
-          const state = lineState(stage, index);
+        <div className="landing-demo__prompt">{demo.prompt}</div>
+        {demo.lines.map((line, index) => {
+          const state = lineState(demo, stage, index);
           return (
-            <div className={`landing-demo__line landing-demo__line--${state}`} key={line}>
+            <div
+              className={`landing-demo__line landing-demo__line--${state}${demo.drawing ? " landing-demo__line--structure" : ""}`}
+              key={line.text}
+            >
               <span className="landing-demo__line-number">{index + 1}</span>
-              <span className="landing-demo__equation">{line}</span>
+              <span className="landing-demo__equation">
+                {line.sketch ? (
+                  <>
+                    <StructureSketch
+                      smiles={line.sketch}
+                      tone={state === "invalid" ? "invalid" : "ink"}
+                    />
+                    <em className="landing-demo__caption">{line.caption}</em>
+                  </>
+                ) : (
+                  <>
+                    {line.text}
+                    {line.caption && (
+                      <em className="landing-demo__caption">{line.caption}</em>
+                    )}
+                  </>
+                )}
+              </span>
               <span className="landing-demo__verdict" aria-hidden="true">
-                {state === "complete" ? "✓" : state === "review" ? "!" : state === "active" ? "•••" : ""}
+                {state === "valid" ? "✓" : state === "invalid" ? "!" : state === "writing" ? "•••" : ""}
               </span>
             </div>
           );
@@ -98,18 +117,23 @@ export default function LandingWorkflowDemo() {
 
       <div className="landing-demo__footer">
         <div aria-live="polite">
-          <strong><span className="sr-only">{stageLabel}: </span>{status}</strong>
-          <span>{source}</span>
+          <strong>{headline}</strong>
+          <span>{note}</span>
         </div>
         <button
           type="button"
           className="landing-demo__toggle"
-          aria-label={playing ? "Pause walkthrough" : "Play walkthrough"}
+          aria-label={playing ? `Pause the ${demo.eyebrow} walkthrough` : `Play the ${demo.eyebrow} walkthrough`}
           onClick={() => setPlaying((currentPlaying) => !currentPlaying)}
         >
           {playing ? "Pause" : "Play"}
         </button>
       </div>
+
+      <p className="landing-demo__verdict-note">
+        <strong aria-hidden="true">{stageName}</strong>
+        {demo.verdict}
+      </p>
     </aside>
   );
 }

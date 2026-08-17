@@ -44,13 +44,26 @@ RUN apt-get update \
         libfreetype6 \
     && rm -rf /var/lib/apt/lists/*
 
-# IUPAC naming needs a Java runtime, because py2opsin wraps OPSIN. It adds
-# roughly 200 MB to the image and a little to cold-start time, and
-# judge/naming.py is written to report `unsupported` cleanly when it is
-# absent. Uncomment this only if naming is part of the demo.
-# RUN apt-get update \
-#     && apt-get install -y --no-install-recommends default-jre-headless \
-#     && rm -rf /var/lib/apt/lists/*
+# IUPAC naming needs a Java runtime, because py2opsin wraps OPSIN. This used
+# to be commented out, on the reasoning that it adds roughly 200 MB and a
+# little cold-start time and that judge/naming.py reports `unsupported`
+# cleanly without it.
+#
+# Reporting it cleanly turned out to be the whole problem. Four of the
+# organic and structure question types resolve a molecule written by *name*
+# -- "Draw this named compound", "Name this structure", "Draw an isomer of
+# this", "Predict the product" -- and every one of them went through OPSIN.
+# So on the deployed service they all answered "outside what we can check
+# yet", every session opened 422 so their hints fell back to the static
+# floor, and "Draw any molecule containing this group" was the only organic
+# question that worked at all. The gate was doing exactly what it was
+# written to do and it read, to a student, as the subject being broken.
+#
+# The gate in judge/naming.py stays: it is what keeps Java off a teammate's
+# laptop and out of the test suite. It just is not what the demo runs on.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends default-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

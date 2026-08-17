@@ -78,6 +78,41 @@ def opsin_available() -> bool:
     return True
 
 
+@functools.lru_cache(maxsize=512)
+def _resolve(text: str) -> str:
+    """One trip through OPSIN, remembered.
+
+    Every call starts a JVM and costs about half a second, and the lock below
+    means those half-seconds queue rather than overlap. A single "draw
+    propan-2-ol" costs several of them: the session builds a vault from the
+    name, the check resolves the same name again, and the page rechecks
+    itself after every transcription, so the same handful of names resolve
+    over and over for the life of a problem.
+
+    Only successful resolutions are cached, because `lru_cache` does not
+    remember exceptions -- which is the behaviour we want. A name OPSIN
+    rejects is cheap to reject again, and caching a failure would outlive a
+    fixed install.
+    """
+    convert = _opsin()
+    try:
+        # One at a time. py2opsin shells out to a Java process and is not
+        # safe to call concurrently: under six parallel requests it handed
+        # back another call's structure, and "methyl acetate" was judged
+        # wrong_name against methyl acetate. A confident wrong verdict on a
+        # correct answer is the top row of this product's failure taxonomy,
+        # and it was reachable by two students naming a molecule at once.
+        # Serialising costs throughput on a feature that is slow and rare,
+        # and the cache above is what pays most of that back.
+        with _OPSIN_LOCK:
+            smiles = convert(text)
+    except Exception as exc:
+        raise NameParseError(f"OPSIN could not read {text!r}") from exc
+    if not smiles:
+        raise NameParseError(f"OPSIN could not read {text!r} as a chemical name")
+    return smiles.strip() if isinstance(smiles, str) else str(smiles).strip()
+
+
 def name_to_smiles(name: str) -> str:
     """Resolve one IUPAC name to a SMILES string.
 
@@ -92,23 +127,14 @@ def name_to_smiles(name: str) -> str:
     if not NAME_RE.match(text):
         raise NameParseError("this does not look like a chemical name")
 
-    convert = _opsin()
-    try:
-        # One at a time. py2opsin shells out to a Java process and is not
-        # safe to call concurrently: under six parallel requests it handed
-        # back another call's structure, and "methyl acetate" was judged
-        # wrong_name against methyl acetate. A confident wrong verdict on a
-        # correct answer is the top row of this product's failure taxonomy,
-        # and it was reachable by two students naming a molecule at once.
-        # Serialising costs throughput on a feature that is already slow,
-        # rare, and gated on a Java runtime the container does not have.
-        with _OPSIN_LOCK:
-            smiles = convert(text)
-    except Exception as exc:
-        raise NameParseError(f"OPSIN could not read {text!r}") from exc
-    if not smiles:
-        raise NameParseError(f"OPSIN could not read {text!r} as a chemical name")
-    return smiles.strip() if isinstance(smiles, str) else str(smiles).strip()
+    # The availability gate is consulted before the cache, never through it.
+    # A cached name would otherwise resolve happily on a machine that has
+    # since lost its Java runtime, so whether naming is supported would
+    # depend on which names happened to be asked for first.
+    _opsin()
+    # Validation happens before the cache too, so nothing malformed is ever a
+    # key and the cache cannot be filled by a client sending junk.
+    return _resolve(text)
 
 
 def looks_like_a_name(text: str) -> bool:
