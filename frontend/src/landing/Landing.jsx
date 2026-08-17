@@ -1,7 +1,8 @@
 import { useState } from "react";
 
 import Logo from "../components/Logo";
-import { COLORS, RADIUS, SHADOW, SUBJECTS } from "../theme";
+import { COLORS, RADIUS, SUBJECTS } from "../theme";
+import LandingProductStory from "./LandingProductStory";
 import LandingWorkflowDemo from "./LandingWorkflowDemo";
 import ScrollReveal from "./ScrollReveal";
 import "./landing-motion.css";
@@ -107,7 +108,7 @@ export default function Landing({ theme }) {
   const [openFaq, setOpenFaq] = useState(0);
 
   return (
-    <div className="landing-motion-ready" style={{ minHeight: "100vh", overflowX: "hidden", color: COLORS.text, background: COLORS.background }}>
+    <div className="landing-motion-ready" style={{ minHeight: "100vh", color: COLORS.text, background: COLORS.background }}>
       <header style={{
         position: "sticky",
         top: 0,
@@ -164,20 +165,11 @@ export default function Landing({ theme }) {
         </div>
       </Section>
 
-      <Section style={{ paddingBottom: 72 }}>
-        <ScrollReveal as="figure" variant="scale" style={{ margin: 0 }}>
-          <div className="landing-product-shot" style={{ overflow: "hidden", border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.xl, background: COLORS.surface, boxShadow: SHADOW.float }}>
-            <img
-              src="/verity-workspace-showcase.jpg"
-              alt="The real Verity Algebra workspace with a ruled page, recognition status, pen and eraser controls, and Check line action"
-              style={{ width: "100%", height: "auto", display: "block" }}
-            />
-          </div>
-          <figcaption style={{ marginTop: 12, color: COLORS.muted, fontSize: 13.5 }}>Actual Algebra workspace from the presenter-only showcase build.</figcaption>
-        </ScrollReveal>
+      <Section style={{ paddingTop: 76, paddingBottom: 76, background: COLORS.surface, borderTop: `1px solid ${COLORS.border}`, borderBottom: `1px solid ${COLORS.border}` }}>
+        <LandingProductStory />
       </Section>
 
-      <Section style={{ paddingTop: 58, paddingBottom: 58, background: COLORS.surface, borderTop: `1px solid ${COLORS.border}`, borderBottom: `1px solid ${COLORS.border}` }}>
+      <Section style={{ paddingTop: 58, paddingBottom: 58 }}>
         <div style={{ display: "grid", gridTemplateColumns: grid, gap: 30 }}>
           {BENEFITS.map(([title, body], index) => <ScrollReveal className="landing-benefit" delay={index * 90} key={title}>
             <h2 style={{ margin: "0 0 8px", fontSize: 19 }}>{title}</h2>
@@ -200,12 +192,15 @@ export default function Landing({ theme }) {
         <ScrollReveal><SectionHeading>Choose a workspace</SectionHeading></ScrollReveal>
         <div style={{ marginTop: 30, display: "grid", gridTemplateColumns: grid, gap: 22 }}>
           {[
-            ["math", "Math", "Work line by line across supported topics. The showcase focuses on Algebra and labels its recognition source and latency in the toolbar."],
-            ["chemistry", "Chemistry", "Use the existing chemistry workspace for equations, quantities, structures, and reactions. Chemistry remains on Gemini image recognition."],
-          ].map(([id, title, copy], index) => <ScrollReveal as="article" variant="scale" delay={index * 110} key={id} style={{ padding: 28, display: "flex", flexDirection: "column", background: COLORS.background, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.lg }}>
+            ["math", "Math", "Work line by line across supported topics. The showcase focuses on Algebra and labels its recognition source and latency in the toolbar.", ["Algebra", "Pre-Algebra", "Trigonometry", "Calculus"]],
+            ["chemistry", "Chemistry", "Use chemistry-specific worksheets and deterministic judges while Gemini handles handwriting recognition.", ["Stoichiometry", "Balancing", "Structures", "Naming"]],
+          ].map(([id, title, copy, capabilities], index) => <ScrollReveal as="article" variant="scale" delay={index * 110} key={id} style={{ padding: 28, display: "flex", flexDirection: "column", background: COLORS.background, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.lg }}>
             <div style={{ color: SUBJECTS[id].accent, fontSize: 22 }}>{SUBJECTS[id].glyph}</div>
             <h3 style={{ margin: "12px 0 8px", fontSize: 23 }}>{title}</h3>
-            <p style={{ margin: "0 0 24px", color: COLORS.muted, lineHeight: 1.65, fontSize: 15 }}>{copy}</p>
+            <p style={{ margin: "0 0 18px", color: COLORS.muted, lineHeight: 1.65, fontSize: 15 }}>{copy}</p>
+            <div className="landing-capabilities" aria-label={`${title} capabilities`}>
+              {capabilities.map((capability) => <span key={capability}>{capability}</span>)}
+            </div>
             <Button href={`/${id}`} tone="outline" style={{ marginTop: "auto", alignSelf: "flex-start" }}>Open {title}</Button>
           </ScrollReveal>)}
         </div>
