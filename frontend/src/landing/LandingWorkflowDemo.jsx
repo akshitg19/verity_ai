@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import StructureSketch from "./StructureSketch";
+
 // One walkthrough: a problem on a ruled page, moving through write, read and
 // check, with the lines lighting up as the stage advances.
 //
@@ -87,9 +89,21 @@ export default function LandingWorkflowDemo({ demo, compact = false }) {
             >
               <span className="landing-demo__line-number">{index + 1}</span>
               <span className="landing-demo__equation">
-                {line.text}
-                {line.caption && (
-                  <em className="landing-demo__caption">{line.caption}</em>
+                {line.sketch ? (
+                  <>
+                    <StructureSketch
+                      smiles={line.sketch}
+                      tone={state === "invalid" ? "invalid" : "ink"}
+                    />
+                    <em className="landing-demo__caption">{line.caption}</em>
+                  </>
+                ) : (
+                  <>
+                    {line.text}
+                    {line.caption && (
+                      <em className="landing-demo__caption">{line.caption}</em>
+                    )}
+                  </>
                 )}
               </span>
               <span className="landing-demo__verdict" aria-hidden="true">

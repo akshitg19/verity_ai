@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { LADDER } from "./landingContent";
 
@@ -19,20 +19,47 @@ function prefersReducedMotion() {
 export default function HintLadder() {
   const [active, setActive] = useState(0);
   const [playing, setPlaying] = useState(true);
+  // The climb does not start until the ladder is on screen. Without this the
+  // timer runs from page load, so scrolling down to the section arrived
+  // partway up it: the first rung a visitor saw was level 2, and a ladder
+  // whose whole point is the order it climbs in was showing its middle.
+  const [started, setStarted] = useState(false);
+  const rootRef = useRef(null);
 
   useEffect(() => {
-    if (!playing || prefersReducedMotion()) return undefined;
+    if (started) return undefined;
+    const element = rootRef.current;
+    if (!element || typeof window === "undefined" || !("IntersectionObserver" in window)) {
+      setStarted(true);
+      return undefined;
+    }
+
+    const observer = new window.IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setActive(0);
+        setStarted(true);
+        observer.disconnect();
+      },
+      { threshold: 0.35 },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [started]);
+
+  useEffect(() => {
+    if (!started || !playing || prefersReducedMotion()) return undefined;
     const timer = window.setInterval(
       () => setActive((current) => (current + 1) % LADDER.length),
       3400,
     );
     return () => window.clearInterval(timer);
-  }, [playing]);
+  }, [started, playing]);
 
   const current = LADDER[active];
 
   return (
-    <div className="hint-ladder">
+    <div className="hint-ladder" ref={rootRef}>
       <div className="hint-ladder__rungs" role="tablist" aria-label="Hint levels">
         <span className="hint-ladder__rail hint-ladder__rail--left" aria-hidden="true" />
         <span className="hint-ladder__rail hint-ladder__rail--right" aria-hidden="true" />

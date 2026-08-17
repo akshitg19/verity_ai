@@ -93,8 +93,11 @@ export const DEMOS = [
     handwriting: true,
     drawing: true,
     lines: [
-      { text: "CCCO", state: "invalid", caption: "read from the drawing" },
-      { text: "CC(C)O", state: "valid", caption: "second attempt" },
+      // The sketch is what the student drew. The text beside it is the SMILES
+      // the reader returned, which is the point of the walkthrough: nobody
+      // writes a SMILES, they draw, and this is the step in between.
+      { text: "CCCO", state: "invalid", caption: "read as CCCO", sketch: "CCCO" },
+      { text: "CC(C)O", state: "valid", caption: "read as CC(C)O", sketch: "CC(C)O" },
     ],
     stages: [
       ["Draw", "Sketch the skeleton the way you would in a workbook", "Implicit carbons, rings, double bonds"],

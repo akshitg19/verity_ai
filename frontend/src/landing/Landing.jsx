@@ -428,15 +428,19 @@ export default function Landing({ theme }) {
         <ScrollReveal>
           <SectionHeading kicker="Built with">The stack, and why each piece is there</SectionHeading>
         </ScrollReveal>
-        <div className="landing-stack">
-          {STACK.map(([piece, choice, reason], index) => (
-            <ScrollReveal delay={index * 55} key={piece} className="landing-stack__row">
+        {/* One reveal around the whole table, not one per row. Per-row
+            reveals left the last row sitting at opacity 0 until you scrolled
+            past it, which read as an empty bordered strip hanging off the
+            bottom of the table. */}
+        <ScrollReveal className="landing-stack">
+          {STACK.map(([piece, choice, reason]) => (
+            <div className="landing-stack__row" key={piece}>
               <span className="landing-stack__piece">{piece}</span>
               <span className="landing-stack__choice">{choice}</span>
               <span className="landing-stack__reason">{reason}</span>
-            </ScrollReveal>
+            </div>
           ))}
-        </div>
+        </ScrollReveal>
       </Section>
 
       {/* --- roadmap ---------------------------------------------------------- */}

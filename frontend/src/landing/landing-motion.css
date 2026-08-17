@@ -314,12 +314,43 @@
   letter-spacing: .02em;
 }
 
-/* A SMILES is our notation, not a student's, so it is set in mono to read as
-   machine output rather than as something they were expected to write. */
+/* The drawing topics show the sketch, with the SMILES demoted to a caption
+   underneath it. A student draws; the SMILES is what our reader returned. */
 .landing-demo__line--structure .landing-demo__equation {
+  gap: 0;
+}
+
+/* A drawing needs more room than a line of algebra. Left at the 47px row
+   height the sketches sat on top of each other and the OH on the middle
+   carbon collided with the row above. */
+.landing-demo__line--structure {
+  min-height: 82px;
+  align-items: center;
+}
+
+.structure-sketch {
+  width: 100px;
+  height: 54px;
+  display: block;
+  overflow: visible;
+}
+
+/* The ink is drawn on, rather than appearing. On the drawing walkthroughs
+   this is the closest thing the page has to showing a pen at work. */
+.structure-sketch path {
+  stroke-dasharray: 92;
+  stroke-dashoffset: 0;
+}
+
+.landing-demo__paper--stage-1 .landing-demo__line--writing .structure-sketch path {
+  animation: structure-draw 1.6s ease-out;
+}
+
+.landing-demo__line--structure .landing-demo__caption {
+  margin-top: -6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: clamp(15px, 1.6vw, 18px);
-  letter-spacing: .06em;
+  font-size: 11px;
+  letter-spacing: .04em;
 }
 
 .landing-demo__caption {
@@ -1057,6 +1088,11 @@
   100% { left: 130%; }
 }
 
+@keyframes structure-draw {
+  from { stroke-dashoffset: 92; }
+  to { stroke-dashoffset: 0; }
+}
+
 /* --- responsive ---------------------------------------------------------------- */
 
 @media (max-width: 1080px) {
@@ -1147,10 +1183,17 @@
   .landing-roadmap__card::after,
   .hint-ladder__rung,
   .landing-eyebrow span,
+  .structure-sketch path,
   .landing-button {
     scroll-behavior: auto !important;
     animation: none !important;
     transition: none !important;
+  }
+
+  /* The draw-on animation is off, so the ink must be fully drawn rather
+     than stuck at whatever offset it was left at. */
+  .structure-sketch path {
+    stroke-dashoffset: 0 !important;
   }
 
   .hint-ladder__rung {
