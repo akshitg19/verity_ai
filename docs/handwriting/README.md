@@ -113,7 +113,9 @@ for implementation decisions.
   PR #57 records the completed run, reconciliation, and content-free results.
   PR #59 repaired schema-v2 paired target-device A/B evidence; PR #71 replaces
   it with an explicit pre-collection consent gate, schema-v3 exports, and
-  required coarse target-environment coverage. PR
+  required coarse target-environment coverage. PR #72 records the exact
+  protected preview and exposes a local-only coarse environment preflight label
+  before consent. PR
   #61 adds the fail-closed production activation evidence gate; PR #63 records
   the historical disabled deployment of runtime source `b9b1d76`; and PR #65 prevents one-shot MyScript REST from
   auto-submitting partial expressions between pen strokes. PR #67 adds the

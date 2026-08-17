@@ -9,7 +9,9 @@ PR #36 (`a584368`). A 50-call synthetic-only live Phase 3 POC completed on
 geometry probe; student/production and decision-corpus work remains gated.
 PR #71 adds schema-v3 anonymous consent and approved coarse target-environment
 coverage to the Phase A/B evidence workflow; real teammate/device results
-remain external.
+remain external. PR #72 records the exact protected preview and adds a local-
+only coarse environment preflight before consent.
+
 **Rule:** One phase per reviewable change unless scope expansion is explicit
 
 ## Phase 0 — Source of truth and safe workspace
@@ -1110,8 +1112,8 @@ The unchanged backend passes 1324 tests with 3 expected xfails and 3 existing
 OPSIN warnings. Handwriting relative links, changed-file privacy/secret scan,
 built-asset provider-secret identifier scan, and git diff check pass. PR #71
 and post-merge main CI run 32000117180 passed Linux backend, Windows backend,
-frontend, and Vercel. Its preview deployment is successful and unauthenticated
-requests return the expected Vercel Authentication redirect.
+frontend, and Vercel. PR #72's exact preview deployment is successful;
+unauthenticated requests return the expected Vercel Authentication redirect.
 Measured metrics: deployment/preflight status only. No handwriting, recognition
 request, target-device latency, accuracy, identity claim, or paid traffic was
 generated.

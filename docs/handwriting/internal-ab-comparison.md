@@ -28,10 +28,10 @@ Local:
 - `http://localhost:5173/math?hwr_ab=current`
 
 Do not use the earlier PR #59 schema-v2 preview: its exports are intentionally
-rejected by the schema-v3 consent gate. The successful, protected PR #71
+rejected by the schema-v3 consent gate. The successful, protected PR #72
 preview base is:
 
-`https://verity-ai-git-feat-handwriting-consent-evidence-verity-ai2.vercel.app`
+`https://verity-ai-git-feat-handwriting-ab-preview-preflight-verity-ai2.vercel.app`
 
 Use this same base for both variants, followed by `/math?hwr_ab=legacy` or
 `/math?hwr_ab=current`; do not compare two different code revisions or

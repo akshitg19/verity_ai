@@ -16,12 +16,14 @@ success, and zero ledger/dashboard discrepancy. These corpora remain
 single-reviewer and decision-ineligible, so the provider decision is still
 `NO_DECISION`. PR #70 hardens the content-safe disabled access-boundary
 verifier, and PR #71 adds schema-v3 pre-collection consent plus approved coarse
-target-environment coverage to the internal A/B workflow. Current Cloud Run
+target-environment coverage to the internal A/B workflow. PR #72 makes that
+protected preview actionable with a local-only environment preflight. Current
+Cloud Run
 revision `verity-ai-00022-2vj` deploys exact
 runtime source `3b1ca95c91e6da62ba8ca3c0dc42cea00a91bb83` and remains fully disabled; the repeatable verifier
 returned `PASS`. Target-device, eligible decision-corpus,
 privacy/legal, real-authentication approval/configuration, same-input control,
-and enabled-canary evidence remain unavailable. The protected PR #71 preview
+and enabled-canary evidence remain unavailable. The protected PR #72 preview
 now lets 3–5 voluntarily consenting anonymous paired device sessions produce
 strict, content-free, machine-checked schema-v3 evidence rather than unverified
 exports.
