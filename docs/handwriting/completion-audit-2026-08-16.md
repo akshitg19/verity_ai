@@ -1,8 +1,11 @@
 # Handwriting v2 Definition-of-Done Audit
 
 **Audit date:** 2026-08-16  
-**Audited runtime source:** PR #62 merge `b9b1d76`, deployed as verified
-disabled revision `verity-ai-00021-glp`
+**Audited repository/frontend source:** PR #65 merge `03bcead`; Vercel
+production deployment successful
+
+**Audited backend runtime source:** `b9b1d76`, deployed as verified disabled
+revision `verity-ai-00021-glp`
 
 **Deployment evidence:** merged by PR #63 at `d683da5`
 **Goal status:** active; production-ready completion is not yet proven.
@@ -30,7 +33,10 @@ evidence or approval.
   exact match, and 96.33% parse success. All four lowercase geometry groups
   passed their frozen exact/parse/latency gates. The owner-only ledger is now
   `1500 / 300 / 1200`; the dashboard moved from 50 to 350 requests, a
-  discrepancy of zero, leaving 1,650 of the published 2,000-request allowance.
+  discrepancy of zero, leaving 1,650 of the published 2,000-request allowance
+  at that checkpoint. Subsequent owner-controlled local/manual ledgers are not
+  included in that historical dashboard reconciliation, so no newer
+  account-wide remaining total is claimed here.
 - Frontend and backend production health returned HTTP 200 at audit time.
 - The original landing-page worktree still contains the same six unrelated
   modified/untracked paths and was not edited, stashed, reset, or merged.
@@ -49,15 +55,15 @@ evidence or approval.
 | 8 | MyScript category evaluation or evidence-backed no-go | External evidence required | The bounded synthetic POC and frozen 300-case diagnostic prove the REST boundary. Every lowercase geometry group passed its diagnostic gates, while the descriptive full-height group contained all eight case-only mismatches. The corpora remain decision-ineligible and no category/device comparison against Gemini exists, so neither adoption nor rejection is justified. |
 | 9 | Alternative evaluated if MyScript rejected | Not yet applicable | MyScript has not received a valid go/no-go decision. Provider-neutral alternative screening is documented, but no replacement benchmark is authorized. |
 | 10 | Selected fast path passes accuracy/parse gate | External evidence required | In the 300-case diagnostic, standard/narrow/wide/tall lowercase groups each passed predeclared 95% exact, 95% parse, and p95 <500 ms gates. This remains synthetic, single-reviewer evidence; no production tolerance or eligible same-input Gemini target-device baseline exists. |
-| 11 | Latency, stale, and duplicate gates measured | Partially complete; target evidence external | Stale and duplicate behavior is regression-tested and content-free lifecycle stages exist. Target-device provisional/final/verdict p50/p95 are unmeasured. |
-| 12 | One-shot observable/correctable rollback-safe hybrid | Mechanism complete; enabled canary external | PR #47 proves one primary, at most one fallback, no normal-path PNG, timeout abort, cancellation, outage propagation, and no recursion. Component/workflow regressions prove each recognized math line is visibly editable, correction invalidates the old verdict, and only the edited transcription is rechecked. An approved authenticated enabled canary remains untested. |
+| 11 | Latency, stale, and duplicate gates measured | Partially complete; target evidence external | Stale and duplicate behavior is regression-tested and content-free lifecycle stages exist. PR #65 additionally prevents the one-shot MyScript REST path from auto-submitting partial expressions after short pauses and disables repeat clicks while recognition is active. Target-device provisional/final/verdict p50/p95 are unmeasured. |
+| 12 | One-shot observable/correctable rollback-safe hybrid | Mechanism complete; enabled canary external | PR #47 proves one primary, at most one fallback, no normal-path PNG, timeout abort, cancellation, outage propagation, and no recursion. PR #65 makes the non-streaming REST path explicitly finalize the active row while retaining automatic previous-row completion. Component/workflow regressions prove each recognized math line is visibly editable, correction invalidates the old verdict, and only the edited transcription is rechecked. An approved authenticated enabled canary remains untested. |
 | 13 | Evidence-backed image-fallback provider decision | External evidence required | Gemini remains the safe default. No approved difficult-fallback corpus or identical-image Gemini/Luna benchmark exists. |
 | 14 | Written chemistry and structures are separate | Routing complete; recognition evidence external | Existing app tests plus [synthetic chemistry routing fixtures](fixtures/synthetic-chemistry-routing-v1/manifest.jsonl) separate `chemistry_text/text` from `chemistry_structure/smiles`. Target-device recognition accuracy/latency is missing. |
 | 15 | No raw content in ordinary logs | Complete for implemented paths | Content-safe metrics, aggregate reports, adapter errors, reprocessor failures, and disabled verifier are covered by tests. Raw prediction artifacts remain outside Git in an owner-only directory. |
 | 16 | No provider secret in Git/frontend/build/docs/logs | Complete for current state | Production bundle scan passes; secrets are backend Secret Manager references; local credential file is ignored and was never read or printed. |
-| 17 | Relevant local and remote checks pass | Complete for merged work | Backend passes 1288 tests / 3 expected xfails; frontend passes 402 tests across 41 files plus lint, App.jsx 256/260, development/production builds, API-base check, and provider-secret bundle scan. Linux, Windows, frontend, and Vercel checks all passed through PR #61, including Git-blob evidence validation across LF/CRLF checkouts. |
-| 18 | Reviewable PRs merged to current main | Complete for safe deliverables | Safe application work through PR #62 is merged; PR #63 merged the corresponding deployment evidence. The deployed runtime source is `b9b1d76`, while `d683da5` is documentation-only. |
-| 19 | Preview/staging smoke tests pass | Partially complete | Vercel previews pass. Build `a5703e61-48d6-487a-8fe2-9e35c06aeb51` deployed exact runtime source `b9b1d76` as disabled revision `verity-ai-00021-glp`; 100% traffic, false flags, numeric secret references, health/OpenAPI/disabled-route/frontend sequence 200/200/404/200, runtime identity, and image digest all passed the fail-closed verifier. No target-device enabled-provider preview is authorized. |
+| 17 | Relevant local and remote checks pass | Complete for merged work | Backend passes 1288 tests / 3 expected xfails; frontend passes 404 tests across 41 files plus lint, App.jsx 257/260, development/production builds, API-base check, and provider-secret bundle scan. Linux, Windows, frontend, Vercel preview, and post-merge `main` CI all passed through PR #65. |
+| 18 | Reviewable PRs merged to current main | Complete for safe deliverables | Safe application work through PR #65 is merged at `03bcead`; PR #63 merged the disabled deployment evidence. The Cloud Run runtime source remains safely disabled at `b9b1d76`, while the Vercel production frontend is current through PR #65. |
+| 19 | Preview/staging smoke tests pass | Partially complete | Vercel preview and production deployment of `03bcead` pass. Build `a5703e61-48d6-487a-8fe2-9e35c06aeb51` deployed backend runtime source `b9b1d76` as disabled revision `verity-ai-00021-glp`; 100% traffic, false flags, numeric secret references, health/OpenAPI/disabled-route/frontend sequence 200/200/404/200, runtime identity, and image digest all passed the fail-closed verifier. No target-device enabled-provider preview is authorized. |
 | 20 | Production rollout completed or fully rollout-ready | Mechanism complete; external evidence required | The safe state is fully disabled. A strict content-free rollout manifest schema and fail-closed validator now require the exact manifest and checked-out source commit, evidence blobs pinned to that commit, eligible provider decision/corpus/categories, five independent approvals, durable ledger and budget reconciliation, authentication/retention IDs, ≤5% canary, one-shot Gemini fallback, and rollback evidence. No valid manifest exists because provider selection, eligible corpus/device evidence, privacy/commercial/security/data/product approvals, and canary evidence remain missing. |
 | 21 | Rollback commands verified | Mechanism complete; enabled rollback external | [Runbook](rollout-runbook.md) contains frontend/backend kill switches; every reviewed Cloud Build restores false flags; live disabled verifier passes. An enabled-provider rollback cannot be exercised before an enabled canary is approved. |
 | 22 | Current architecture/status/results/risks/maintenance docs | Complete | Architecture, implementation log, evaluation report, POC evidence, readiness, rollout, and this audit are current. |

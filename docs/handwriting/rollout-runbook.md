@@ -31,7 +31,12 @@ The direct `myscript-poc` frontend mode has no automatic Gemini fallback. This
 proves that the vector POC path generates no PNG and prevents fallback traffic
 from contaminating latency and accuracy measurements. Generic hybrid and shadow
 classes remain testable infrastructure, but the environment configuration does
-not construct them for MyScript.
+not construct them for MyScript. PR #65 also marks the REST adapter as a
+one-shot, non-incremental recognizer: a short pause no longer auto-submits a
+partial current row. The tester explicitly presses Check line, which becomes a
+disabled Reading... action until completion; moving to the next row still
+finishes the previous row automatically. This bounds duplicate trial calls but
+does not turn the REST POC into streaming recognition.
 
 ## 2. Preconditions before student or deployed provider traffic
 
