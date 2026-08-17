@@ -1,3 +1,7 @@
+.landing-motion-ready {
+  overflow-x: clip;
+}
+
 .landing-hero-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(330px, .85fr);
@@ -31,17 +35,22 @@
 }
 
 .landing-demo {
+  --demo-accent: var(--v-primary);
   position: relative;
   min-width: 0;
   padding: 18px;
   overflow: hidden;
   color: var(--v-text);
   background:
-    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--v-primary) 13%, transparent), transparent 42%),
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--demo-accent) 13%, transparent), transparent 42%),
     var(--v-surface);
   border: 1px solid var(--v-border);
   border-radius: 24px;
   box-shadow: 0 24px 64px color-mix(in srgb, var(--v-text) 13%, transparent);
+}
+
+.landing-demo--chemistry {
+  --demo-accent: var(--v-chem);
 }
 
 .landing-demo::before {
@@ -76,7 +85,7 @@
 }
 
 .landing-demo__eyebrow {
-  color: var(--v-primary);
+  color: var(--demo-accent);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .08em;
@@ -99,10 +108,43 @@
 .landing-demo__live i {
   width: 7px;
   height: 7px;
-  background: var(--v-primary);
+  background: var(--demo-accent);
   border-radius: 50%;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--v-primary) 16%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--demo-accent) 16%, transparent);
   animation: landing-demo-pulse 2.4s ease-in-out infinite;
+}
+
+.landing-demo__subjects {
+  position: relative;
+  z-index: 2;
+  display: inline-grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 3px;
+  margin-top: 15px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--v-border) 52%, transparent);
+  border-radius: 999px;
+}
+
+.landing-demo__subjects button {
+  min-width: 84px;
+  min-height: 31px;
+  padding: 5px 13px;
+  color: var(--v-muted);
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.landing-demo__subjects button[aria-pressed="true"] {
+  color: var(--demo-accent);
+  background: var(--v-surface);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--v-text) 10%, transparent);
 }
 
 .landing-demo__stages {
@@ -137,7 +179,7 @@
 }
 
 .landing-demo__stages button[aria-pressed="true"] {
-  color: var(--v-primary);
+  color: var(--demo-accent);
   background: var(--v-surface);
   box-shadow: 0 3px 12px color-mix(in srgb, var(--v-text) 10%, transparent);
 }
@@ -272,7 +314,7 @@
 .landing-demo__toggle {
   min-width: 60px;
   min-height: 38px;
-  color: var(--v-primary);
+  color: var(--demo-accent);
   background: transparent;
   border: 1px solid var(--v-border);
   border-radius: 10px;
@@ -280,6 +322,204 @@
   font-size: 11px;
   font-weight: 800;
   cursor: pointer;
+}
+
+.landing-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 24px;
+}
+
+.landing-capabilities span {
+  padding: 6px 9px;
+  color: var(--v-muted);
+  background: color-mix(in srgb, var(--v-surface) 72%, transparent);
+  border: 1px solid var(--v-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.landing-story__intro {
+  max-width: 720px;
+  margin-bottom: 26px;
+}
+
+.landing-story__intro > span,
+.landing-story__step > span {
+  color: var(--v-primary);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.landing-story__intro h2 {
+  max-width: 680px;
+  margin: 12px 0 0;
+  font-size: clamp(34px, 5vw, 58px);
+  line-height: 1.03;
+  letter-spacing: -.045em;
+}
+
+.landing-story__intro p {
+  margin: 17px 0 0;
+  color: var(--v-muted);
+  font-size: 16px;
+}
+
+.landing-story__layout {
+  display: grid;
+  grid-template-columns: minmax(260px, .7fr) minmax(0, 1.3fr);
+  gap: clamp(36px, 7vw, 92px);
+  align-items: start;
+}
+
+.landing-story__step {
+  display: flex;
+  min-height: min(68vh, 610px);
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: center;
+  padding: 38px 0;
+  opacity: .35;
+  transition: opacity 420ms ease, transform 520ms cubic-bezier(.16, 1, .3, 1);
+}
+
+.landing-story__step.is-active {
+  opacity: 1;
+  transform: translateX(8px);
+}
+
+.landing-story__step:nth-child(2) > span {
+  color: var(--v-chem);
+}
+
+.landing-story__step h3 {
+  margin: 13px 0 0;
+  font-size: clamp(27px, 3.2vw, 42px);
+  line-height: 1.08;
+  letter-spacing: -.035em;
+}
+
+.landing-story__step p {
+  max-width: 440px;
+  margin: 17px 0 0;
+  color: var(--v-muted);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.landing-story__step strong {
+  margin-top: 20px;
+  font-size: 12px;
+}
+
+.landing-story__visual {
+  position: sticky;
+  top: 108px;
+  display: grid;
+  gap: 17px;
+  padding-top: 34px;
+}
+
+.landing-story__frame,
+.landing-story__mobile-visual {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--v-border) 38%, var(--v-background));
+  border: 1px solid var(--v-border);
+  border-radius: 24px;
+  box-shadow: 0 28px 68px color-mix(in srgb, var(--v-text) 14%, transparent);
+}
+
+.landing-story__frame {
+  height: min(62vh, 550px);
+  min-height: 390px;
+}
+
+.landing-story__scene {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: scale(.965);
+  transition: opacity 540ms ease, transform 760ms cubic-bezier(.16, 1, .3, 1);
+}
+
+.landing-story__scene.is-active {
+  z-index: 1;
+  opacity: 1;
+  transform: scale(1);
+}
+
+.landing-story__scene img,
+.landing-story__mobile-visual img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+}
+
+.landing-story__scene--chemistry img,
+.landing-story__scene--feedback img,
+.landing-story__mobile-visual--chemistry img,
+.landing-story__mobile-visual--feedback img {
+  object-position: right center;
+}
+
+.landing-story__scene-label {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  left: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  color: #fff;
+  background: rgba(16, 32, 27, .82);
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 13px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, .22);
+  backdrop-filter: blur(14px);
+}
+
+.landing-story__scene-label span {
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.landing-story__scene-label strong {
+  font-size: 11px;
+  text-align: right;
+}
+
+.landing-story__dots {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+}
+
+.landing-story__dots span {
+  width: 7px;
+  height: 7px;
+  background: var(--v-border);
+  border-radius: 999px;
+  transition: width 240ms ease, background 240ms ease;
+}
+
+.landing-story__dots span.is-active {
+  width: 27px;
+  background: var(--v-primary);
+}
+
+.landing-story__mobile-visual {
+  display: none;
 }
 
 .landing-benefit {
@@ -321,6 +561,38 @@
     width: min(100%, 560px);
     box-sizing: border-box;
   }
+
+  .landing-story__layout {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .landing-story__step,
+  .landing-story__step.is-active {
+    min-height: 0;
+    padding: 38px 0;
+    opacity: 1;
+    transform: none;
+  }
+
+  .landing-story__visual {
+    display: none;
+  }
+
+  .landing-story__mobile-visual {
+    display: block;
+    height: auto;
+    margin-top: 24px;
+    aspect-ratio: 16 / 10;
+    border-radius: 18px;
+    box-shadow: 0 18px 46px color-mix(in srgb, var(--v-text) 12%, transparent);
+  }
+
+  .landing-story__mobile-visual--chemistry img,
+  .landing-story__mobile-visual--feedback img {
+    transform: scale(1.13);
+    transform-origin: right center;
+  }
 }
 
 @media (max-width: 520px) {
@@ -333,6 +605,14 @@
     display: none;
   }
 
+  .landing-demo__subjects {
+    display: grid;
+  }
+
+  .landing-demo__subjects button {
+    min-width: 0;
+  }
+
   .landing-demo__stages button {
     font-size: 10px;
   }
@@ -343,6 +623,19 @@
 
   .landing-demo__paper {
     min-height: 206px;
+  }
+
+
+  .landing-story__intro h2 {
+    font-size: 34px;
+  }
+
+  .landing-story__step h3 {
+    font-size: 28px;
+  }
+
+  .landing-story__mobile-visual {
+    aspect-ratio: 4 / 3;
   }
 }
 
@@ -357,7 +650,8 @@
 
   .landing-demo *,
   .landing-benefit,
-  .landing-product-shot {
+  .landing-product-shot,
+  .landing-story * {
     scroll-behavior: auto !important;
     animation: none !important;
     transition: none !important;
