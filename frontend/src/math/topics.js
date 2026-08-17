@@ -18,7 +18,7 @@ export const MATH_TOPICS = [
     label: "Geometry",
     glyph: "△",
     blurb: "Angles, triangles, similarity, circles, area, volume, and coordinate geometry.",
-    implemented: false,
+    implemented: true,
   },
   {
     id: "trigonometry",

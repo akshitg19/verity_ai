@@ -43,6 +43,7 @@ ErrorType = Literal[
     "limit_evaluation",
     "calculus_algebraic",
     "statistics_error",
+    "geometry_error",
     "parse_error",
     "unsupported",
 ]
