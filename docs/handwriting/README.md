@@ -125,7 +125,9 @@ for implementation decisions.
   protected preview and exposes a local-only coarse environment preflight label
   before consent. PR #73 requires exact content-free corpus governance for
   every decision validate/plan/score path and binds the governance artifact to
-  rollout approval. PR
+  rollout approval. PR #74 requires the activation validator to load the actual
+  external corpus manifest and governance JSON and cross-check every frozen
+  decision/retention/deletion field without opening ink/image inputs. PR
   #61 adds the fail-closed production activation evidence gate; PR #63 records
   the historical disabled deployment of runtime source `b9b1d76`; and PR #65 prevents one-shot MyScript REST from
   auto-submitting partial expressions between pen strokes. PR #67 adds the

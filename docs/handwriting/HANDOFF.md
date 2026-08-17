@@ -21,7 +21,10 @@ protected preview actionable with a local-only environment preflight. PR #73
 adds a strict content-free governance schema and binds every decision
 validate/plan/score plus rollout approval to the exact governance and corpus
 hashes; the final rollout gate now also requires the actual external governance
-and restricted-manifest metadata artifacts. Current
+and restricted-manifest metadata artifacts. PR #74 closes that activation-time
+evidence chain by loading and validating both real external artifacts and
+cross-checking provider, retention, deletion, count, version, and hashes.
+Current
 Cloud Run
 revision `verity-ai-00022-2vj` deploys exact
 runtime source `3b1ca95c91e6da62ba8ca3c0dc42cea00a91bb83` and remains fully disabled; the repeatable verifier
@@ -39,11 +42,12 @@ exports.
 **Current deployment build/revision:**
 `37fec1f2-8ed5-43dd-b1aa-d004e32bc760` / `verity-ai-00022-2vj`
 
-**Current repository:** PR #73 merge `72e71fe`; post-merge main CI
-`32002999450` passed
+**Current safe mechanism:** PR #74 merge `bd3ee49`; post-merge main CI
+`32006317905` passed. Later documentation-only checkpoints do not change this
+runtime/validator source.
 
 **Verified frontend deployments:** production PR #71 at `628ed62`; protected
-PR #72 preview and PR #73 preview successful
+PR #72, PR #73, and PR #74 previews successful
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
