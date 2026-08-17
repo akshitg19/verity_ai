@@ -1126,3 +1126,37 @@ product/QA owner then records the displayed coarse classes, approves the target
 matrix, assigns balanced variant order, and collects schema-v3 paired exports.
 Keep production MyScript and identity flags false.
 ```
+
+```text
+Date: 2026-08-17
+Branch: feat/handwriting-corpus-governance
+Phase: decision-corpus governance evidence gate
+Implemented: added a strict content-free corpus-governance schema and bound it
+to offline validate, replay-plan, and score commands. Every decision run now
+requires a current approval matching the exact canonical manifest hash, count,
+source classes, provider set, retention policies, restricted-store/access and
+tested-deletion evidence, provider-specific consent/withdrawal evidence, and
+two-reviewer confirmation; decision size is fail-closed at 300–500. Any
+consented-user run also requires governance and explicit student-data approval,
+while a governed smaller smoke remains possible. Plans and aggregate reports
+carry only governance ID/version/hash evidence. The activation manifest now
+binds the same governance artifact hash to the independent data-governance
+approval and rejects decision corpora above 500.
+Tests and results: 20/20 focused evaluator tests pass under the repository's
+Python 3.11 runtime. After commit, the full backend passes 1331 tests with 3
+expected xfails; the exact-commit evidence-drift gate passes. The unchanged
+frontend passes lint, 413 tests across 44 files, App.jsx 257/260, standard and
+production-configured builds, expected API-base verification, and the
+provider-secret bundle scan. Both JSON schemas parse, Python compilation,
+24-file handwriting relative-link validation, changed-file privacy scan, and
+`git diff --check` pass.
+Measured metrics: governance/tooling behavior only. No provider request,
+student handwriting, secret read, deployment, identity sign-in, or paid action
+occurred.
+Known risks: the schema and validator do not create approval. No real approved
+restricted store, deletion test, consent/provenance registry, 300–500-case
+two-reviewer target-device corpus, or matching governance artifact exists.
+Next action: merge the content-safe mechanism. Data/privacy and corpus owners
+must later issue the real governance artifact outside raw data and supply the
+exact restricted manifest; do not invent approval IDs or put real ink in Git.
+```

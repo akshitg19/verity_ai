@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,9 @@ from handwriting_eval.normalization import normalize_expression
 from handwriting_eval.scoring import score_run
 from handwriting_eval.validation import (
     EvaluationDataError,
+    canonical_json_sha256,
+    canonical_manifest_sha256,
+    load_corpus_governance,
     load_manifest,
     load_predictions,
 )
@@ -18,6 +22,9 @@ ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_SCHEMA = ROOT / "docs/handwriting/fixtures/fixture.schema.json"
 STROKE_SCHEMA = ROOT / "docs/handwriting/fixtures/stroke.schema.json"
 PREDICTION_SCHEMA = ROOT / "docs/handwriting/fixtures/prediction.schema.json"
+GOVERNANCE_SCHEMA = (
+    ROOT / "docs/handwriting/fixtures/corpus-governance.schema.json"
+)
 CHEMISTRY_ROUTING_ROOT = (
     ROOT / "docs/handwriting/fixtures/synthetic-chemistry-routing-v1"
 )
@@ -48,6 +55,8 @@ def fixture_record(
     expected_format="ascii",
     unreadable=False,
     input_path="strokes/math-001.json",
+    source="synthetic",
+    approved_providers=None,
 ):
     return {
         "schema_version": 1,
@@ -69,11 +78,85 @@ def fixture_record(
         "consent": {
             "retention_approved": True,
             "retention_policy_id": "test-policy-v1",
-            "source": "synthetic",
+            "source": source,
             "provenance_id": "synthetic-test-v1",
-            "approved_providers": ["candidate"],
+            "approved_providers": approved_providers or ["candidate"],
         },
     }
+
+
+def governance_record(
+    records,
+    *,
+    corpus_version="decision-corpus-v1",
+    manifest_sha256=None,
+    student_data_use_approved=False,
+    reviewed_at=None,
+    valid_through=None,
+):
+    today = date.today()
+    return {
+        "schema_version": 1,
+        "governance_id": "decision-corpus-governance-v1",
+        "corpus_version": corpus_version,
+        "manifest_sha256": manifest_sha256 or canonical_manifest_sha256(records),
+        "fixture_count": len(records),
+        "data_sources": sorted(
+            {record["consent"]["source"] for record in records}
+        ),
+        "approved_providers": sorted(
+            {
+                provider
+                for record in records
+                for provider in record["consent"]["approved_providers"]
+            }
+        ),
+        "storage": {
+            "classification": "restricted",
+            "restricted_store_approval_id": "restricted-store-v1",
+            "access_policy_id": "restricted-access-v1",
+            "retention_policy_ids": sorted(
+                {
+                    record["consent"]["retention_policy_id"]
+                    for record in records
+                }
+            ),
+            "deletion_procedure_id": "restricted-delete-v1",
+            "deletion_test_id": "restricted-delete-test-v1",
+            "encryption_at_rest_verified": True,
+        },
+        "consent": {
+            "provenance_registry_id": "restricted-provenance-v1",
+            "withdrawal_process_id": "restricted-withdrawal-v1",
+            "provider_specific_consent_verified": True,
+            "student_data_use_approved": student_data_use_approved,
+        },
+        "review": {
+            "status": "approved",
+            "data_privacy_approval_id": "data-privacy-approval-v1",
+            "corpus_owner_approval_id": "corpus-owner-approval-v1",
+            "ambiguous_two_reviewer_verified": True,
+            "reviewed_at": (reviewed_at or today).isoformat(),
+            "valid_through": (valid_through or today + timedelta(days=30)).isoformat(),
+        },
+    }
+
+
+def decision_records(
+    count=300,
+    *,
+    source="synthetic",
+    approved_providers=None,
+):
+    return [
+        fixture_record(
+            f"math-{index:03d}",
+            input_path="strokes/math-001.json",
+            source=source,
+            approved_providers=approved_providers,
+        )
+        for index in range(1, count + 1)
+    ]
 
 
 def stroke_record(*, times=(0, 5)):
@@ -495,9 +578,210 @@ def test_plan_enforces_provider_approval_and_request_cap(tmp_path, capsys):
     assert not output_path.exists()
     capsys.readouterr()
 
-    assert main([*common, "--request-cap", "2", "--decision-run"]) == 0
+    assert main([*common, "--request-cap", "2"]) == 0
     plan = json.loads(output_path.read_text(encoding="utf-8"))
     assert plan["planned_requests"] == 2
     assert "expected" not in output_path.read_text(encoding="utf-8")
     if os.name == "posix":
         assert output_path.stat().st_mode & 0o077 == 0
+
+
+def test_decision_validate_requires_bound_governance(tmp_path, capsys):
+    records = decision_records()
+    manifest_path = tmp_path / "cases.jsonl"
+    write_jsonl(manifest_path, records)
+
+    assert main(
+        [
+            "validate",
+            "--manifest",
+            str(manifest_path),
+            "--manifest-only",
+            "--decision-run",
+        ]
+    ) == 2
+    captured = capsys.readouterr()
+    assert "corpus governance approval is required" in captured.err
+
+
+def test_decision_validate_accepts_exact_300_fixture_governance(tmp_path, capsys):
+    records = decision_records()
+    manifest_path = tmp_path / "cases.jsonl"
+    governance_path = tmp_path / "governance.json"
+    write_jsonl(manifest_path, records)
+    write_json(governance_path, governance_record(records))
+
+    assert main(
+        [
+            "validate",
+            "--manifest",
+            str(manifest_path),
+            "--manifest-only",
+            "--decision-run",
+            "--governance",
+            str(governance_path),
+        ]
+    ) == 0
+    response = json.loads(capsys.readouterr().out)
+    assert response["record_count"] == 300
+    assert response["governance"]["governance_id"] == (
+        "decision-corpus-governance-v1"
+    )
+    assert response["governance"]["manifest_sha256"] == (
+        canonical_manifest_sha256(records)
+    )
+    assert response["governance"]["governance_sha256"] == canonical_json_sha256(
+        governance_record(records)
+    )
+
+
+def test_decision_governance_rejects_small_corpus(tmp_path):
+    records = decision_records(299)
+    manifest_path = tmp_path / "cases.jsonl"
+    governance_path = tmp_path / "governance.json"
+    write_jsonl(manifest_path, records)
+    write_json(governance_path, governance_record(records))
+    manifest = load_manifest(
+        manifest_path,
+        FIXTURE_SCHEMA,
+        require_inputs=False,
+        require_decision_ready=True,
+    )
+
+    with pytest.raises(EvaluationDataError, match="between 300 and 500"):
+        load_corpus_governance(
+            governance_path,
+            GOVERNANCE_SCHEMA,
+            manifest,
+            require_decision_size=True,
+        )
+
+
+def test_governance_rejects_hash_expiry_and_provider_mismatch(tmp_path):
+    records = [fixture_record()]
+    manifest_path = tmp_path / "cases.jsonl"
+    governance_path = tmp_path / "governance.json"
+    write_jsonl(manifest_path, records)
+    manifest = load_manifest(manifest_path, FIXTURE_SCHEMA, require_inputs=False)
+
+    write_json(governance_path, governance_record(records, manifest_sha256="0" * 64))
+    with pytest.raises(EvaluationDataError, match="manifest hash"):
+        load_corpus_governance(governance_path, GOVERNANCE_SCHEMA, manifest)
+
+    yesterday = date.today() - timedelta(days=1)
+    write_json(governance_path, governance_record(records, valid_through=yesterday))
+    with pytest.raises(EvaluationDataError, match="not currently valid"):
+        load_corpus_governance(governance_path, GOVERNANCE_SCHEMA, manifest)
+
+    write_json(governance_path, governance_record(records))
+    with pytest.raises(EvaluationDataError, match="not approved"):
+        load_corpus_governance(
+            governance_path,
+            GOVERNANCE_SCHEMA,
+            manifest,
+            expected_provider="other-provider",
+        )
+
+
+def test_consented_user_requires_governance_and_student_data_approval(
+    tmp_path, capsys
+):
+    records = decision_records(1, source="consented_user")
+    manifest_path = tmp_path / "cases.jsonl"
+    governance_path = tmp_path / "governance.json"
+    write_jsonl(manifest_path, records)
+
+    common = [
+        "validate",
+        "--manifest",
+        str(manifest_path),
+        "--manifest-only",
+        "--allow-consented-user",
+    ]
+    assert main(common) == 2
+    assert "corpus governance approval is required" in capsys.readouterr().err
+
+    write_json(
+        governance_path,
+        governance_record(records, student_data_use_approved=False),
+    )
+    assert main([*common, "--governance", str(governance_path)]) == 2
+    assert "failed JSON Schema rule" in capsys.readouterr().err
+
+    write_json(
+        governance_path,
+        governance_record(records, student_data_use_approved=True),
+    )
+    assert main([*common, "--governance", str(governance_path)]) == 0
+    response = json.loads(capsys.readouterr().out)
+    assert response["record_count"] == 1
+
+
+def test_decision_plan_and_score_bind_governance_evidence(tmp_path, capsys):
+    stroke_dir = tmp_path / "strokes"
+    stroke_dir.mkdir()
+    write_json(stroke_dir / "math-001.json", stroke_record())
+    records = decision_records()
+    manifest_path = tmp_path / "cases.jsonl"
+    governance_path = tmp_path / "governance.json"
+    predictions_path = tmp_path / "predictions.jsonl"
+    plan_path = tmp_path / "plan.json"
+    write_jsonl(manifest_path, records)
+    write_json(governance_path, governance_record(records))
+    write_jsonl(
+        predictions_path,
+        [prediction(record["id"], "3*x + 2 = 5") for record in records],
+    )
+
+    common = [
+        "--manifest",
+        str(manifest_path),
+        "--fixture-root",
+        str(tmp_path),
+        "--governance",
+        str(governance_path),
+        "--decision-run",
+    ]
+    assert main(
+        [
+            "plan",
+            *common,
+            "--provider",
+            "candidate",
+            "--run-id",
+            "decision-run-v1",
+            "--request-cap",
+            "300",
+            "--output",
+            str(plan_path),
+        ]
+    ) == 0
+    plan_response = json.loads(capsys.readouterr().out)
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    assert plan_response["governance_id"] == "decision-corpus-governance-v1"
+    assert plan["governance"]["manifest_sha256"] == (
+        canonical_manifest_sha256(records)
+    )
+    expected_governance_sha256 = canonical_json_sha256(governance_record(records))
+    assert plan_response["governance_sha256"] == expected_governance_sha256
+    assert plan["governance"]["governance_sha256"] == expected_governance_sha256
+
+    assert main(
+        [
+            "score",
+            *common,
+            "--predictions",
+            str(predictions_path),
+            "--corpus-version",
+            "decision-corpus-v1",
+        ]
+    ) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["decision_eligible"] is True
+    assert report["corpus"]["governance_id"] == (
+        "decision-corpus-governance-v1"
+    )
+    assert report["corpus"]["manifest_sha256"] == (
+        canonical_manifest_sha256(records)
+    )
+    assert report["corpus"]["governance_sha256"] == expected_governance_sha256

@@ -33,6 +33,8 @@
       "required": [
         "status",
         "run_id",
+        "corpus_governance_id",
+        "corpus_governance_sha256",
         "corpus_version",
         "corpus_manifest_sha256",
         "normalization_version",
@@ -44,6 +46,8 @@
           "enum": ["NO_DECISION", "NO_GO", "GO", "CATEGORY_LIMITED_GO"]
         },
         "run_id": { "$ref": "#/$defs/safeId" },
+        "corpus_governance_id": { "$ref": "#/$defs/safeId" },
+        "corpus_governance_sha256": { "$ref": "#/$defs/sha256" },
         "corpus_version": { "$ref": "#/$defs/safeId" },
         "corpus_manifest_sha256": { "$ref": "#/$defs/sha256" },
         "normalization_version": {

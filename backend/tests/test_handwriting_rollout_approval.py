@@ -131,6 +131,10 @@ def valid_manifest(repository_root):
         "decision": {
             "status": "CATEGORY_LIMITED_GO",
             "run_id": "myscript-linear-decision-v1",
+            "corpus_governance_id": "consented-linear-governance-v1",
+            "corpus_governance_sha256": approvals["data_governance"][
+                "artifact_sha256"
+            ],
             "corpus_version": "consented-linear-v1",
             "corpus_manifest_sha256": "b" * 64,
             "normalization_version": "v2",
@@ -215,6 +219,10 @@ def test_no_decision_and_small_corpus_fail_closed(tmp_path):
     manifest["decision"]["sample_count"] = 299
     assert_code("decision_sample_count_below_minimum", manifest, tmp_path)
 
+    manifest = valid_manifest(tmp_path)
+    manifest["decision"]["sample_count"] = 501
+    assert_code("decision_sample_count_above_maximum", manifest, tmp_path)
+
 
 def test_every_independent_approval_requires_complete_evidence(tmp_path):
     manifest = valid_manifest(tmp_path)
@@ -230,6 +238,12 @@ def test_every_independent_approval_requires_complete_evidence(tmp_path):
         manifest["approvals"]["privacy_legal"]["evidence_id"]
     )
     assert_code("approval_evidence_id_duplicate", manifest, tmp_path)
+
+
+def test_rollout_decision_must_bind_the_approved_governance_artifact(tmp_path):
+    manifest = valid_manifest(tmp_path)
+    manifest["decision"]["corpus_governance_sha256"] = "f" * 64
+    assert_code("corpus_governance_approval_mismatch", manifest, tmp_path)
 
 
 def test_future_approval_date_is_rejected(tmp_path):

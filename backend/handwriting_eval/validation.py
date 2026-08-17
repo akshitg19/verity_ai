@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
 
 
@@ -40,6 +42,18 @@ class ManifestValidation:
     records: list[dict[str, Any]]
     decision_eligible: bool
     ineligibility_reasons: tuple[str, ...]
+    manifest_sha256: str
+
+
+@dataclass(frozen=True)
+class CorpusGovernanceValidation:
+    governance_id: str
+    governance_sha256: str
+    corpus_version: str
+    manifest_sha256: str
+    fixture_count: int
+    approved_providers: tuple[str, ...]
+    valid_through: str
 
 
 def _reject_json_constant(_value: str) -> None:
@@ -134,7 +148,7 @@ def _validate_records(
         Draft202012Validator.check_schema(schema)
     except SchemaError as exc:
         raise EvaluationDataError("JSON Schema is not a valid Draft 2020-12 schema") from exc
-    validator = Draft202012Validator(schema)
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
     failures: list[str] = []
     for line_number, record in enumerate(records, start=1):
         failures.extend(
@@ -236,6 +250,36 @@ def _lint_annotation(record: dict[str, Any]) -> None:
         )
 
 
+def canonical_manifest_sha256(records: Iterable[dict[str, Any]]) -> str:
+    """Hash normalized JSONL records without depending on file formatting."""
+
+    digest = hashlib.sha256()
+    for record in records:
+        digest.update(
+            json.dumps(
+                record,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8")
+        )
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def canonical_json_sha256(value: dict[str, Any]) -> str:
+    """Hash one JSON object independently of insignificant file formatting."""
+
+    return hashlib.sha256(
+        json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def load_manifest(
     manifest_path: Path | str,
     schema_path: Path | str,
@@ -295,6 +339,92 @@ def load_manifest(
         records=records,
         decision_eligible=not sorted_reasons,
         ineligibility_reasons=sorted_reasons,
+        manifest_sha256=canonical_manifest_sha256(records),
+    )
+
+
+def load_corpus_governance(
+    governance_path: Path | str,
+    schema_path: Path | str,
+    manifest: ManifestValidation,
+    *,
+    expected_corpus_version: str | None = None,
+    expected_provider: str | None = None,
+    require_decision_size: bool = False,
+    current_date: date | None = None,
+) -> CorpusGovernanceValidation:
+    """Validate content-free approval evidence bound to one exact corpus."""
+
+    value = _read_json(Path(governance_path))
+    _validate_records([value], _read_json(Path(schema_path)))
+
+    reviewed_at = date.fromisoformat(value["review"]["reviewed_at"])
+    valid_through = date.fromisoformat(value["review"]["valid_through"])
+    today = current_date or date.today()
+    if reviewed_at > today or valid_through < today or reviewed_at > valid_through:
+        raise EvaluationDataError(
+            "Corpus governance approval is not currently valid"
+        )
+    if value["manifest_sha256"] != manifest.manifest_sha256:
+        raise EvaluationDataError(
+            "Corpus governance manifest hash does not match the fixture manifest"
+        )
+    if value["fixture_count"] != len(manifest.records):
+        raise EvaluationDataError(
+            "Corpus governance fixture count does not match the fixture manifest"
+        )
+    if require_decision_size and not 300 <= value["fixture_count"] <= 500:
+        raise EvaluationDataError(
+            "Decision corpus must contain between 300 and 500 fixtures"
+        )
+    if (
+        expected_corpus_version is not None
+        and value["corpus_version"] != expected_corpus_version
+    ):
+        raise EvaluationDataError(
+            "Corpus governance version does not match the requested corpus version"
+        )
+
+    sources = sorted({record["consent"]["source"] for record in manifest.records})
+    if sorted(value["data_sources"]) != sources:
+        raise EvaluationDataError(
+            "Corpus governance data sources do not match the fixture manifest"
+        )
+    retention_policy_ids = sorted(
+        {
+            record["consent"]["retention_policy_id"]
+            for record in manifest.records
+        }
+    )
+    if sorted(value["storage"]["retention_policy_ids"]) != retention_policy_ids:
+        raise EvaluationDataError(
+            "Corpus governance retention policies do not match the fixture manifest"
+        )
+    fixture_providers = sorted(
+        {
+            provider
+            for record in manifest.records
+            for provider in record["consent"]["approved_providers"]
+        }
+    )
+    approved_providers = sorted(value["approved_providers"])
+    if approved_providers != fixture_providers:
+        raise EvaluationDataError(
+            "Corpus governance providers do not match the fixture manifest"
+        )
+    if expected_provider is not None and expected_provider not in approved_providers:
+        raise EvaluationDataError(
+            "Requested provider is not approved by corpus governance"
+        )
+
+    return CorpusGovernanceValidation(
+        governance_id=value["governance_id"],
+        governance_sha256=canonical_json_sha256(value),
+        corpus_version=value["corpus_version"],
+        manifest_sha256=value["manifest_sha256"],
+        fixture_count=value["fixture_count"],
+        approved_providers=tuple(approved_providers),
+        valid_through=value["review"]["valid_through"],
     )
 
 

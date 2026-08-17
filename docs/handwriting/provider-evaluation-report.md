@@ -39,7 +39,7 @@ measurement row.
 | MyScript trial/privacy terms | [Public facts frozen](myscript-public-terms-checkpoint-2026-08-16.md); blocked for student ink | MyScript and VerityAI privacy/legal | Internal approval and written reconciliation of trial-result research/technical-input access with DPA transient processing, plus FERPA/COPPA/student-data and acceptable attribution/publicity terms |
 | Commercial rights and cost | Deferred production gate | MyScript and VerityAI commercial owner | Written billing unit, quota, minimum, overage, cancellation, production right, SLA, and quote before distribution |
 | Approved smoke corpus | Complete for technical smoke | VerityAI engineering | 30 deterministic synthetic fixtures, MyScript-specific permission, provenance, retention, validation |
-| Frozen decision corpus | Blocked | VerityAI data/privacy owner | Versioned 300–500 fixtures in restricted storage with approved deletion/access rules |
+| Frozen decision corpus | Blocked; executable governance gate complete | VerityAI data/privacy and corpus owners | Versioned 300–500 fixtures in restricted storage plus a current `corpus-governance.schema.json` approval bound to the exact hash/count, source/provider/retention sets, deletion test, access policy, consent, and two-reviewer evidence |
 | Durable attempt store | Code merged; store not approved or mounted | GCP/data owner | Durable store identity, access policy, initialized ledger, restart proof, dashboard reconciliation procedure |
 | Target devices | Blocked | Product/QA owner | Named tablet/browser groups and consented device-run exports |
 | Authentication | Blocked for student traffic | Security/product owner | Review proving a real user-access boundary; shared browser header is insufficient |
@@ -68,7 +68,8 @@ attached. Do not use `0`, an empty cell, or a copied example value to mean
 |---|---|
 | Run ID | `NOT_MEASURED` |
 | Test window | `NOT_MEASURED` |
-| Corpus version and SHA-256 | `NOT_MEASURED` |
+| Corpus governance ID and canonical governance SHA-256 | `NOT_MEASURED` |
+| Corpus version and manifest SHA-256 | `NOT_MEASURED` |
 | Normalization version | `NOT_MEASURED` |
 | Provider/model/configuration | `NOT_MEASURED` |
 | Control provider/configuration | `NOT_MEASURED` |
@@ -137,8 +138,8 @@ request count.
 
 1. Predeclare tolerance and smoke stop thresholds before viewing final results.
 2. Run 30–50 approved smoke cases and fix harness defects before the frozen run.
-3. Attach the content-free aggregate with `decision_eligible=true`, corpus hash,
-   run identity, normalizer version, and sample counts.
+3. Attach the content-free aggregate with `decision_eligible=true`, governance
+   ID, corpus hash, run identity, normalizer version, and sample counts.
 4. Review every category, device, browser, and critical tag; do not average away
    a failure.
 5. Record privacy, commercial, security, cost, correction, fallback, and outage
