@@ -1064,6 +1064,13 @@
 
 /* --- misc --------------------------------------------------------------------- */
 
+.landing-shots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+  gap: 26px;
+  margin-top: 38px;
+}
+
 .landing-product-shot {
   transition: transform 300ms ease, box-shadow 300ms ease;
 }

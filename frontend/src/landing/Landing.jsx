@@ -409,18 +409,23 @@ export default function Landing({ theme }) {
             grows forever. Work is saved in your browser and stays there.
           </Lede>
         </ScrollReveal>
-        <ScrollReveal as="figure" variant="scale" delay={80} style={{ margin: "38px 0 0" }}>
-          <div className="landing-product-shot" style={{ overflow: "hidden", border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.xl, background: COLORS.surface, boxShadow: SHADOW.float }}>
-            <img
-              src="/verity-workspace-showcase.jpg"
-              alt="The verity.ai workspace: a ruled page with handwritten working, the recognised lines beside it, and the verdict panel"
-              style={{ width: "100%", height: "auto", display: "block" }}
-            />
-          </div>
-          <figcaption style={{ marginTop: 12, color: COLORS.muted, fontSize: 13.5 }}>
-            The workspace, with the page as the product and everything else out of its way.
-          </figcaption>
-        </ScrollReveal>
+        {/* Both workspaces, because the page gives the two subjects equal
+            billing and showing only the maths one undercut that. */}
+        <div className="landing-shots">
+          {[
+            ["/verity-workspace-showcase.jpg", "Math", "The ruled page, the recognised lines beside it, and the verdict panel.", "The verity.ai maths workspace: a ruled page with handwritten working, the recognised lines beside it, and the verdict panel"],
+            ["/verity-chemistry-showcase.jpg", "Chemistry", "The same page, with the worksheet that fits the question on it.", "The verity.ai chemistry workspace, checking an answer against a deterministic verdict"],
+          ].map(([src, label, caption, alt], index) => (
+            <ScrollReveal as="figure" variant="scale" delay={index * 90} key={src} style={{ margin: 0 }}>
+              <div className="landing-product-shot" style={{ overflow: "hidden", border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.xl, background: COLORS.surface, boxShadow: SHADOW.float }}>
+                <img src={src} alt={alt} style={{ width: "100%", height: "auto", display: "block" }} />
+              </div>
+              <figcaption style={{ marginTop: 12, color: COLORS.muted, fontSize: 13.5 }}>
+                <strong style={{ color: COLORS.text }}>{label}.</strong> {caption}
+              </figcaption>
+            </ScrollReveal>
+          ))}
+        </div>
       </Section>
 
       {/* --- tech stack ------------------------------------------------------- */}
