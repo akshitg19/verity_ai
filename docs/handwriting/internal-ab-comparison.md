@@ -28,8 +28,12 @@ Local:
 - `http://localhost:5173/math?hwr_ab=current`
 
 Do not use the earlier PR #59 schema-v2 preview: its exports are intentionally
-rejected by the schema-v3 consent gate. Use the preview generated from the
-schema-v3 change for both variants, followed by `/math?hwr_ab=legacy` or
+rejected by the schema-v3 consent gate. The successful, protected PR #71
+preview base is:
+
+`https://verity-ai-git-feat-handwriting-consent-evidence-verity-ai2.vercel.app`
+
+Use this same base for both variants, followed by `/math?hwr_ab=legacy` or
 `/math?hwr_ab=current`; do not compare two different code revisions or
 providers. The preview is protected by Vercel Authentication, so each teammate
 must have access to the `verity-ai2` Vercel team and sign in before the app is
@@ -76,8 +80,11 @@ identify the participant or replace team/security approval.
 1. Open the schema-v3 PR preview with one variant query and complete the
    existing Vercel team sign-in if prompted.
 2. Confirm the panel heading names the intended variant. Read and voluntarily
-   check the anonymous consent statement before writing. No experiment metrics
-   are collected before it is checked. If the panel says session storage is
+   check the anonymous consent statement before writing. Before checking it,
+   report only the displayed coarse environment label to the experiment owner
+   so the owner can approve the target matrix; the label is computed locally
+   and is not stored or sent. No experiment metrics are collected before the
+   statement is checked. If the panel says session storage is
    unavailable, enable session storage for this internal preview and try again;
    export stays disabled until anonymous pairing can be retained.
 3. Use the math notebook. For each pair, write row 1 and row 2 exactly as shown,

@@ -24,8 +24,9 @@ for implementation decisions.
 - [Phase A baseline](baseline-report-2026-08-14.md) records the re-verified test
   baseline, lifecycle coverage, and the outstanding target-device evidence.
 - [Internal A/B comparison](internal-ab-comparison.md) defines the consented
-  Gemini scheduling comparison, schema-v2 content-free export, anonymous
-  session pairing, and strict 3–5-pair evidence-readiness workflow.
+  Gemini scheduling comparison, schema-v3 consent-gated content-free export,
+  anonymous session pairing, target-environment coverage, and strict 3–5-pair
+  evidence-readiness workflow.
 - [Provider readiness](provider-readiness.md) records current official-source
   licensing, privacy, pricing, secret mapping, POC budget, and rollout gates.
 - [MyScript public terms checkpoint](myscript-public-terms-checkpoint-2026-08-16.md)
@@ -110,13 +111,15 @@ for implementation decisions.
   cross-phase audit; PRs #53–#55 authorize and align the 1,500-attempt v2
   boundary; PR #56 freezes the deterministic 300-case v2 corpus and gates; and
   PR #57 records the completed run, reconciliation, and content-free results.
-  PR #59 repairs and hardens schema-v2 paired target-device A/B evidence. PR
+  PR #59 repaired schema-v2 paired target-device A/B evidence; PR #71 replaces
+  it with an explicit pre-collection consent gate, schema-v3 exports, and
+  required coarse target-environment coverage. PR
   #61 adds the fail-closed production activation evidence gate; PR #63 records
   the historical disabled deployment of runtime source `b9b1d76`; and PR #65 prevents one-shot MyScript REST from
   auto-submitting partial expressions between pen strokes. PR #67 adds the
   default-off, exact-allow-list Google identity boundary and removes the shared
   header as a sufficient deployed-MyScript access condition. Build
-  `37fec1f2-8ed5-43dd-b1aa-d004e32bc760` deploys current source `3b1ca95` as
+  `37fec1f2-8ed5-43dd-b1aa-d004e32bc760` deploys backend source `3b1ca95` as
   fully disabled revision `verity-ai-00022-2vj` and passes the repeatable
   verifier.
 - Production recognizer: Gemini image transcription.
@@ -144,7 +147,7 @@ for implementation decisions.
   request can be possible. A default-off Google ID-token boundary is implemented
   and fully tested locally, but has no OAuth client, allow-list, external
   security approval, real-account canary, or production activation.
-- Next gates: target-device Phase A/B exports; internal approval of the public
+- Next gates: voluntary schema-v3 target-device Phase A/B exports; internal approval of the public
   terms checkpoint plus written MyScript reconciliation/commercial and
   student-privacy answers before student/production use; an approved consented
   raw-stroke decision corpus; same-input Gemini control evidence; and a reviewed

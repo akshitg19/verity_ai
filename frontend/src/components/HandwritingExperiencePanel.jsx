@@ -89,6 +89,7 @@ export default function HandwritingExperiencePanel() {
   const pairNumber = Math.floor(taskIndex / 2) + 1;
   const pairedTask = pairStart ? TASKS[taskIndex + 1] : null;
   const recordedTaskIds = new Set(assessments.map((entry) => entry.taskId));
+  const detectedEnvironment = `${browserClass()}/${deviceClass()}`;
 
   const handleConsentChange = (event) => {
     if (!event.target.checked) {
@@ -176,6 +177,11 @@ export default function HandwritingExperiencePanel() {
       <p style={{ fontSize: 12, lineHeight: 1.4 }}>
         This optional internal test uses only the synthetic prompts shown here.
         No metrics are collected until you agree below.
+      </p>
+      <p style={{ fontSize: 12, lineHeight: 1.4, color: "#51605b" }}>
+        Detected coarse environment:{" "}
+        <code data-handwriting-environment>{detectedEnvironment}</code>. This
+        preflight label stays in your browser and is not stored or sent.
       </p>
       <label style={{ ...fieldStyle, margin: "8px 0 12px" }}>
         <span>

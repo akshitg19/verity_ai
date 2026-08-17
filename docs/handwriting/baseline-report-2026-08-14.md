@@ -76,10 +76,12 @@ fake-timer tests prove policy behavior, not device latency.
 
 The paired-row, content-free export and aggregation workflow in
 [Internal A/B comparison](internal-ab-comparison.md) is the safe measurement
-path. Export schema v2 now proves anonymous Legacy/Current pairing within one
-browser session, validates the frozen policy and 12-task protocol, rejects
-non-allowlisted content, and emits a failing readiness gate for incomplete,
-unpaired, stale, or errored runs. To close the device evidence gate, 3–5
+path. Export schema v3 now proves anonymous Legacy/Current pairing within one
+browser session, requires explicit anonymous consent before metric collection,
+validates the frozen policy and 12-task protocol, rejects non-allowlisted
+content, and can require complete-pair coverage for approved coarse target
+environments. It emits a failing readiness gate for incomplete, unpaired,
+stale, errored, or non-consented runs. To close the device evidence gate, 3–5
 consenting teammates must each run both variants on the supported
 tablet/browser combinations, export both JSON files, and aggregate them with
 `--require-ready`. Required evidence is:
