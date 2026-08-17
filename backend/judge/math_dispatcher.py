@@ -4,7 +4,8 @@ from .algebra import AlgebraJudge
 from .pre_algebra import PreAlgebraJudge
 from .trigonometry import TrigonometryJudge
 from .calculus import CalculusJudge
-
+from .statistics import StatisticsJudge
+from .geometry import GeometryJudge
 
 class MathJudgeDispatcher:
     def __init__(self) -> None:
@@ -13,6 +14,8 @@ class MathJudgeDispatcher:
             "algebra": AlgebraJudge(),
             "trigonometry": TrigonometryJudge(),
             "calculus": CalculusJudge(),
+            "statistics": StatisticsJudge(),
+            "geometry": GeometryJudge(),
         }
 
     def check(

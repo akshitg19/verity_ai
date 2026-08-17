@@ -1038,6 +1038,37 @@ _MATH_LEVEL_2_PROMPT = (
     "- Do not write fragments such as `subtract 6`, `divide by 2`, or `= 8`.\n"
     "- Preserve equivalence correctly from one equation to the next.\n\n"
 
+    "GEOMETRY RULES:\n"
+    "- The generated problem MUST use one of these exact machine-readable forms:\n"
+    "  `rectangle area LENGTH, WIDTH`\n"
+    "  `rectangle perimeter LENGTH, WIDTH`\n"
+    "  `triangle area BASE, HEIGHT`\n"
+    "  `circle area RADIUS`\n"
+    "  `circle circumference RADIUS`\n"
+    "  `pythagorean LEG_A, LEG_B`\n"
+    "  `triangle angle ANGLE_A, ANGLE_B`\n"
+    "- Use numeric values only in the generated problem.\n"
+    "- Do not turn the problem into prose.\n"
+    "- For circle problems, use pi in solution steps, such as `9*pi`.\n"
+    "- Every solution step must evaluate to the final correct geometric quantity.\n"
+    "- Prefer simple equivalent expressions such as `8*5` followed by `40`.\n"
+    "- Do not include formula-definition steps with unresolved variables such as `A = l*w`.\n\n"
+
+    "STATISTICS RULES:\n"
+    "- The generated problem MUST use one of these exact machine-readable forms:\n"
+    "  `mean of VALUE, VALUE, VALUE`\n"
+    "  `median of VALUE, VALUE, VALUE`\n"
+    "  `mode of VALUE, VALUE, VALUE`\n"
+    "  `range of VALUE, VALUE, VALUE`\n"
+    "- Never replace the generated statistics problem with its arithmetic expression.\n"
+    "- For example, write `mean of 3, 6, 9, 12`, NOT `(3 + 6 + 9 + 12) / 4` as the problem.\n"
+    "- Mean solution steps should be numeric expressions that already evaluate to the correct mean, "
+    "such as `(3 + 6 + 9 + 12) / 4` followed by `7.5`.\n"
+    "- Do not use equation-style arithmetic steps such as `3 + 6 + 9 + 12 = 30`.\n"
+    "- For median, a correctly sorted comma-separated data list may be used as an intermediate step.\n"
+    "- Mode examples must have exactly one unique mode.\n"
+    "- Keep datasets small, preferably 4 to 6 values.\n\n"
+
     "TRIGONOMETRY RULES:\n"
     "- Use x as the symbolic variable in generated identity problems.\n"
     "- Standard exact angles such as pi/6, pi/4, pi/3, and pi/2 are allowed.\n"
@@ -1221,7 +1252,7 @@ def _level_2_prompt(
             + f"\nThe student's problem, which must NOT be reused: {problem}"
             + f"\nThe mistake they made: {error_type}\n\n"
             + "Reply with exactly this JSON shape:\n"
-            + '{"problem": "<new equation>", '
+            + '{"problem": "<machine-readable new problem>", '
             + '"technique": "<technique in one sentence>", '
             + '"steps": ["<equation 1>", "<equation 2>", "..."], '
             + '"check": {}}'

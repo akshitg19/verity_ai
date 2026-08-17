@@ -28,6 +28,8 @@ from sympy import Eq, solve, simplify, trigsimp
 from judge.algebra import _parse_equation
 from judge.trigonometry import _parse_math
 from judge.calculus import X, _derivative_definition, _evaluate_calculus_statement
+from judge.statistics import _expected_value, _parse_stat_problem
+from judge.geometry import _parse_geometry_problem
 
 from judge.chemistry import (
     ChemistryParseError,
@@ -392,6 +394,41 @@ def vault_for_calculus(problem: str) -> AnswerVault:
     return vault
 
 
+def vault_for_statistics(problem: str) -> AnswerVault:
+    """Build a vault from the same deterministic interpretation as StatisticsJudge."""
+    try:
+        kind, values = _parse_stat_problem(problem)
+        answer = _expected_value(kind, values)
+    except Exception as exc:
+        raise ValueError(f"could not evaluate statistics problem: {exc}") from exc
+
+    vault = AnswerVault(
+        topic="statistics",
+        problem=problem,
+        supports_terminal_detection=False,
+    )
+
+    _add_sympy_answer(vault, simplify(answer))
+    return vault
+
+
+def vault_for_geometry(problem: str) -> AnswerVault:
+    """Build a vault from the same deterministic interpretation as GeometryJudge."""
+    try:
+        _, answer = _parse_geometry_problem(problem)
+    except Exception as exc:
+        raise ValueError(f"could not evaluate geometry problem: {exc}") from exc
+
+    vault = AnswerVault(
+        topic="geometry",
+        problem=problem,
+        supports_terminal_detection=False,
+    )
+
+    _add_sympy_answer(vault, simplify(answer))
+    return vault
+
+
 def vault_for_algebra(problem: str) -> AnswerVault:
     """Build a protected answer vault for a supported one-variable equation."""
     try:
@@ -559,6 +596,12 @@ def build_math_vault(*, topic: str, problem: str) -> AnswerVault:
         if topic == "calculus":
             return vault_for_calculus(problem)
 
+        if topic == "statistics":
+            return vault_for_statistics(problem)
+
+        if topic == "geometry":
+            return vault_for_geometry(problem)
+
     except ValueError as exc:
         raise VaultConstructionError(str(exc)) from exc
 
@@ -584,6 +627,8 @@ __all__ = [
     "build_math_vault",
     "vault_for_pre_algebra",
     "vault_for_algebra",
+    "vault_for_geometry",
     "vault_for_trigonometry",
+    "vault_for_statistics",
     "vault_for_calculus",
 ]

@@ -29,6 +29,8 @@ describe("math topics", () => {
       "algebra",
       "trigonometry",
       "calculus",
+      "statistics",
+      "geometry",
     ]);
 
     for (const topic of MATH_TOPICS) {
