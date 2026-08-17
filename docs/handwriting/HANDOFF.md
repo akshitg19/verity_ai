@@ -14,8 +14,8 @@ smoke/probe and separate
 v2 run had 300/300 provider successes, 95.00% overall exact match, 96.33% parse
 success, and zero ledger/dashboard discrepancy. These corpora remain
 single-reviewer and decision-ineligible, so the provider decision is still
-`NO_DECISION`. Current Cloud Run revision `verity-ai-00021-glp` deploys exact
-runtime source `b9b1d76` and remains fully disabled; the repeatable verifier
+`NO_DECISION`. Current Cloud Run revision `verity-ai-00022-2vj` deploys exact
+runtime source `3b1ca95c91e6da62ba8ca3c0dc42cea00a91bb83` and remains fully disabled; the repeatable verifier
 returned `PASS`. Target-device, eligible decision-corpus,
 privacy/legal, real-authentication approval/configuration, same-input control,
 and enabled-canary evidence remain unavailable. PR #59 repaired and hardened
@@ -25,11 +25,12 @@ strict, content-free, machine-checked evidence rather than unverified exports.
 
 **Resume branch:** `main`
 
-**Deployed runtime source:** `b9b1d76`
+**Deployed runtime source:** `3b1ca95c91e6da62ba8ca3c0dc42cea00a91bb83`
 
-**Deployment-evidence merge:** PR #63 at `d683da5`
+**Current deployment build/revision:**
+`37fec1f2-8ed5-43dd-b1aa-d004e32bc760` / `verity-ai-00022-2vj`
 
-**Current repository / Vercel frontend:** PR #67 at `94b3e0d`
+**Current repository / Vercel frontend:** PR #68 at `3b1ca95`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
@@ -573,7 +574,7 @@ The MyScript developer application and credentials exist. The credentials remain
 only in the local ignored secret file and two GCP Secret Manager secrets; the
 Cloud Run runtime service account has accessor permission. A backend protocol
 client, typed route, shared normalizer, and Cloud Run secret mapping are merged
-and deployed in disabled revision `verity-ai-00021-glp`; both provider and route
+and deployed in disabled revision `verity-ai-00022-2vj`; both provider and route
 flags are false. Runtime metadata proves the expected service account and the
 two numeric version-`1` Secret Manager references without reading their values;
 see `secret-version-pinning-evidence-2026-08-16.md`. A direct vector-only
@@ -864,7 +865,7 @@ Not safe to claim yet:
 - Luna is better than Gemini;
 - complex chemistry or full undergraduate math is supported.
 
-The current safe state is disabled revision `verity-ai-00021-glp`, with both
+The current safe state is disabled revision `verity-ai-00022-2vj`, with both
 provider flags false and both Secret Manager references pinned to reviewed
 numeric version `1`. Further decision-corpus or student/deployed traffic remains
 blocked on its separately applicable corpus, privacy/legal, commercial,

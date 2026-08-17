@@ -2,13 +2,14 @@
 
 **Audit date:** 2026-08-16; last verified 2026-08-17
 
-**Audited repository/frontend source:** PR #67 merge `94b3e0d`; Vercel
+**Audited repository/frontend source:** PR #68 merge `3b1ca95`; Vercel
 production deployment successful
 
-**Audited backend runtime source:** `b9b1d76`, deployed as verified disabled
-revision `verity-ai-00021-glp`
+**Audited backend runtime source:** `3b1ca95`, deployed as verified disabled
+revision `verity-ai-00022-2vj`
 
-**Deployment evidence:** merged by PR #63 at `d683da5`
+**Deployment evidence:** build `37fec1f2-8ed5-43dd-b1aa-d004e32bc760`;
+[content-safe record](current-main-disabled-deployment-evidence-2026-08-17.md)
 **Goal status:** active; production-ready completion is not yet proven.
 
 This audit uses the 23-item Definition of Done from the user-approved completion
@@ -20,10 +21,10 @@ evidence or approval.
 ## Current verified checkpoint
 
 - Production recognizer remains Gemini image transcription.
-- PR #67's Vercel production deployment serves the default-off identity code;
+- PR #68's Vercel production deployment serves the default-off identity code;
   a read-only `/math` smoke still opened the Gemini workspace directly with no
   sign-in gate or console error.
-- Current backend revision is `verity-ai-00021-glp`, serving 100% of Cloud Run
+- Current backend revision is `verity-ai-00022-2vj`, serving 100% of Cloud Run
   traffic with `MYSCRIPT_ENABLED=false` and
   `MYSCRIPT_POC_ROUTE_ENABLED=false`.
 - Both MyScript environment variables reference reviewed Secret Manager numeric
@@ -66,8 +67,8 @@ evidence or approval.
 | 15 | No raw content in ordinary logs | Complete for implemented paths | Content-safe metrics, aggregate reports, adapter errors, reprocessor failures, and disabled verifier are covered by tests. Raw prediction artifacts remain outside Git in an owner-only directory. |
 | 16 | No provider secret in Git/frontend/build/docs/logs | Complete for current state | Production bundle scan passes; secrets are backend Secret Manager references; local credential file is ignored and was never read or printed. |
 | 17 | Relevant local and remote checks pass | Complete for merged work | PR #67 passes backend 1316 / 3 expected xfails, frontend 410 across 43 files, lint, Linux, Windows, Vercel preview, identity-off/on production builds, API-base/provider-secret scans, a negative shared-secret build guard, and a local sign-in-gate smoke. Post-merge `main` CI run `31996768597` passed all three jobs. |
-| 18 | Reviewable PRs merged to current main | Complete for safe deliverables | The default-off identity mechanism is merged by PR #67 at `94b3e0d`; PR #63 merged the disabled backend deployment evidence. Cloud Run runtime source remains safely disabled at `b9b1d76`, while Vercel production is current through PR #67. |
-| 19 | Preview/staging smoke tests pass | Partially complete | Vercel preview and production deployment of `94b3e0d` pass; a read-only production `/math` smoke opened the existing Gemini workspace with no sign-in gate or console error. Cloud Build history still ends at build `a5703e61-48d6-487a-8fe2-9e35c06aeb51`, and Cloud Run still sends 100% traffic to disabled revision `verity-ai-00021-glp` from backend source `b9b1d76`. No target-device authenticated enabled-provider preview is authorized. |
+| 18 | Reviewable PRs merged to current main | Complete for safe deliverables | The default-off identity mechanism is merged by PR #67 and its evidence by PR #68 at `3b1ca95`. Cloud Run now deploys that exact source as fully disabled revision `verity-ai-00022-2vj`; Vercel production is current through PR #68. |
+| 19 | Preview/staging smoke tests pass | Partially complete | Vercel production for `3b1ca95` and Cloud Build `37fec1f2-8ed5-43dd-b1aa-d004e32bc760` pass. The Cloud Run verifier proves 100% traffic to disabled revision `verity-ai-00022-2vj`, false MyScript flags, pinned secret references, and HTTP 200/200/404/200. No target-device authenticated enabled-provider preview is authorized. |
 | 20 | Production rollout completed or fully rollout-ready | Mechanism complete; external evidence required | The safe state is fully disabled. A strict rollout manifest gate exists, and a default-off Google identity mechanism now verifies official ID tokens, audience/issuer/expiry, and exact allow-lists while refusing shared-key bypass. It still has no real OAuth client, configured reviewers, security approval, or real-account device canary. No valid rollout manifest exists because provider selection, eligible corpus/device evidence, privacy/commercial/security/data/product approvals, and canary evidence remain missing. |
 | 21 | Rollback commands verified | Mechanism complete; enabled rollback external | [Runbook](rollout-runbook.md) contains frontend/backend kill switches; every reviewed Cloud Build restores false flags; live disabled verifier passes. An enabled-provider rollback cannot be exercised before an enabled canary is approved. |
 | 22 | Current architecture/status/results/risks/maintenance docs | Complete | Architecture, implementation log, evaluation report, POC evidence, readiness, rollout, and this audit are current. |
