@@ -12,6 +12,7 @@ import {
   createNotebookId,
   duplicateNoteRecord,
 } from "./notebookModel";
+import { createNotebookAutosave } from "./notebookAutosave";
 
 const MAX_FOLDERS = 40;
 const MAX_NOTES = 200;
@@ -48,6 +49,7 @@ export default function useNotebook() {
   const repositoryRef = useRef(null);
   const repositoryReadyRef = useRef(Promise.resolve(null));
   const writesRef = useRef(Promise.resolve());
+  const autosaveRef = useRef(null);
   const mountedRef = useRef(true);
   const trackerRef = useRef({ nextRevision: 0, pending: new Set(), error: null });
   const [hydrated, setHydrated] = useState(false);
@@ -68,7 +70,8 @@ export default function useNotebook() {
       const message = error instanceof Error ? error.message : "Notebook could not be saved.";
       setSaveError(message);
     }
-    if (tracker.pending.size > 0) {
+    if (!mountedRef.current) return;
+    if (tracker.pending.size > 0 || autosaveRef.current?.hasPending()) {
       setSaveStatus("saving");
     } else if (tracker.error) {
       setSaveStatus("error");
@@ -89,7 +92,7 @@ export default function useNotebook() {
       .catch(() => undefined)
       .then(async () => {
         const repository = await repositoryReadyRef.current;
-        if (!repository || !mountedRef.current) return undefined;
+        if (!repository) return undefined;
         return operation(repository);
       });
     writesRef.current = run;
@@ -99,6 +102,47 @@ export default function useNotebook() {
     );
     return run;
   }, [settleWrite]);
+
+  const persistPagePatches = useCallback((patches) => {
+    const current = stateRef.current;
+    const pagesToSave = [];
+    let changed = false;
+    const nextNotes = current.notes.map((note) => {
+      const notePatches = patches.filter((patch) => patch.noteId === note.id);
+      if (notePatches.length === 0) return note;
+      const byPage = new Map(notePatches.map((patch) => [patch.pageId, patch]));
+      let noteChanged = false;
+      const pages = note.pages.map((page) => {
+        const patch = byPage.get(page.id);
+        if (!patch) return page;
+        const nextPage = { ...page };
+        if (Object.hasOwn(patch, "strokes")) {
+          nextPage.strokes = clone(patch.strokes ?? []);
+        }
+        if (Object.hasOwn(patch, "workflowSnapshot")) {
+          nextPage.workflowSnapshot = clone(patch.workflowSnapshot);
+        }
+        noteChanged = true;
+        pagesToSave.push({ noteId: note.id, page: nextPage });
+        return nextPage;
+      });
+      if (!noteChanged) return note;
+      changed = true;
+      return metadataFor({ ...note, pages });
+    });
+
+    if (changed) commitState({ ...current, notes: nextNotes });
+    if (pagesToSave.length === 0) return Promise.resolve();
+    return enqueueWrite(async (repository) => {
+      for (const pageRecord of pagesToSave) {
+        await repository.savePage(pageRecord);
+      }
+    });
+  }, [commitState, enqueueWrite]);
+
+  useEffect(() => {
+    autosaveRef.current = createNotebookAutosave({ onFlush: persistPagePatches });
+  }, [persistPagePatches]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -124,8 +168,13 @@ export default function useNotebook() {
     });
 
     return () => {
+      const pendingFlush = autosaveRef.current?.flush() ?? Promise.resolve();
       mountedRef.current = false;
-      const closeWhenIdle = Promise.allSettled([writesRef.current, ready]).then(() => repository.close());
+      const closeWhenIdle = Promise.allSettled([
+        pendingFlush,
+        writesRef.current,
+        ready,
+      ]).then(() => repository.close());
       void closeWhenIdle;
     };
   }, [commitState]);
@@ -207,23 +256,18 @@ export default function useNotebook() {
       const pageId = targetPageId ?? note?.activePageId ?? note?.pages[0]?.id;
       const page = note?.pages.find((entry) => entry.id === pageId);
       if (!note || !page) return Promise.resolve();
-      const nextPage = { ...page, strokes: clone(strokes ?? []) };
-      const nextNote = metadataFor({
-        ...note,
-        pages: note.pages.map((entry) => (entry.id === pageId ? nextPage : entry)),
-      });
-      const nextState = {
-        ...current,
-        notes: current.notes.map((entry) => (entry.id === note.id ? nextNote : entry)),
-      };
-      commitState(nextState);
-      const capturedNoteId = note.id;
-      const capturedPageId = pageId;
-      return enqueueWrite((repository) =>
-        repository.savePage({ noteId: capturedNoteId, page: { ...nextPage, id: capturedPageId } })
-      );
+      setSaveStatus("saving");
+      return autosaveRef.current?.schedule({
+        noteId: note.id,
+        pageId,
+        strokes: strokes ?? [],
+      }) ?? persistPagePatches([{
+        noteId: note.id,
+        pageId,
+        strokes: strokes ?? [],
+      }]);
     },
-    [commitState, enqueueWrite]
+    [persistPagePatches]
   );
 
   const saveWorkflow = useCallback(
@@ -233,25 +277,41 @@ export default function useNotebook() {
       const targetPageId = pageId ?? note?.activePageId ?? note?.pages[0]?.id;
       const page = note?.pages.find((entry) => entry.id === targetPageId);
       if (!note || !page) return Promise.resolve();
-      const nextPage = { ...page, workflowSnapshot: clone(workflowSnapshot) };
-      const nextNote = metadataFor({
-        ...note,
-        pages: note.pages.map((entry) => (entry.id === targetPageId ? nextPage : entry)),
-      });
-      commitState({
-        ...current,
-        notes: current.notes.map((entry) => (entry.id === note.id ? nextNote : entry)),
-      });
-      return enqueueWrite((repository) => repository.savePage({ noteId: note.id, page: nextPage }));
+      setSaveStatus("saving");
+      return autosaveRef.current?.schedule({
+        noteId: note.id,
+        pageId: targetPageId,
+        workflowSnapshot,
+      }) ?? persistPagePatches([{
+        noteId: note.id,
+        pageId: targetPageId,
+        workflowSnapshot,
+      }]);
     },
-    [commitState, enqueueWrite]
+    [persistPagePatches]
   );
 
   const flushWrites = useCallback(async () => {
+    await autosaveRef.current?.flush().catch(() => undefined);
     await writesRef.current.catch(() => undefined);
     const failure = trackerRef.current.error;
     if (failure) throw failure.error;
   }, []);
+
+  useEffect(() => {
+    const flush = () => {
+      void flushWrites().catch(() => undefined);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [flushWrites]);
 
   const retrySave = useCallback(() => {
     trackerRef.current.error = null;
@@ -507,10 +567,11 @@ export default function useNotebook() {
   }, [flushWrites]);
 
   const importNotebook = useCallback(async (serialized) => {
+    await flushWrites();
     const imported = await enqueueWrite((repository) => repository.importData(serialized));
     if (imported && mountedRef.current) commitState(imported);
     return imported;
-  }, [commitState, enqueueWrite]);
+  }, [commitState, enqueueWrite, flushWrites]);
 
   return {
     notes,

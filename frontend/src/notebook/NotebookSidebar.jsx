@@ -80,6 +80,7 @@ export default function NotebookSidebar({
     saveError,
     exportNotebook,
     importNotebook,
+    preparePageExport,
     retrySave,
   } = notebook;
 
@@ -121,6 +122,21 @@ export default function NotebookSidebar({
       await importNotebook(await file.text());
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "That notebook could not be imported.");
+    }
+  };
+
+  const handleExportPage = async () => {
+    try {
+      const strokes = preparePageExport
+        ? await preparePageExport()
+        : activePage.strokes;
+      exportPage(
+        strokes,
+        activeNote.title,
+        activeNote.pages.findIndex((page) => page.id === activePage.id) + 1
+      );
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Page export failed.");
     }
   };
 
@@ -428,13 +444,7 @@ export default function NotebookSidebar({
               type="button"
               title="Save this page as a picture"
               aria-label="Save this page as a picture"
-              onClick={() =>
-                exportPage(
-                  activePage.strokes,
-                  activeNote.title,
-                  activeNote.pages.findIndex((page) => page.id === activePage.id) + 1
-                )
-              }
+              onClick={() => void handleExportPage()}
               style={{
                 border: "none",
                 background: "transparent",
