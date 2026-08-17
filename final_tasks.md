@@ -471,11 +471,23 @@ any row here as evidence.
 
 | # | Subject | Grade band | Authoritative engine | Status |
 |---|---|---|---|---|
-**The six names are fixed.** Elementary math, algebra, geometry, trigonometry,
-statistics, calculus. Those exact words, in that order, everywhere they appear:
-this file, the landing page, the deck, the README, the UI. No renaming to
-"pre-algebra", "statistics and probability", or anything else, because a student
-picking a subject and a judge reading the deck should see the same six words.
+**The six names are fixed.** Pre-Algebra, Algebra, Geometry, Trigonometry,
+Statistics & Probability, Calculus. Those exact words, in that order, everywhere
+they appear: this file, the landing page, the deck, the README, the UI, because
+a student picking a subject and a judge reading the deck should see the same six
+words.
+
+> **Amended Aug 17, by an explicit product call.** The first two names used to
+> be "Elementary math" and "Statistics", and this paragraph used to forbid
+> "pre-algebra" and "statistics and probability" by name. The UI had already
+> drifted to the forbidden pair in `frontend/src/math/topics.js`, the landing
+> page rewrite surfaced the conflict, and the call was to keep the UI wording
+> and move the lock rather than rename what students already see. The list
+> above is the lock now. `frontend/src/landing/landingContent.js` and
+> `frontend/src/math/topics.js` are the two places that must agree.
+
+The rest of the table below still uses the old wording in places. That is
+cosmetic drift in a planning document, not a second decision.
 
 | # | Subject | Grade band | Authoritative engine | Status |
 |---|---|---|---|---|
@@ -1750,10 +1762,17 @@ and use `--set-secrets`, which is a separate flag and is not wiped.
 - **`/capture/chemistry` writes to disk**, and a container's filesystem is
   ephemeral. It is gated on `VERITY_CAPTURE_DIR`, so simply do not set that
   variable in production. Corpus capture is a local-machine activity anyway.
-- **IUPAC naming needs Java**, which is deliberately not in the image: it adds
-  roughly 200 MB and slows cold start. `judge/naming.py` reports `unsupported`
-  cleanly without it. A commented three-line block in the Dockerfile enables
-  it if naming is part of the demo.
+- **IUPAC naming needs Java, and the image now has it.** This caveat used to
+  read that Java was deliberately left out, because it adds roughly 200 MB and
+  slows cold start, and that `judge/naming.py` reports `unsupported` cleanly
+  without it. Reporting it cleanly was the entire problem. Naming is not one
+  question type, it is the resolver *four* of them run on: "Draw this named
+  compound", "Name this structure", "Draw an isomer of this", and "Predict the
+  product" all hand a written molecule name to OPSIN. So on the deployed
+  service all four answered "outside what we can check yet", `/chemistry/session`
+  returned 422 for each so their hints fell back to the static floor, and
+  "Draw any molecule containing this group" was the only organic question that
+  worked. See section 29.
 - **The URL is public and unauthenticated.** Fine while only three people have
   an unguessable Cloud Run address, and `--max-instances 1` bounds the damage.
   If the link is ever posted anywhere, add a shared-secret header first.
@@ -3307,3 +3326,94 @@ identical from the page.
       hint ladder generate rather than fall back, but it does not read a
       single hint. `live_hint_audit.py` is still the only thing that does,
       and it has not been run since any of these changes.
+
+---
+
+## 29. Organic was broken in production only, and by one missing package, Aug 17
+
+Reported from the deployed app: "Draw this named compound" reads the drawing
+fine, and then checking it says *"That problem is outside what we can check
+yet. That's our limit, not a mistake in your work."* Same for the rest of
+organic. The one question that worked was "Draw any molecule containing this
+group".
+
+**The cause was the Java runtime, and nothing in the application code.**
+`py2opsin` wraps OPSIN, which is a Java program, and the Dockerfile left the
+`default-jre-headless` install commented out on the reasoning recorded in the
+deployment caveats: it adds roughly 200 MB, and `judge/naming.py` was written
+to report `unsupported` cleanly without it. That gate worked exactly as
+designed. It is what let a teammate work on the repo without installing Java,
+and it is still there for that reason.
+
+What the gate's author did not have in front of them is how far naming
+reaches. It is not one question type. Four of them resolve a molecule the
+student wrote as a **name**, and every one goes through OPSIN:
+
+| Question type | Endpoint | What it resolved by name |
+|---|---|---|
+| Draw this named compound | `/chemistry/name` | the target, "propan-2-ol" |
+| Name this structure | `/chemistry/name` | the student's own answer |
+| Draw an isomer of this | `/chemistry/isomer` | the reference, "ethanol" |
+| Predict the product | `/chemistry/reaction` | the starting material, "ethene" |
+
+Measured against the live service before the fix, and every one of these is
+an unmocked, real reproduction:
+
+```text
+/chemistry/name    target_name propan-2-ol   -> problem_error "unsupported"
+/chemistry/isomer  reference   ethanol       -> problem_error "unsupported"
+/chemistry/reaction reactant   ethene        -> problem_error "unsupported"
+/chemistry/name    student wrote a name      -> verdict "unsupported"
+/chemistry/functional-group ester            -> valid          <- the one that worked
+```
+
+The same four calls locally, where Java is installed, all return correct
+verdicts. So the entire organic subject was one `apt-get` line, and no code
+was wrong.
+
+**The hints followed it down, which is why they read as broken too.**
+`build_vault` resolves `target_name` through the same OPSIN call, so it raised
+`VaultConstructionError`, so `/chemistry/session` answered 422. No session
+means no vault, and no vault means the hint ladder serves the static floor
+rather than generating. Both symptoms, the verdict and the hints, are the one
+missing package.
+
+### What this says about the gate, which is worth keeping
+
+A feature gated on an optional dependency degrades to `unsupported`, and
+`unsupported` is honest, non-blaming, and correctly rendered as our limit
+rather than the student's mistake. Every rule in this file was obeyed. The
+student still experienced a subject that did not work, because from the page
+there is no difference between "we cannot check this kind of problem" and
+"this deployment is missing a package".
+
+Worth a rule rather than a one-off fix: **a dependency gate that is fine on a
+laptop is not automatically fine in the image the demo runs on.** The two
+environments need checking separately, and nothing did.
+
+### Done
+
+- [x] `default-jre-headless` installed in the Dockerfile, with the reason
+      written against it. The gate in `judge/naming.py` stays exactly as it
+      is; it is what keeps Java off a teammate's laptop and out of CI.
+- [x] Name resolution cached (`judge/naming.py`, `_resolve`). Each OPSIN call
+      starts a JVM, costs about 0.55s measured, and the concurrency lock makes
+      them queue. One problem resolves the same name several times: once for
+      the vault, once per check, and again on every recheck after a
+      transcription. Validation and the availability gate are both consulted
+      *before* the cache, so a warm entry can never make an unsupported
+      machine look supported, and a client cannot fill the cache with junk.
+
+### Still open
+
+- [ ] **Nothing tests the deployed image's dependencies.** The suite proves
+      naming works where Java is installed and skips where it is not, which is
+      exactly why this survived to production. A post-deploy smoke check that
+      calls one naming endpoint and fails loudly would have caught it on the
+      day the container was first built.
+- [ ] Cold start grew by whatever the JRE costs. `--min-instances 1` hides it
+      from students; it should still be measured once rather than assumed.
+- [ ] "Name this structure" is the one organic type whose question still has
+      to be typed as a SMILES into the panel, which is our notation and not
+      the student's. Every other type takes a written name now. Same fix as
+      the isomer reference: take the molecule by name.

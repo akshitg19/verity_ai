@@ -404,4 +404,8 @@ pass.
 - A tablet cannot open the frontend: use the Vite `Network` URL and keep the
   laptop and tablet on the same Wi-Fi.
 - IUPAC naming reports "not supported": OPSIN needs a Java runtime. Install
-  one, or leave naming out. Every other feature is unaffected.
+  one to work on naming locally. The deployed image installs it, so this is a
+  local-setup message only. Note it is not just the naming question that needs
+  it: drawing a named compound, drawing an isomer of a named molecule, and
+  predicting a product from a named starting material all resolve the name
+  through OPSIN, so all four report "not supported" together.
