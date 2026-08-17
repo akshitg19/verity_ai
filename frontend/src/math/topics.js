@@ -32,7 +32,7 @@ export const MATH_TOPICS = [
     label: "Statistics & Probability",
     glyph: "σ",
     blurb: "Descriptive statistics, probability, distributions, inference, and regression.",
-    implemented: false,
+    implemented: true,
   },
   {
     id: "calculus",

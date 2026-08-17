@@ -42,6 +42,7 @@ ErrorType = Literal[
     "integral_rule",
     "limit_evaluation",
     "calculus_algebraic",
+    "statistics_error",
     "parse_error",
     "unsupported",
 ]
