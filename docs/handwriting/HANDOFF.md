@@ -17,7 +17,11 @@ single-reviewer and decision-ineligible, so the provider decision is still
 `NO_DECISION`. PR #70 hardens the content-safe disabled access-boundary
 verifier, and PR #71 adds schema-v3 pre-collection consent plus approved coarse
 target-environment coverage to the internal A/B workflow. PR #72 makes that
-protected preview actionable with a local-only environment preflight. Current
+protected preview actionable with a local-only environment preflight. PR #73
+adds a strict content-free governance schema and binds every decision
+validate/plan/score plus rollout approval to the exact governance and corpus
+hashes; the final rollout gate now also requires the actual external governance
+and restricted-manifest metadata artifacts. Current
 Cloud Run
 revision `verity-ai-00022-2vj` deploys exact
 runtime source `3b1ca95c91e6da62ba8ca3c0dc42cea00a91bb83` and remains fully disabled; the repeatable verifier
@@ -35,7 +39,11 @@ exports.
 **Current deployment build/revision:**
 `37fec1f2-8ed5-43dd-b1aa-d004e32bc760` / `verity-ai-00022-2vj`
 
-**Current repository / Vercel frontend:** PR #71 at `628ed62`
+**Current repository:** PR #73 merge `72e71fe`; post-merge main CI
+`32002999450` passed
+
+**Verified frontend deployments:** production PR #71 at `628ed62`; protected
+PR #72 preview and PR #73 preview successful
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 

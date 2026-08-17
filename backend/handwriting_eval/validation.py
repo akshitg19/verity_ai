@@ -53,6 +53,8 @@ class CorpusGovernanceValidation:
     manifest_sha256: str
     fixture_count: int
     approved_providers: tuple[str, ...]
+    retention_policy_ids: tuple[str, ...]
+    deletion_test_id: str
     valid_through: str
 
 
@@ -424,6 +426,8 @@ def load_corpus_governance(
         manifest_sha256=value["manifest_sha256"],
         fixture_count=value["fixture_count"],
         approved_providers=tuple(approved_providers),
+        retention_policy_ids=tuple(retention_policy_ids),
+        deletion_test_id=value["storage"]["deletion_test_id"],
         valid_through=value["review"]["valid_through"],
     )
 

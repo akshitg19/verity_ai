@@ -60,8 +60,10 @@ for implementation decisions.
 - [Rollout approval schema](rollout-approval.schema.json) defines the strict
   evidence contract that a future activation manifest must satisfy, including
   the exact governance ID and governance-artifact hash approved by the
-  data-governance owner; no valid real approval manifest exists while the
-  current decision is `NO_DECISION`.
+  data-governance owner. The validator must also load the actual external
+  governance JSON and restricted corpus manifest metadata and cross-check both
+  artifacts; no valid real approval manifest exists while the current decision
+  is `NO_DECISION`.
 - [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
   records the exact build, revision, false flags, secret references, image
   digest, and content-safe rollout checks without reading secret values.
@@ -121,7 +123,9 @@ for implementation decisions.
   it with an explicit pre-collection consent gate, schema-v3 exports, and
   required coarse target-environment coverage. PR #72 records the exact
   protected preview and exposes a local-only coarse environment preflight label
-  before consent. PR
+  before consent. PR #73 requires exact content-free corpus governance for
+  every decision validate/plan/score path and binds the governance artifact to
+  rollout approval. PR
   #61 adds the fail-closed production activation evidence gate; PR #63 records
   the historical disabled deployment of runtime source `b9b1d76`; and PR #65 prevents one-shot MyScript REST from
   auto-submitting partial expressions between pen strokes. PR #67 adds the
