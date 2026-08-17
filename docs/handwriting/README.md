@@ -62,7 +62,10 @@ for implementation decisions.
   the exact governance ID and governance-artifact hash approved by the
   data-governance owner. The validator must also load the actual external
   governance JSON and restricted corpus manifest metadata and cross-check both
-  artifacts; no valid real approval manifest exists while the current decision
+  artifacts. It separately requires the actual private privacy/legal,
+  commercial, security/authentication, and product-rollout approval files and
+  matches their bounded SHA-256 values without parsing or logging their
+  contents. No valid real approval manifest exists while the current decision
   is `NO_DECISION`.
 - [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
   records the exact build, revision, false flags, secret references, image
