@@ -7,12 +7,14 @@ export const VECTOR_FINALIZATION_POLICY = Object.freeze({
   inputMode: RECOGNITION_INPUT_MODES.VECTOR,
   quietPeriodMs: 350,
   provisionalAfterStroke: true,
+  autoFinalize: true,
 });
 
 export const IMAGE_FINALIZATION_POLICY = Object.freeze({
   inputMode: RECOGNITION_INPUT_MODES.IMAGE,
   quietPeriodMs: 750,
   provisionalAfterStroke: false,
+  autoFinalize: true,
 });
 
 export function finalizationPolicyForRecognizer(recognizer) {
@@ -22,6 +24,7 @@ export function finalizationPolicyForRecognizer(recognizer) {
   return Object.freeze({
     ...VECTOR_FINALIZATION_POLICY,
     provisionalAfterStroke: recognizer.supportsProvisional !== false,
+    autoFinalize: recognizer.autoFinalize !== false,
   });
 }
 
@@ -46,6 +49,7 @@ export function scheduleRowFinalization(
   { setTimer = setTimeout, clearTimer = clearTimeout } = {}
 ) {
   cancelRowFinalization(timers, row, clearTimer);
+  if (policy?.autoFinalize === false) return null;
   const quietPeriodMs = Number.isFinite(policy?.quietPeriodMs)
     ? Math.max(0, policy.quietPeriodMs)
     : IMAGE_FINALIZATION_POLICY.quietPeriodMs;

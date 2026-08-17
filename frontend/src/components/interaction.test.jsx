@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import ActionDialog from "./ActionDialog";
 import HintLadder from "./HintLadder";
 import MathFeedbackPanel from "./MathFeedbackPanel";
+import PageActions from "./PageActions";
 
 let root;
 let container;
@@ -99,5 +100,28 @@ describe("workspace interactions", () => {
     expect(dialog).not.toBe(null);
     act(() => dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(closed).toBe(true);
+  });
+
+  it("prevents repeated line submissions while recognition is active", () => {
+    const onFinishLine = vi.fn();
+    render(
+      <PageActions
+        mode="math"
+        chemistry={{}}
+        strokeCount={4}
+        activeLineNumber={2}
+        transcribing
+        onFinishLine={onFinishLine}
+        onReadPage={vi.fn()}
+        onNewQuestion={vi.fn()}
+      />
+    );
+
+    const button = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === "Reading…");
+    expect(button).not.toBe(undefined);
+    expect(button.disabled).toBe(true);
+    act(() => button.click());
+    expect(onFinishLine).not.toHaveBeenCalled();
   });
 });

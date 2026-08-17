@@ -110,7 +110,18 @@ export default class MyScriptVectorRecognizer extends RecognizerAdapter {
     now,
     emitMetric = emitRecognitionMetric,
   } = {}) {
-    super("myscript", { inputMode: "vector", supportsProvisional: false });
+    // The REST endpoint is a one-shot recognizer, not an incremental iink
+    // session. Automatically finalizing after every short pen pause sends
+    // incomplete expressions, wastes the bounded trial ledger, and queues a
+    // second request as soon as the writer adds the next stroke. Moving to a
+    // new row still finishes the previous row; the active row uses the
+    // explicit "Check line" action so one intentional gesture means one
+    // provider request.
+    super("myscript", {
+      inputMode: "vector",
+      supportsProvisional: false,
+      autoFinalize: false,
+    });
     if (!validDpi(dpiX) || !validDpi(dpiY)) {
       throw new TypeError("MyScript DPI must be between 36 and 600.");
     }

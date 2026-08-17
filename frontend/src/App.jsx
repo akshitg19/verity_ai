@@ -226,6 +226,7 @@ export default function App({ theme: themeFromRoute, subject }) {
         chemistry={chemistry}
         strokeCount={canvas.strokes.length}
         activeLineNumber={canvas.activeLineNumber}
+        transcribing={transcribing}
         onFinishLine={canvas.finishActiveRow}
         onReadPage={handleReadPage}
         onNewQuestion={workspace.handleNewQuestion}

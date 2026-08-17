@@ -64,6 +64,7 @@ export default class HybridRecognizer extends RecognizerAdapter {
     super("hybrid", {
       inputMode: checkedPrimary.inputMode ?? "image",
       supportsProvisional: Boolean(checkedPrimary.supportsProvisional),
+      autoFinalize: checkedPrimary.autoFinalize !== false,
     });
     this.primary = checkedPrimary;
     this.fallback = assertRecognizer(fallback, "fallback recognizer");

@@ -12,6 +12,7 @@ export default function PageActions({
   chemistry,
   strokeCount,
   activeLineNumber,
+  transcribing,
   onFinishLine,
   onReadPage,
   onNewQuestion,
@@ -23,9 +24,13 @@ export default function PageActions({
     mode === "math"
       ? {
           label:
-            activeLineNumber === null ? "Check line" : `Check line ${activeLineNumber}`,
+            transcribing
+              ? "Reading…"
+              : activeLineNumber === null
+              ? "Check line"
+              : `Check line ${activeLineNumber}`,
           onClick: onFinishLine,
-          disabled: empty || activeLineNumber === null,
+          disabled: empty || activeLineNumber === null || transcribing,
         }
       : {
           label: chemistry.reading

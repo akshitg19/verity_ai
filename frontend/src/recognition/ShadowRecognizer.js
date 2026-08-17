@@ -7,6 +7,7 @@ export default class ShadowRecognizer extends RecognizerAdapter {
     super("shadow", {
       inputMode: checkedControl.inputMode ?? "image",
       supportsProvisional: Boolean(checkedControl.supportsProvisional),
+      autoFinalize: checkedControl.autoFinalize !== false,
     });
     this.control = checkedControl;
     this.candidate = assertRecognizer(candidate, "candidate recognizer");
