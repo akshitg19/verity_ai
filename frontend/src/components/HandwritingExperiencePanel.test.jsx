@@ -40,7 +40,16 @@ describe("HandwritingExperiencePanel consent gate", () => {
     render(<HandwritingExperiencePanel />);
 
     const checkbox = container.querySelector('input[type="checkbox"]');
+    const environment = container.querySelector(
+      "[data-handwriting-environment]"
+    );
     expect(checkbox).not.toBe(null);
+    expect(environment.textContent).toMatch(
+      /^(firefox|edge|chromium|safari|other)\/(touch|pointer)-(small|medium|large)$/
+    );
+    expect(container.textContent).toContain(
+      "This preflight label stays in your browser and is not stored or sent."
+    );
     expect(container.querySelector("select")).toBe(null);
     expect(sessionStorage.getItem(HANDWRITING_EXPERIMENT_PAIR_TOKEN_KEY))
       .toBe(null);

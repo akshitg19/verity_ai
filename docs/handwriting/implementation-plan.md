@@ -7,6 +7,11 @@ POC wiring is implemented in PR #35, and durable attempt-ledger enforcement in
 PR #36 (`a584368`). A 50-call synthetic-only live Phase 3 POC completed on
 2026-08-16, comprising the initial 30-case smoke and a paired 20-case `x/X`
 geometry probe; student/production and decision-corpus work remains gated.
+PR #71 adds schema-v3 anonymous consent and approved coarse target-environment
+coverage to the Phase A/B evidence workflow; real teammate/device results
+remain external. PR #72 records the exact protected preview and adds a local-
+only coarse environment preflight before consent.
+
 **Rule:** One phase per reviewable change unless scope expansion is explicit
 
 ## Phase 0 — Source of truth and safe workspace
@@ -1087,4 +1092,37 @@ Known risks: this proves that identity and MyScript are disabled, not that the
 future configured identity flow is approved or works with real accounts.
 Next action: merge the hardened verifier, then obtain security/OAuth approval
 and consented real-account target-device evidence before an enabled canary.
+```
+
+```text
+Date: 2026-08-17
+Branch: feat/handwriting-ab-preview-preflight
+Phase: A/B external-evidence preflight hardening
+Implemented: recorded PR #71's schema-v3 pre-collection anonymous consent gate,
+strict consent validation, and required coarse target-environment coverage;
+replaced stale schema-v2 references; recorded the exact successful protected
+Vercel preview; and added a local-only detected environment label so a tester
+can report a coarse browser/device class for matrix approval before consenting
+or generating any experiment metric. No name, email, device model, full user
+agent, or pair token is displayed, stored, or sent by the preflight label.
+Tests and results: 11 focused A/B component/report tests pass. The full frontend
+passes 413 tests across 44 files, lint, App.jsx 257/260, development and
+production builds, API-base verification, and the provider-secret bundle scan.
+The unchanged backend passes 1324 tests with 3 expected xfails and 3 existing
+OPSIN warnings. Handwriting relative links, changed-file privacy/secret scan,
+built-asset provider-secret identifier scan, and git diff check pass. PR #71
+and post-merge main CI run 32000117180 passed Linux backend, Windows backend,
+frontend, and Vercel. PR #72's exact preview deployment is successful;
+unauthenticated requests return the expected Vercel Authentication redirect.
+Measured metrics: deployment/preflight status only. No handwriting, recognition
+request, target-device latency, accuracy, identity claim, or paid traffic was
+generated.
+Known risks: the displayed coarse class is an input to product/QA matrix
+approval, not approval itself. Three to five teammates must still consent and
+complete paired runs on the approved devices; the exact preview requires
+existing Vercel team access.
+Next action: merge the preflight/documentation change after remote checks. The
+product/QA owner then records the displayed coarse classes, approves the target
+matrix, assigns balanced variant order, and collects schema-v3 paired exports.
+Keep production MyScript and identity flags false.
 ```

@@ -14,14 +14,19 @@ smoke/probe and separate
 v2 run had 300/300 provider successes, 95.00% overall exact match, 96.33% parse
 success, and zero ledger/dashboard discrepancy. These corpora remain
 single-reviewer and decision-ineligible, so the provider decision is still
-`NO_DECISION`. Current Cloud Run revision `verity-ai-00022-2vj` deploys exact
+`NO_DECISION`. PR #70 hardens the content-safe disabled access-boundary
+verifier, and PR #71 adds schema-v3 pre-collection consent plus approved coarse
+target-environment coverage to the internal A/B workflow. PR #72 makes that
+protected preview actionable with a local-only environment preflight. Current
+Cloud Run
+revision `verity-ai-00022-2vj` deploys exact
 runtime source `3b1ca95c91e6da62ba8ca3c0dc42cea00a91bb83` and remains fully disabled; the repeatable verifier
 returned `PASS`. Target-device, eligible decision-corpus,
 privacy/legal, real-authentication approval/configuration, same-input control,
-and enabled-canary evidence remain unavailable. PR #59 repaired and hardened
-the internal Gemini
-scheduling comparison so 3–5 anonymous paired device sessions can now produce
-strict, content-free, machine-checked evidence rather than unverified exports.
+and enabled-canary evidence remain unavailable. The protected PR #72 preview
+now lets 3–5 voluntarily consenting anonymous paired device sessions produce
+strict, content-free, machine-checked schema-v3 evidence rather than unverified
+exports.
 
 **Resume branch:** `main`
 
@@ -30,7 +35,7 @@ strict, content-free, machine-checked evidence rather than unverified exports.
 **Current deployment build/revision:**
 `37fec1f2-8ed5-43dd-b1aa-d004e32bc760` / `verity-ai-00022-2vj`
 
-**Current repository / Vercel frontend:** PR #68 at `3b1ca95`
+**Current repository / Vercel frontend:** PR #71 at `628ed62`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
