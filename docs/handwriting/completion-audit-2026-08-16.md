@@ -2,9 +2,10 @@
 
 **Audit date:** 2026-08-16; last verified 2026-08-17
 
-**Audited repository source:** PR #73 merge `72e71fe`; post-merge main CI run
-`32002999450` passed. The latest verified production frontend remains PR #71
-`628ed62`; the protected PR #72 and PR #73 preview deployments succeeded.
+**Audited safe mechanism source:** PR #74 merge `bd3ee49`; post-merge main CI
+run `32006317905` passed. Later documentation-only checkpoints do not change
+this runtime/validator source. The latest verified production frontend remains
+PR #71 `628ed62`; the protected PR #72–#74 preview deployments succeeded.
 
 **Audited backend runtime source:** `3b1ca95`, deployed as verified disabled
 revision `verity-ai-00022-2vj`
@@ -52,6 +53,11 @@ evidence or approval.
   planning, aggregate scoring, and rollout approval. Its local backend passed
   1331 tests with 3 expected xfails; PR and post-merge Linux, Windows, and
   frontend CI all passed.
+- PR #74 makes activation-time validation load the actual external restricted
+  manifest and governance JSON, then cross-checks the frozen decision and
+  operations fields without opening referenced stroke/image inputs. Its local
+  backend passed 1334 tests with 3 expected xfails; PR and post-merge Linux,
+  Windows, frontend, and Vercel checks all passed.
 - The original landing-page worktree still contains the same six unrelated
   modified/untracked paths and was not edited, stashed, reset, or merged.
 
@@ -75,8 +81,8 @@ evidence or approval.
 | 14 | Written chemistry and structures are separate | Routing complete; recognition evidence external | Existing app tests plus [synthetic chemistry routing fixtures](fixtures/synthetic-chemistry-routing-v1/manifest.jsonl) separate `chemistry_text/text` from `chemistry_structure/smiles`. Target-device recognition accuracy/latency is missing. |
 | 15 | No raw content in ordinary logs | Complete for implemented paths | Content-safe metrics, aggregate reports, adapter errors, reprocessor failures, and disabled verifier are covered by tests. Raw prediction artifacts remain outside Git in an owner-only directory. |
 | 16 | No provider secret in Git/frontend/build/docs/logs | Complete for current state | Production bundle scan passes; secrets are backend Secret Manager references; local credential file is ignored and was never read or printed. |
-| 17 | Relevant local and remote checks pass | Complete for merged work | PR #73 passes 1331 backend tests with 3 expected xfails, 413 frontend tests across 44 files, lint, production build, API/provider-secret checks, Linux backend, Windows backend, frontend, and Vercel preview checks. Post-merge main CI run `32002999450` passed all three jobs. The access-boundary verifier remains content-safe and passes against the live disabled revision. |
-| 18 | Reviewable PRs merged to current main | Complete for safe deliverables | The default-off identity mechanism is merged by PR #67, backend deployment evidence by PRs #68–#70, consent-gated target-device tooling by PRs #71–#72, and exact corpus-governance binding by PR #73 at `72e71fe`. Cloud Run remains exact backend source `3b1ca95` as fully disabled revision `verity-ai-00022-2vj`; no merge enabled provider traffic. |
+| 17 | Relevant local and remote checks pass | Complete for merged work | PR #74 passes 1334 backend tests with 3 expected xfails, 413 frontend tests across 44 files, lint, production build, API/provider-secret checks, Linux backend, Windows backend, frontend, and Vercel preview checks. Post-merge main CI run `32006317905` passed all three jobs. The access-boundary verifier remains content-safe and passes against the live disabled revision. |
+| 18 | Reviewable PRs merged to current main | Complete for safe deliverables | The default-off identity mechanism is merged by PR #67, backend deployment evidence by PRs #68–#70, consent-gated target-device tooling by PRs #71–#72, exact corpus-governance binding by PR #73, and activation-time external-artifact verification by PR #74 at `bd3ee49`. Cloud Run remains exact backend source `3b1ca95` as fully disabled revision `verity-ai-00022-2vj`; no merge enabled provider traffic. |
 | 19 | Preview/staging smoke tests pass | Partially complete | Vercel production for `628ed62`, the protected PR #71 schema-v3 preview, and Cloud Build `37fec1f2-8ed5-43dd-b1aa-d004e32bc760` pass. Unauthenticated preview requests return the expected authentication redirect. The enhanced Cloud Run verifier proves 100% traffic to disabled revision `verity-ai-00022-2vj`, false MyScript/shared-access flags, identity mode off, empty OAuth/API-secret/allow-list configuration, pinned secret references, and HTTP 200/200/404/200. No target-device authenticated enabled-provider preview is authorized. |
 | 20 | Production rollout completed or fully rollout-ready | Mechanism complete; external evidence required | The safe state is fully disabled. A strict rollout manifest gate exists, and a default-off Google identity mechanism now verifies official ID tokens, audience/issuer/expiry, and exact allow-lists while refusing shared-key bypass. It still has no real OAuth client, configured reviewers, security approval, or real-account device canary. No valid rollout manifest exists because provider selection, eligible corpus/device evidence, privacy/commercial/security/data/product approvals, and canary evidence remain missing. |
 | 21 | Rollback commands verified | Mechanism complete; enabled rollback external | [Runbook](rollout-runbook.md) contains frontend/backend kill switches; every reviewed Cloud Build restores false flags; live disabled verifier passes. An enabled-provider rollback cannot be exercised before an enabled canary is approved. |

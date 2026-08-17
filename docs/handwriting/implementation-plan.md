@@ -1173,15 +1173,17 @@ governance schemas, and cross-checks decision eligibility, corpus and governance
 hashes/IDs/version/count, MyScript approval, data-governance artifact hash,
 retention policy, and deletion-test ID. Missing, oversized, malformed, stale,
 or mismatched artifacts fail with stable content-safe codes. The handoff,
-completion audit, index, and rollout command now reflect PR #73 and the two
-new required external paths.
+completion audit, index, and rollout command preserve the PR #73 checkpoint and
+document the two new required external paths.
 Tests and results: after commit, 40/40 focused evaluator/rollout tests and the
 full backend pass with 1334 tests plus 3 expected xfails, including the exact-
 commit evidence-drift gate. The unchanged frontend passes lint, 413 tests
 across 44 files, a production-configured build, API-base/provider-secret
 verification, and App.jsx 257/260. Python compilation, 24-file handwriting
 relative-link validation, changed-file privacy scan, and `git diff --check`
-pass.
+pass. PR #74 passed Linux backend, Windows backend, frontend, and Vercel checks;
+post-merge main CI run `32006317905` passed all three jobs at merge commit
+`bd3ee49`.
 Measured metrics: validation behavior only. No stroke/image file was opened,
 no provider request or secret read occurred, no user data was created, and no
 deployment or paid action occurred.
@@ -1189,7 +1191,6 @@ Known risks: the validator proves artifact consistency, not that an approval is
 substantively correct. No real governance file, approved restricted corpus,
 same-input provider decision, target-device evidence, security approval, or
 enabled canary exists.
-Next action: merge this fail-closed closure after remote gates. Keep production
-identity/MyScript flags false until the named owners supply the actual artifacts
-and all remaining approvals.
+Next action: PR #74 is merged. Keep production identity/MyScript flags false
+until the named owners supply the actual artifacts and all remaining approvals.
 ```
