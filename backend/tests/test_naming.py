@@ -178,6 +178,11 @@ def test_opsin_calls_are_serialised():
         inside.acquire(timeout=0.2)
         return "CCO"
 
+    # The resolution cache would otherwise answer three of these four from
+    # memory, which is the point of the cache and the opposite of what this
+    # test is for: it needs four callers actually reaching OPSIN at once.
+    naming_module._resolve.cache_clear()
+
     with patch.object(naming_module, "_opsin", return_value=slow_convert):
         threads = [
             threading.Thread(target=naming_module.name_to_smiles, args=("ethanol",))
@@ -211,6 +216,46 @@ def test_a_name_that_resolves_to_the_target_is_valid_under_load():
         statuses = list(pool.map(lambda _: once(), range(12)))
 
     assert set(statuses) == {"valid"}, statuses
+
+
+def test_the_same_name_is_only_sent_to_opsin_once():
+    """Every OPSIN call starts a JVM and costs about half a second, and the
+    lock means they queue. One problem resolves the same name repeatedly:
+    once to build the vault, once per check, and again on every recheck after
+    a transcription."""
+    import judge.naming as naming_module
+
+    calls = []
+
+    def counting_convert(text):
+        calls.append(text)
+        return "CCO"
+
+    naming_module._resolve.cache_clear()
+    with patch.object(naming_module, "_opsin", return_value=counting_convert):
+        for _ in range(5):
+            assert naming_module.name_to_smiles("ethanol") == "CCO"
+
+    assert calls == ["ethanol"]
+
+
+def test_a_cached_name_still_reports_unsupported_without_java():
+    """The availability gate is consulted before the cache, never through it.
+
+    Otherwise whether naming worked would depend on which names had been
+    asked for while a Java runtime was still installed.
+    """
+    import judge.naming as naming_module
+
+    naming_module._resolve.cache_clear()
+    with patch.object(naming_module, "_opsin", return_value=lambda text: "CCO"):
+        assert naming_module.name_to_smiles("ethanol") == "CCO"
+
+    with patch.object(
+        naming_module, "_opsin", side_effect=OpsinUnavailableError("no java")
+    ):
+        with pytest.raises(OpsinUnavailableError):
+            naming_module.name_to_smiles("ethanol")
 
 
 # ---------------------------------------------------------------------------
