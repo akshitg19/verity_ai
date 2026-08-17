@@ -7,8 +7,14 @@ import {
   getHint,
   recognizeMyScript,
 } from "./api";
+import {
+  clearGoogleIdToken,
+  getGoogleIdToken,
+  setGoogleIdToken,
+} from "./auth/tokenStore";
 
 afterEach(() => {
+  clearGoogleIdToken();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -93,5 +99,32 @@ describe("API request wrapper", () => {
       "/api/handwriting/myscript/recognize"
     );
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(payload);
+  });
+
+  it("sends an in-memory Google ID token as a bearer credential", async () => {
+    const fetchMock = vi.fn(async () => response({ text: "x=3" }));
+    vi.stubGlobal("fetch", fetchMock);
+    setGoogleIdToken("signed.jwt.token");
+
+    await recognizeMyScript({ strokes: [] });
+
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe(
+      "Bearer signed.jwt.token"
+    );
+    expect(fetchMock.mock.calls[0][1].headers["X-Verity-Key"]).toBe(undefined);
+  });
+
+  it("clears an expired or rejected bearer credential after a 401", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response(
+      { detail: "Authentication required" },
+      { ok: false, status: 401, statusText: "Unauthorized" }
+    )));
+    setGoogleIdToken("signed.jwt.token");
+
+    await expect(recognizeMyScript({ strokes: [] })).rejects.toMatchObject({
+      status: 401,
+    });
+
+    expect(getGoogleIdToken()).toBe("");
   });
 });

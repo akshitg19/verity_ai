@@ -1,6 +1,7 @@
 import App from "./App";
 import ErrorBoundary from "./ErrorBoundary";
 import Landing from "./landing/Landing";
+import GoogleIdentityBoundary from "./auth/GoogleIdentityBoundary";
 import useRoute from "./router";
 import useTheme from "./useTheme";
 import { useEffect } from "react";
@@ -29,7 +30,9 @@ export default function Root() {
       {route === "/" ? (
         <Landing theme={theme} />
       ) : (
-        <App theme={theme} subject={route === "/math" ? "math" : "chemistry"} />
+        <GoogleIdentityBoundary>
+          <App theme={theme} subject={route === "/math" ? "math" : "chemistry"} />
+        </GoogleIdentityBoundary>
       )}
     </ErrorBoundary>
   );

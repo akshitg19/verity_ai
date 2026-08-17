@@ -48,6 +48,16 @@ substitutions:
   # a real secret, move it to Secret Manager and use --set-secrets, which is
   # a separate flag and so is not wiped by --set-env-vars.
   _API_SECRET: ''
+  # Real Google identity remains off in every normal disabled deployment. An
+  # activation PR must set a reviewed web OAuth client ID and an exact Google
+  # `sub` allow-list. Stable subjects avoid exposing email addresses, but they
+  # remain persistent identifiers and deployment metadata access stays limited.
+  # A Workspace-domain allow-list supports an approved broader rollout but is
+  # intentionally empty here.
+  _AUTH_MODE: 'off'
+  _GOOGLE_CLIENT_ID: ''
+  _AUTH_ALLOWED_SUBJECTS: ''
+  _AUTH_ALLOWED_DOMAINS: ''
 
 options:
   # Required when the build runs as a service account rather than the legacy
@@ -122,7 +132,7 @@ steps:
       - '--timeout=300'
       # This replaces the whole environment rather than adding to it, so every
       # variable the service needs has to be named here every time.
-      - '--set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=${_CORS_ORIGINS},CORS_ORIGIN_REGEX=${_CORS_ORIGIN_REGEX},VERITY_API_SECRET=${_API_SECRET},MYSCRIPT_ENABLED=false,MYSCRIPT_POC_ROUTE_ENABLED=false,MYSCRIPT_RECOGNITION_URL=https://cloud.myscript.com/api/v4.0/iink/recognize,MYSCRIPT_TIMEOUT_SECONDS=3,MYSCRIPT_EVAL_REQUEST_CAP=1500'
+      - '--set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},GEMINI_MODEL=gemini-2.5-flash,CORS_ORIGINS=${_CORS_ORIGINS},CORS_ORIGIN_REGEX=${_CORS_ORIGIN_REGEX},VERITY_API_SECRET=${_API_SECRET},VERITY_AUTH_MODE=${_AUTH_MODE},VERITY_GOOGLE_CLIENT_ID=${_GOOGLE_CLIENT_ID},VERITY_AUTH_ALLOWED_SUBJECTS=${_AUTH_ALLOWED_SUBJECTS},VERITY_AUTH_ALLOWED_DOMAINS=${_AUTH_ALLOWED_DOMAINS},MYSCRIPT_ENABLED=false,MYSCRIPT_POC_ROUTE_ENABLED=false,MYSCRIPT_ALLOW_SHARED_ACCESS=false,MYSCRIPT_RECOGNITION_URL=https://cloud.myscript.com/api/v4.0/iink/recognize,MYSCRIPT_TIMEOUT_SECONDS=3,MYSCRIPT_EVAL_REQUEST_CAP=1500'
       # Secret values are resolved by Cloud Run into backend-only environment
       # variables. They never become Cloud Build substitutions or image layers.
       - '--update-secrets=MYSCRIPT_APPLICATION_KEY=verity-myscript-application-key:${_MYSCRIPT_APPLICATION_KEY_VERSION},MYSCRIPT_HMAC_KEY=verity-myscript-hmac-key:${_MYSCRIPT_HMAC_KEY_VERSION}'

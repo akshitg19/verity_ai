@@ -21,10 +21,14 @@ The MyScript POC is protected by independent layers:
 |---|---|---:|---|
 | Frontend mode | `VITE_HANDWRITING_MODE` | unset / `gemini` | Uses the existing Gemini PNG path |
 | Frontend POC gate | `VITE_MYSCRIPT_POC_ENABLED` | unset / false | A `myscript-poc` mode request still resolves to Gemini |
+| Frontend identity | `VITE_GOOGLE_CLIENT_ID` | unset | No sign-in gate or bearer token is constructed |
 | Frontend access header | `VITE_API_SECRET` | unset | Must match the backend access-control value for an internal preview; it is visible in the browser and is not authentication |
 | Backend route gate | `MYSCRIPT_POC_ROUTE_ENABLED` | `false` | Returns a content-safe disabled response before adapter lookup |
 | Backend provider gate | `MYSCRIPT_ENABLED` | `false` | Prevents the adapter from opening a provider connection |
-| API access control | `VERITY_API_SECRET` | empty | The route gate cannot open without the existing access-control configuration |
+| Local shared-access escape hatch | `MYSCRIPT_ALLOW_SHARED_ACCESS` | `false` | Prevents the browser header from opening a deployed provider route; only an explicitly configured local POC may set true |
+| Real identity mode | `VERITY_AUTH_MODE` | `off` | Google ID-token verification is not active |
+| Identity allow-list | `VERITY_AUTH_ALLOWED_SUBJECTS` / `VERITY_AUTH_ALLOWED_DOMAINS` | empty | No user or domain is approved by deployment metadata |
+| API access control | `VERITY_API_SECRET` | empty | Optional local speed bump only; a reviewed Google identity boundary can satisfy the route gate instead |
 | Provider credentials | Secret Manager references | mapped in deploy config | Values remain backend-only and are never read for metadata verification |
 
 The direct `myscript-poc` frontend mode has no automatic Gemini fallback. This
@@ -59,8 +63,12 @@ All items must have an owner and attached evidence:
 7. Both Secret Manager environment references are pinned to reviewed numeric
    versions, and Cloud Run revision metadata proves the references without
    reading values.
-8. Real user authentication is reviewed. The existing shared browser header is
-   only a crawler deterrent and is not sufficient for a student rollout.
+8. Real user authentication is reviewed. The default-off
+   [Google identity boundary](google-identity-boundary-2026-08-16.md) is
+   implemented, but the exact OAuth audience, exact-user allow-list, approved
+   origins, real-account iPad/desktop evidence, access-removal process, and
+   security approval must all be attached. The existing shared browser header
+   remains only a crawler deterrent.
 
 If any item is missing, leave every MyScript deployment flag false and do not
 send student or production traffic. The completed synthetic-only local smoke is
@@ -233,6 +241,20 @@ Only after every precondition passes:
    VITE_HANDWRITING_MODE=myscript-poc
    VITE_MYSCRIPT_POC_ENABLED=true
    ```
+
+   Configure real identity before either provider flag opens:
+
+   ```text
+   backend: VERITY_AUTH_MODE=google
+   backend: VERITY_GOOGLE_CLIENT_ID=<reviewed web OAuth client ID>
+   backend: VERITY_AUTH_ALLOWED_SUBJECTS=<exact reviewed Google subjects>
+   frontend: VITE_GOOGLE_CLIENT_ID=<the same reviewed web OAuth client ID>
+   frontend: VITE_API_SECRET must be unset
+   ```
+
+   `cloudbuild.yaml` keeps all identity values off/empty today. An activation
+   PR must change them together with reviewed evidence; an out-of-band manual
+   environment update will be erased by the next normal deploy.
 
 5. Confirm the preview is inaccessible to ordinary student traffic.
 6. Run the validated replay plan, beginning with one synthetic fixture and then

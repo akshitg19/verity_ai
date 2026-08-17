@@ -527,6 +527,10 @@ def test_route_gate_requires_both_explicit_flag_and_api_access_control(monkeypat
     with patch.object(main, "API_SECRET", ""):
         assert main._myscript_poc_route_is_enabled() is False
     with patch.object(main, "API_SECRET", "configured-access-control"):
+        assert main._myscript_poc_route_is_enabled() is False
+
+    monkeypatch.setenv("MYSCRIPT_ALLOW_SHARED_ACCESS", "true")
+    with patch.object(main, "API_SECRET", "configured-access-control"):
         assert main._myscript_poc_route_is_enabled() is True
 
     monkeypatch.setenv("MYSCRIPT_POC_ROUTE_ENABLED", "false")
@@ -541,6 +545,11 @@ def test_cloud_build_pins_existing_secrets_with_provider_disabled():
 
     assert "MYSCRIPT_ENABLED=false" in cloudbuild
     assert "MYSCRIPT_POC_ROUTE_ENABLED=false" in cloudbuild
+    assert "MYSCRIPT_ALLOW_SHARED_ACCESS=false" in cloudbuild
+    assert "_AUTH_MODE: 'off'" in cloudbuild
+    assert "VERITY_AUTH_MODE=${_AUTH_MODE}" in cloudbuild
+    assert "VERITY_GOOGLE_CLIENT_ID=${_GOOGLE_CLIENT_ID}" in cloudbuild
+    assert "VERITY_AUTH_ALLOWED_SUBJECTS=${_AUTH_ALLOWED_SUBJECTS}" in cloudbuild
     assert "_MYSCRIPT_APPLICATION_KEY_VERSION: '1'" in cloudbuild
     assert "_MYSCRIPT_HMAC_KEY_VERSION: '1'" in cloudbuild
     assert "_MYSCRIPT_APPLICATION_KEY_VERSION: latest" not in cloudbuild
