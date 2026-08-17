@@ -112,6 +112,11 @@ from remaining in a production bundle after real identity is enabled.
   health/OpenAPI/disabled-route/frontend checks. Identity remains `off` with an
   empty client and empty allow-lists, so this proves safe deployment rather than
   a configured authentication canary.
+- The hardened verifier at `a9eab64` then re-read that live revision and
+  machine-checked `MYSCRIPT_ALLOW_SHARED_ACCESS=false`, identity mode `off`, and
+  absence of an API secret, OAuth client, and subject/email/domain allow-lists
+  before permitting any HTTP check. It returned `PASS` without exposing any
+  runtime value outside its explicit content-safe report.
 
 No real user credential, OAuth client, Google account claim, student ink,
 MyScript request, or production flag was created or transmitted by these tests.

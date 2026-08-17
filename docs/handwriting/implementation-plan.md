@@ -1062,3 +1062,29 @@ Next action: merge this content-free evidence. Keep identity and both provider
 flags off until every named external approval and rollout-manifest requirement
 is satisfied.
 ```
+
+```text
+Date: 2026-08-17
+Branch: feat/verify-disabled-access-boundary / a9eab64
+Phase: disabled access-boundary verification hardening
+Implemented: extended the content-safe Cloud Run verifier to fail before HTTP
+unless the shared-access escape hatch is false, identity mode is off, the API
+secret and Google client ID are empty, and subject/email/domain allow-lists are
+empty. The report emits only false/configured booleans and retains the original
+stable provider-gate failure codes. Direct and secret-reference drift are both
+rejected without echoing values.
+Tests and results: 20 focused verifier tests pass, and the full backend passes
+with 1324 passed and 3 expected xfails. Coverage includes every new drift
+condition, HTTP-before-metadata prohibition, valueFrom rejection, stable CLI
+errors, private-sentinel non-disclosure, existing provider flags, pinned secret
+versions, traffic, and content-safe HTTP checks. The enhanced verifier was run
+from exact source a9eab64 against live revision verity-ai-00022-2vj and returned
+PASS for the access boundary, provider flags, version-1 secret references, 100%
+traffic, and HTTP 200/200/404/200.
+Measured metrics: deployment safety only; no provider call, sign-in, user ink,
+identity claim, accuracy, latency, or paid traffic was generated.
+Known risks: this proves that identity and MyScript are disabled, not that the
+future configured identity flow is approved or works with real accounts.
+Next action: merge the hardened verifier, then obtain security/OAuth approval
+and consented real-account target-device evidence before an enabled canary.
+```

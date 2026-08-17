@@ -45,15 +45,24 @@ not access either Secret Manager value.
 | `MYSCRIPT_POC_ROUTE_ENABLED` | `false` | Pass |
 | `MYSCRIPT_APPLICATION_KEY` reference | `verity-myscript-application-key:1` | Pass |
 | `MYSCRIPT_HMAC_KEY` reference | `verity-myscript-hmac-key:1` | Pass |
+| `MYSCRIPT_ALLOW_SHARED_ACCESS` | `false` | Pass |
+| `VERITY_AUTH_MODE` | `off` | Pass |
+| `VERITY_API_SECRET` configured | no | Pass |
+| Google OAuth client configured | no | Pass |
+| Subject/email/domain allow-list configured | no | Pass |
 
 `cloudbuild.yaml` also deploys `MYSCRIPT_ALLOW_SHARED_ACCESS=false`,
 `VERITY_AUTH_MODE=off`, an empty Google client ID, and empty identity
 allow-lists. The merged identity verifier is therefore present but inactive;
 no account identity is required or collected in the current production state.
+The enhanced verifier at source `a9eab64` later re-read the live revision and
+machine-checked these access-boundary values rather than inferring them only
+from `cloudbuild.yaml`; it returned `PASS` without reading a credential value.
 
 ## 3. Content-safe checks
 
-`scripts/verify_disabled_myscript_revision.py` returned `PASS` with this
+`scripts/verify_disabled_myscript_revision.py` returned `PASS` before and after
+the access-boundary hardening, with this
 allowlisted sequence:
 
 | Check | Observed result |
