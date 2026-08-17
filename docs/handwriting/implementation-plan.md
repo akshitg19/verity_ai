@@ -1017,16 +1017,19 @@ Full backend passes 1316 with 3 expected xfails; full frontend passes 410 across
 API-base/provider-secret scan; the conflicting-key negative build fails as
 expected. A local production-preview browser smoke shows only the team sign-in
 gate and official Google button on /math, with no workspace mount, console
-warning/error, credential use, or MyScript request.
+warning/error, credential use, or MyScript request. PR #67 then passed Linux,
+Windows, frontend, and Vercel checks and merged at `94b3e0d`; post-merge `main`
+CI run `31996768597` passed all three jobs. The production frontend smoke still
+opens Gemini directly because its Google client setting is unset.
 Measured metrics: no provider, identity-provider sign-in, student, or paid
 traffic. Google public certificate responses are cache-controlled to avoid a
 new network fetch on every API action.
 Known risks: no OAuth client, exact reviewer subjects, approved origins,
-security decision, access-removal evidence, real-account desktop/iPad test, or
-remote PR/CI evidence exists yet. The mechanism is not an authentication
+security decision, access-removal evidence, or real-account desktop/iPad test
+exists yet. The mechanism is not an authentication
 approval and production remains disabled.
-Next action: merge the default-off mechanism after review. Security/product and
-OAuth owners must then approve and configure a stable non-production preview,
+Next action: security/product and OAuth owners must approve and configure a
+stable non-production preview,
 prove allowed/denied/expiry/sign-out behavior on target devices, and issue the
 authentication-boundary evidence ID required by the rollout manifest.
 ```

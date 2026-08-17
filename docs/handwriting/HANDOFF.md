@@ -1,12 +1,13 @@
 # VerityAI Handwriting v2 — Complete Handoff
 
-**Handoff date:** 2026-08-16
+**Handoff date:** 2026-08-17
 
 **Status:** Safe provider-neutral foundations, disabled MyScript integration,
-and one-shot REST submission scheduling are merged through PR #65. A
-default-off Google ID-token identity boundary is implemented and locally
-validated on the current feature branch; it is not yet merged, configured,
-security-approved, or exercised with a real account. Current
+and one-shot REST submission scheduling are merged through PR #65. The
+default-off Google ID-token identity boundary is merged through PR #67 and
+validated locally, in PR CI, in post-merge `main` CI, and in a production
+frontend smoke. It is not configured, security-approved, or exercised with a
+real account. Current
 disabled-deployment evidence is merged through PR #63. The 50-call v1
 smoke/probe and separate
 300-call v2 synthetic diagnostic completed with no production flag change; the
@@ -17,7 +18,8 @@ single-reviewer and decision-ineligible, so the provider decision is still
 runtime source `b9b1d76` and remains fully disabled; the repeatable verifier
 returned `PASS`. Target-device, eligible decision-corpus,
 privacy/legal, real-authentication approval/configuration, same-input control,
-and enabled-canary evidence remain unavailable. PR #59 repaired and hardened the internal Gemini
+and enabled-canary evidence remain unavailable. PR #59 repaired and hardened
+the internal Gemini
 scheduling comparison so 3–5 anonymous paired device sessions can now produce
 strict, content-free, machine-checked evidence rather than unverified exports.
 
@@ -27,7 +29,7 @@ strict, content-free, machine-checked evidence rather than unverified exports.
 
 **Deployment-evidence merge:** PR #63 at `d683da5`
 
-**Current repository / Vercel frontend:** PR #65 at `03bcead`
+**Current repository / Vercel frontend:** PR #67 at `94b3e0d`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
