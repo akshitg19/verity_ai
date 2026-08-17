@@ -48,6 +48,12 @@ export default function useWorkspaceNavigation({ notebook, canvas, mode, chemist
     void notebook.flushWrites().then(() => notebook.deletePage(targetPageId));
   }, [notebook, saveActivePage]);
 
+  const preparePageExport = useCallback(async () => {
+    saveActivePage();
+    await notebook.flushWrites();
+    return canvas.getStrokesSnapshot();
+  }, [canvas, notebook, saveActivePage]);
+
   const workspaceNotebook = {
     ...notebook,
     openPage: handleOpenPage,
@@ -55,6 +61,7 @@ export default function useWorkspaceNavigation({ notebook, canvas, mode, chemist
     createNote: handleCreateNote,
     addPage: handleAddPage,
     deletePage: handleDeletePage,
+    preparePageExport,
     duplicateNote: (noteId) => {
       if (noteId === notebook.activeNote.id) saveActivePage();
       void notebook.flushWrites().then(() => notebook.duplicateNote(noteId));
@@ -103,8 +110,10 @@ export default function useWorkspaceNavigation({ notebook, canvas, mode, chemist
   const handleModeChange = useCallback((nextMode) => {
     if (nextMode === mode) return;
     saveActivePage();
-    navigate(nextMode === "math" ? "/math" : "/chemistry");
-  }, [mode, saveActivePage]);
+    void notebook.flushWrites().then(() => {
+      navigate(nextMode === "math" ? "/math" : "/chemistry");
+    });
+  }, [mode, notebook, saveActivePage]);
 
   return {
     actionDialog,

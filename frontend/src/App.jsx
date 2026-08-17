@@ -215,6 +215,7 @@ export default function App({ theme: themeFromRoute, subject }) {
         onFinishLine={canvas.finishActiveRow}
         onReadPage={handleReadPage}
         onClear={workspace.handleNewQuestion}
+        recognitionStatus={math.recognitionStatus}
       />
       <NotebookSaveStatus
         status={notebook.saveStatus}

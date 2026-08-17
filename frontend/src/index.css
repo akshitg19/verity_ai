@@ -155,7 +155,7 @@ textarea,
 /* On wide screens the feedback column is a real layout column. The canvas
    receives the remaining rectangle, so feedback cannot cover the writing
    surface or alter pointer coordinates after a resize. */
-@media (min-width: 1101px) {
+@media (min-width: 1281px) {
   .workspace-app {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) 376px;
@@ -311,17 +311,18 @@ textarea,
   stroke: #1b1c1a;
 }
 
-/* A tablet is not a desktop and not a phone. Below 1100px the 360px panel
-   plus a usable canvas no longer fit side by side, so the panel becomes a
-   sheet along the bottom. It keeps its own scroll container either way, so
-   nothing inside it can be unreachable. */
+/* A tablet is not a desktop and not a phone. At iPad landscape widths the
+   toolbar needs two deliberate rows and the 360px feedback column would
+   leave too little ruled paper, so the panel becomes a sheet below 1281px.
+   It keeps its own scroll container either way, so nothing inside it can be
+   unreachable. */
 /* dvh, not vh, and it is load-bearing rather than tidiness. A tablet browser
    counts its collapsible toolbars as part of vh, so `bottom: 12px` with a vh
    height put the foot of the panel behind the toolbar: the panel scrolled to
    its end and the last thing in it, which is the hint, stayed off screen with
    no way to reach it. dvh is the viewport actually being shown. The vh line
    above each dvh line is the fallback for browsers without it. */
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
   .workspace-app {
     display: block !important;
   }
