@@ -17,8 +17,24 @@ from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+BACKEND_ROOT = REPO_ROOT / "backend"
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from handwriting_eval.validation import (  # noqa: E402
+    CorpusGovernanceValidation,
+    EvaluationDataError,
+    ManifestValidation,
+    load_corpus_governance,
+    load_manifest,
+)
+
+
 MAX_MANIFEST_BYTES = 256 * 1024
 MAX_EVIDENCE_BYTES = 4 * 1024 * 1024
+MAX_CORPUS_MANIFEST_BYTES = 64 * 1024 * 1024
+MAX_CORPUS_GOVERNANCE_BYTES = 256 * 1024
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 APPROVAL_NAMES = (
     "privacy_legal",
@@ -101,6 +117,46 @@ def _validate_schema(manifest: dict[str, Any], schema: dict[str, Any]) -> None:
         raise RolloutApprovalError(
             f"approval_schema_failed__{safe_location}__{safe_validator}"
         )
+
+
+def _load_corpus_evidence(
+    *,
+    corpus_manifest_path: Path,
+    fixture_schema_path: Path,
+    corpus_governance_path: Path,
+    governance_schema_path: Path,
+    decision: dict[str, Any],
+    provider: str,
+) -> tuple[ManifestValidation, CorpusGovernanceValidation]:
+    """Load restricted decision metadata without opening stroke/image inputs."""
+
+    try:
+        for path, maximum_bytes in (
+            (corpus_manifest_path, MAX_CORPUS_MANIFEST_BYTES),
+            (corpus_governance_path, MAX_CORPUS_GOVERNANCE_BYTES),
+        ):
+            if not path.is_file() or path.stat().st_size > maximum_bytes:
+                raise RolloutApprovalError("corpus_evidence_invalid")
+        corpus_manifest = load_manifest(
+            corpus_manifest_path,
+            fixture_schema_path,
+            require_inputs=False,
+            require_decision_ready=True,
+            allow_consented_user=True,
+        )
+        corpus_governance = load_corpus_governance(
+            corpus_governance_path,
+            governance_schema_path,
+            corpus_manifest,
+            expected_corpus_version=decision["corpus_version"],
+            expected_provider=provider,
+            require_decision_size=True,
+        )
+    except RolloutApprovalError:
+        raise
+    except (EvaluationDataError, OSError, ValueError):
+        raise RolloutApprovalError("corpus_evidence_invalid") from None
+    return corpus_manifest, corpus_governance
 
 
 def _repository_file(root: Path, relative_path: str) -> Path:
@@ -298,12 +354,52 @@ def _validate_ledger_path(value: str, repository_root: Path) -> None:
         raise RolloutApprovalError("durable_ledger_path_inside_repository")
 
 
+def _validate_corpus_binding(
+    approval_manifest: dict[str, Any],
+    corpus_manifest: ManifestValidation,
+    corpus_governance: CorpusGovernanceValidation,
+) -> None:
+    decision = approval_manifest["decision"]
+    operations = approval_manifest["operations"]
+    provider = approval_manifest["provider"]
+
+    if not corpus_manifest.decision_eligible:
+        raise RolloutApprovalError("corpus_manifest_not_decision_eligible")
+    if corpus_manifest.manifest_sha256 != decision["corpus_manifest_sha256"]:
+        raise RolloutApprovalError("corpus_manifest_hash_mismatch")
+    if len(corpus_manifest.records) != decision["sample_count"]:
+        raise RolloutApprovalError("corpus_sample_count_mismatch")
+    if corpus_governance.governance_id != decision["corpus_governance_id"]:
+        raise RolloutApprovalError("corpus_governance_id_mismatch")
+    if (
+        corpus_governance.governance_sha256
+        != decision["corpus_governance_sha256"]
+    ):
+        raise RolloutApprovalError("corpus_governance_hash_mismatch")
+    if corpus_governance.corpus_version != decision["corpus_version"]:
+        raise RolloutApprovalError("corpus_version_mismatch")
+    if corpus_governance.manifest_sha256 != corpus_manifest.manifest_sha256:
+        raise RolloutApprovalError("corpus_governance_manifest_mismatch")
+    if corpus_governance.fixture_count != len(corpus_manifest.records):
+        raise RolloutApprovalError("corpus_governance_count_mismatch")
+    if provider not in corpus_governance.approved_providers:
+        raise RolloutApprovalError("corpus_provider_not_approved")
+    if corpus_governance.retention_policy_ids != (
+        operations["retention_policy_id"],
+    ):
+        raise RolloutApprovalError("corpus_retention_policy_mismatch")
+    if corpus_governance.deletion_test_id != operations["deletion_test_id"]:
+        raise RolloutApprovalError("corpus_deletion_test_mismatch")
+
+
 def validate_rollout_approval(
     manifest: dict[str, Any],
     schema: dict[str, Any],
     *,
     repository_root: Path,
     expected_source_commit: str,
+    corpus_manifest: ManifestValidation,
+    corpus_governance: CorpusGovernanceValidation,
 ) -> dict[str, Any]:
     """Validate every rollout gate and return an allowlisted summary."""
 
@@ -327,6 +423,7 @@ def validate_rollout_approval(
         != decision["corpus_governance_sha256"]
     ):
         raise RolloutApprovalError("corpus_governance_approval_mismatch")
+    _validate_corpus_binding(manifest, corpus_manifest, corpus_governance)
     _validate_evidence(manifest["evidence"], repository_root)
     validate_committed_evidence(
         manifest["evidence"], repository_root, expected_source_commit
@@ -369,16 +466,27 @@ def validate_rollout_approval(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(
         description="Validate a content-free handwriting rollout approval manifest."
     )
     parser.add_argument("--manifest", required=True)
     parser.add_argument(
         "--schema",
-        default=str(root / "docs/handwriting/rollout-approval.schema.json"),
+        default=str(REPO_ROOT / "docs/handwriting/rollout-approval.schema.json"),
     )
-    parser.add_argument("--repository-root", default=str(root))
+    parser.add_argument("--corpus-manifest")
+    parser.add_argument("--corpus-governance")
+    parser.add_argument(
+        "--fixture-schema",
+        default=str(REPO_ROOT / "docs/handwriting/fixtures/fixture.schema.json"),
+    )
+    parser.add_argument(
+        "--governance-schema",
+        default=str(
+            REPO_ROOT / "docs/handwriting/fixtures/corpus-governance.schema.json"
+        ),
+    )
+    parser.add_argument("--repository-root", default=str(REPO_ROOT))
     parser.add_argument("--expected-source-commit", required=True)
     return parser
 
@@ -393,11 +501,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         checked_out_commit = repository_head(Path(args.repository_root))
         if checked_out_commit != args.expected_source_commit:
             raise RolloutApprovalError("checked_out_commit_mismatch")
+        _validate_schema(manifest, schema)
+        if args.corpus_manifest is None or args.corpus_governance is None:
+            raise RolloutApprovalError("corpus_evidence_missing")
+        corpus_manifest, corpus_governance = _load_corpus_evidence(
+            corpus_manifest_path=Path(args.corpus_manifest),
+            fixture_schema_path=Path(args.fixture_schema),
+            corpus_governance_path=Path(args.corpus_governance),
+            governance_schema_path=Path(args.governance_schema),
+            decision=manifest["decision"],
+            provider=manifest["provider"],
+        )
         summary = validate_rollout_approval(
             manifest,
             schema,
             repository_root=Path(args.repository_root),
             expected_source_commit=args.expected_source_commit,
+            corpus_manifest=corpus_manifest,
+            corpus_governance=corpus_governance,
         )
     except RolloutApprovalError as exc:
         print(

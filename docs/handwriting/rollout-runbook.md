@@ -87,6 +87,8 @@ approval manifest outside raw/restricted data and validate it against
 ```bash
 python3 scripts/validate_handwriting_rollout_approval.py \
   --manifest /approved/path/myscript-rollout-approval.json \
+  --corpus-manifest /approved/restricted/corpus-v1.jsonl \
+  --corpus-governance /approved/governance/corpus-v1-governance.json \
   --repository-root . \
   --expected-source-commit "$(git rev-parse HEAD)"
 ```
@@ -97,6 +99,11 @@ true:
 - the exact 40-character source commit matches both the manifest and the
   checked-out repository `HEAD`, and a `GO` or `CATEGORY_LIMITED_GO` decision
   is pinned;
+- the actual restricted decision manifest and content-free governance JSON are
+  supplied to the validator; it opens no stroke/image inputs, emits no corpus
+  content, and fails closed unless the exact governance ID/hash, corpus
+  version/hash/count, MyScript approval, current review window, two-reviewer
+  gate, retention policy, and deletion-test ID match the rollout manifest;
 - the decision corpus has 300–500 cases, and its governance ID, version, hash,
   normalization, run ID, and allowed categories are frozen;
 - privacy/legal, commercial, security/authentication, data-governance, and

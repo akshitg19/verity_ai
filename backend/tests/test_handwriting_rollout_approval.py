@@ -3,6 +3,7 @@ import json
 import subprocess
 import sys
 from copy import deepcopy
+from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -14,10 +15,17 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.validate_handwriting_rollout_approval import (  # noqa: E402
     RolloutApprovalError,
+    _load_corpus_evidence,
     main,
     repository_head,
     validate_committed_evidence,
     validate_rollout_approval,
+)
+from handwriting_eval.validation import (  # noqa: E402
+    CorpusGovernanceValidation,
+    ManifestValidation,
+    canonical_json_sha256,
+    canonical_manifest_sha256,
 )
 
 
@@ -25,6 +33,10 @@ SCHEMA = json.loads(
     (ROOT / "docs/handwriting/rollout-approval.schema.json").read_text()
 )
 SOURCE_COMMIT = "a" * 40
+FIXTURE_SCHEMA = ROOT / "docs/handwriting/fixtures/fixture.schema.json"
+GOVERNANCE_SCHEMA = (
+    ROOT / "docs/handwriting/fixtures/corpus-governance.schema.json"
+)
 
 
 def sha256(path):
@@ -168,13 +180,122 @@ def valid_manifest(repository_root):
     }
 
 
+def valid_corpus_evidence(manifest):
+    decision = manifest["decision"]
+    operations = manifest["operations"]
+    corpus_manifest = ManifestValidation(
+        records=[{} for _ in range(decision["sample_count"])],
+        decision_eligible=True,
+        ineligibility_reasons=(),
+        manifest_sha256=decision["corpus_manifest_sha256"],
+    )
+    corpus_governance = CorpusGovernanceValidation(
+        governance_id=decision["corpus_governance_id"],
+        governance_sha256=decision["corpus_governance_sha256"],
+        corpus_version=decision["corpus_version"],
+        manifest_sha256=decision["corpus_manifest_sha256"],
+        fixture_count=decision["sample_count"],
+        approved_providers=(manifest["provider"],),
+        retention_policy_ids=(operations["retention_policy_id"],),
+        deletion_test_id=operations["deletion_test_id"],
+        valid_through=(date.today() + timedelta(days=90)).isoformat(),
+    )
+    return corpus_manifest, corpus_governance
+
+
+def write_valid_corpus_evidence(repository_root, manifest):
+    records = []
+    for index in range(1, 301):
+        records.append(
+            {
+                "schema_version": 1,
+                "id": f"rollout-math-{index:03d}",
+                "domain": "math",
+                "topic": "linear-equations",
+                "difficulty": "basic",
+                "device_group": "tablet-stylus",
+                "browser_group": "safari",
+                "inputs": {"strokes": "restricted/fixture.json"},
+                "expected": {
+                    "format": "ascii",
+                    "canonical": "x=1",
+                    "accepted": [],
+                    "unreadable": False,
+                },
+                "tags": [],
+                "annotation": {"reviewer_count": 2, "status": "reviewed"},
+                "consent": {
+                    "retention_approved": True,
+                    "retention_policy_id": "restricted-ink-retention-v1",
+                    "source": "internal",
+                    "provenance_id": "rollout-internal-v1",
+                    "approved_providers": ["myscript"],
+                },
+            }
+        )
+    corpus_manifest_path = repository_root / "restricted-corpus.jsonl"
+    corpus_manifest_path.write_text(
+        "".join(
+            json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
+            for record in records
+        ),
+        encoding="utf-8",
+    )
+    corpus_hash = canonical_manifest_sha256(records)
+    governance = {
+        "schema_version": 1,
+        "governance_id": "consented-linear-governance-v1",
+        "corpus_version": "consented-linear-v1",
+        "manifest_sha256": corpus_hash,
+        "fixture_count": 300,
+        "data_sources": ["internal"],
+        "approved_providers": ["myscript"],
+        "storage": {
+            "classification": "restricted",
+            "restricted_store_approval_id": "restricted-store-v1",
+            "access_policy_id": "restricted-access-v1",
+            "retention_policy_ids": ["restricted-ink-retention-v1"],
+            "deletion_procedure_id": "restricted-delete-v1",
+            "deletion_test_id": "restricted-ink-deletion-test-v1",
+            "encryption_at_rest_verified": True,
+        },
+        "consent": {
+            "provenance_registry_id": "restricted-provenance-v1",
+            "withdrawal_process_id": "restricted-withdrawal-v1",
+            "provider_specific_consent_verified": True,
+            "student_data_use_approved": False,
+        },
+        "review": {
+            "status": "approved",
+            "data_privacy_approval_id": "data-privacy-approval-v1",
+            "corpus_owner_approval_id": "corpus-owner-approval-v1",
+            "ambiguous_two_reviewer_verified": True,
+            "reviewed_at": date.today().isoformat(),
+            "valid_through": (date.today() + timedelta(days=90)).isoformat(),
+        },
+    }
+    governance_path = repository_root / "corpus-governance.json"
+    governance_path.write_text(json.dumps(governance), encoding="utf-8")
+
+    governance_hash = canonical_json_sha256(governance)
+    manifest["decision"]["corpus_manifest_sha256"] = corpus_hash
+    manifest["decision"]["corpus_governance_sha256"] = governance_hash
+    manifest["approvals"]["data_governance"][
+        "artifact_sha256"
+    ] = governance_hash
+    return corpus_manifest_path, governance_path
+
+
 def validate(manifest, repository_root, expected_commit=None):
     expected_commit = expected_commit or manifest["source_commit"]
+    corpus_manifest, corpus_governance = valid_corpus_evidence(manifest)
     return validate_rollout_approval(
         manifest,
         SCHEMA,
         repository_root=repository_root,
         expected_source_commit=expected_commit,
+        corpus_manifest=corpus_manifest,
+        corpus_governance=corpus_governance,
     )
 
 
@@ -208,6 +329,92 @@ def test_complete_content_free_rollout_manifest_passes(tmp_path):
     assert "evidence_id" not in serialized
     assert "artifact_sha256" not in serialized
     assert "/mnt/" not in serialized
+
+
+def test_external_corpus_and_governance_files_close_the_rollout_binding(tmp_path):
+    manifest = valid_manifest(tmp_path)
+    corpus_manifest_path, governance_path = write_valid_corpus_evidence(
+        tmp_path, manifest
+    )
+    corpus_manifest, corpus_governance = _load_corpus_evidence(
+        corpus_manifest_path=corpus_manifest_path,
+        fixture_schema_path=FIXTURE_SCHEMA,
+        corpus_governance_path=governance_path,
+        governance_schema_path=GOVERNANCE_SCHEMA,
+        decision=manifest["decision"],
+        provider=manifest["provider"],
+    )
+
+    summary = validate_rollout_approval(
+        manifest,
+        SCHEMA,
+        repository_root=tmp_path,
+        expected_source_commit=manifest["source_commit"],
+        corpus_manifest=corpus_manifest,
+        corpus_governance=corpus_governance,
+    )
+
+    assert summary["status"] == "PASS"
+    assert corpus_manifest.manifest_sha256 == manifest["decision"][
+        "corpus_manifest_sha256"
+    ]
+    assert corpus_governance.governance_sha256 == manifest["decision"][
+        "corpus_governance_sha256"
+    ]
+
+
+def test_rollout_rejects_corpus_and_governance_binding_drift(tmp_path):
+    manifest = valid_manifest(tmp_path)
+    corpus_manifest, corpus_governance = valid_corpus_evidence(manifest)
+
+    def assert_binding_code(expected, checked_manifest, checked_governance):
+        with pytest.raises(RolloutApprovalError) as captured:
+            validate_rollout_approval(
+                manifest,
+                SCHEMA,
+                repository_root=tmp_path,
+                expected_source_commit=manifest["source_commit"],
+                corpus_manifest=checked_manifest,
+                corpus_governance=checked_governance,
+            )
+        assert captured.value.code == expected
+
+    assert_binding_code(
+        "corpus_manifest_hash_mismatch",
+        replace(corpus_manifest, manifest_sha256="0" * 64),
+        corpus_governance,
+    )
+    assert_binding_code(
+        "corpus_governance_id_mismatch",
+        corpus_manifest,
+        replace(corpus_governance, governance_id="different-governance-v1"),
+    )
+    assert_binding_code(
+        "corpus_governance_hash_mismatch",
+        corpus_manifest,
+        replace(corpus_governance, governance_sha256="0" * 64),
+    )
+    assert_binding_code(
+        "corpus_provider_not_approved",
+        corpus_manifest,
+        replace(corpus_governance, approved_providers=("gemini",)),
+    )
+
+    manifest["operations"]["retention_policy_id"] = "different-retention-v1"
+    assert_binding_code(
+        "corpus_retention_policy_mismatch",
+        corpus_manifest,
+        corpus_governance,
+    )
+    manifest["operations"]["retention_policy_id"] = (
+        "restricted-ink-retention-v1"
+    )
+    manifest["operations"]["deletion_test_id"] = "different-deletion-test-v1"
+    assert_binding_code(
+        "corpus_deletion_test_mismatch",
+        corpus_manifest,
+        corpus_governance,
+    )
 
 
 def test_no_decision_and_small_corpus_fail_closed(tmp_path):
@@ -333,6 +540,48 @@ def test_cli_rejects_a_manifest_not_bound_to_the_checked_out_commit(
     captured = capsys.readouterr()
     assert exit_code == 1
     assert '"code": "checked_out_commit_mismatch"' in captured.err
+    assert captured.out == ""
+
+
+def test_cli_requires_and_safely_validates_external_corpus_evidence(
+    tmp_path, capsys
+):
+    checked_out_commit = repository_head(ROOT)
+    manifest = valid_manifest(tmp_path)
+    manifest["source_commit"] = checked_out_commit
+    approval_path = tmp_path / "approval.json"
+    approval_path.write_text(json.dumps(manifest), encoding="utf-8")
+    common = [
+        "--manifest",
+        str(approval_path),
+        "--repository-root",
+        str(ROOT),
+        "--expected-source-commit",
+        checked_out_commit,
+    ]
+
+    assert main(common) == 1
+    captured = capsys.readouterr()
+    assert '"code": "corpus_evidence_missing"' in captured.err
+    assert captured.out == ""
+
+    private_value = "private-restricted-transcription"
+    corpus_path = tmp_path / "corpus.jsonl"
+    governance_path = tmp_path / "governance.json"
+    corpus_path.write_text(private_value, encoding="utf-8")
+    governance_path.write_text(json.dumps({"private": private_value}), encoding="utf-8")
+    assert main(
+        [
+            *common,
+            "--corpus-manifest",
+            str(corpus_path),
+            "--corpus-governance",
+            str(governance_path),
+        ]
+    ) == 1
+    captured = capsys.readouterr()
+    assert '"code": "corpus_evidence_invalid"' in captured.err
+    assert private_value not in captured.err
     assert captured.out == ""
 
 

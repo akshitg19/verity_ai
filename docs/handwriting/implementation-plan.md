@@ -1160,3 +1160,36 @@ Next action: merge the content-safe mechanism. Data/privacy and corpus owners
 must later issue the real governance artifact outside raw data and supply the
 exact restricted manifest; do not invent approval IDs or put real ink in Git.
 ```
+
+```text
+Date: 2026-08-17
+Branch: feat/handwriting-rollout-governance-evidence
+Phase: activation-time corpus-governance evidence closure
+Implemented: changed the final rollout validator from trusting declared corpus
+and governance hashes to loading the actual external restricted manifest and
+content-free governance JSON. It validates the 300–500-record decision corpus
+without opening referenced stroke/image inputs, reuses the strict fixture and
+governance schemas, and cross-checks decision eligibility, corpus and governance
+hashes/IDs/version/count, MyScript approval, data-governance artifact hash,
+retention policy, and deletion-test ID. Missing, oversized, malformed, stale,
+or mismatched artifacts fail with stable content-safe codes. The handoff,
+completion audit, index, and rollout command now reflect PR #73 and the two
+new required external paths.
+Tests and results: after commit, 40/40 focused evaluator/rollout tests and the
+full backend pass with 1334 tests plus 3 expected xfails, including the exact-
+commit evidence-drift gate. The unchanged frontend passes lint, 413 tests
+across 44 files, a production-configured build, API-base/provider-secret
+verification, and App.jsx 257/260. Python compilation, 24-file handwriting
+relative-link validation, changed-file privacy scan, and `git diff --check`
+pass.
+Measured metrics: validation behavior only. No stroke/image file was opened,
+no provider request or secret read occurred, no user data was created, and no
+deployment or paid action occurred.
+Known risks: the validator proves artifact consistency, not that an approval is
+substantively correct. No real governance file, approved restricted corpus,
+same-input provider decision, target-device evidence, security approval, or
+enabled canary exists.
+Next action: merge this fail-closed closure after remote gates. Keep production
+identity/MyScript flags false until the named owners supply the actual artifacts
+and all remaining approvals.
+```
