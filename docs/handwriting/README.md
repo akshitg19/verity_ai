@@ -105,7 +105,8 @@ for implementation decisions.
   PR #59 repairs and hardens schema-v2 paired target-device A/B evidence. PR
   #61 adds the fail-closed production activation evidence gate; PR #63 records
   the verified disabled deployment of runtime source `b9b1d76` as revision
-  `verity-ai-00021-glp`.
+  `verity-ai-00021-glp`; and PR #65 prevents one-shot MyScript REST from
+  auto-submitting partial expressions between pen strokes.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
@@ -114,8 +115,11 @@ for implementation decisions.
   synthetic-only 50-call POC proved the live REST boundary and characterized
   `x/X` geometry sensitivity. The separate v2 synthetic diagnostic completed
   300/300 calls with a 300/1500 ledger; the account-wide counter reconciles at
-  350 used with zero discrepancy and 1,650 published free requests remaining.
-  Cloud Run and frontend traffic remain disabled.
+  350 used with zero discrepancy and 1,650 published free requests remaining
+  at that checkpoint. Later owner-controlled local/manual attempts use separate
+  content-free ledgers and require a new dashboard reconciliation before any
+  remaining-account-total claim. Cloud Run and production frontend MyScript
+  traffic remain disabled.
 - Recommended vector POC: MyScript iink. The developer application, local
   credential file, GCP secrets, and runtime-service-account secret access are
   complete. Disabled deployment, numeric secret-version pinning, and

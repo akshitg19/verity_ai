@@ -2,9 +2,10 @@
 
 **Handoff date:** 2026-08-16
 
-**Status:** Safe provider-neutral foundations and disabled MyScript integration
-work are merged through PR #62, and their current disabled-deployment evidence
-is merged through PR #63. The 50-call v1 smoke/probe and separate
+**Status:** Safe provider-neutral foundations, disabled MyScript integration,
+and one-shot REST submission scheduling are merged through PR #65; current
+disabled-deployment evidence is merged through PR #63. The 50-call v1
+smoke/probe and separate
 300-call v2 synthetic diagnostic completed with no production flag change; the
 v2 run had 300/300 provider successes, 95.00% overall exact match, 96.33% parse
 success, and zero ledger/dashboard discrepancy. These corpora remain
@@ -22,6 +23,8 @@ strict, content-free, machine-checked evidence rather than unverified exports.
 **Deployed runtime source:** `b9b1d76`
 
 **Deployment-evidence merge:** PR #63 at `d683da5`
+
+**Current repository / Vercel frontend:** PR #65 at `03bcead`
 
 **Working tree:** `/Users/anyixin/Desktop/VerityAI/verity_ai-handwriting-goal`
 
