@@ -29,6 +29,25 @@ EXPECTED_SECRET_NAMES = {
     "MYSCRIPT_APPLICATION_KEY": "verity-myscript-application-key",
     "MYSCRIPT_HMAC_KEY": "verity-myscript-hmac-key",
 }
+REQUIRED_DISABLED_VALUES = {
+    "MYSCRIPT_ENABLED": ("false", "myscript_enabled_not_false"),
+    "MYSCRIPT_POC_ROUTE_ENABLED": (
+        "false",
+        "myscript_poc_route_enabled_not_false",
+    ),
+    "MYSCRIPT_ALLOW_SHARED_ACCESS": (
+        "false",
+        "myscript_allow_shared_access_not_false",
+    ),
+    "VERITY_AUTH_MODE": ("off", "verity_auth_mode_not_off"),
+}
+REQUIRED_EMPTY_VALUES = (
+    "VERITY_API_SECRET",
+    "VERITY_GOOGLE_CLIENT_ID",
+    "VERITY_AUTH_ALLOWED_SUBJECTS",
+    "VERITY_AUTH_ALLOWED_DOMAINS",
+)
+OPTIONAL_EMPTY_VALUES = ("VERITY_AUTH_ALLOWED_EMAILS",)
 DISABLED_DETAILS = {"Not Found", "MyScript recognition is disabled"}
 
 
@@ -71,6 +90,27 @@ def _single_env(entries: list[dict[str, Any]], name: str) -> dict[str, Any]:
     if len(matches) != 1:
         raise VerificationError(f"{name.lower()}_missing_or_duplicate")
     return matches[0]
+
+
+def _require_direct_value(
+    entries: list[dict[str, Any]], name: str, expected: str, failure_code: str
+) -> None:
+    entry = _single_env(entries, name)
+    if entry.get("value") != expected or "valueFrom" in entry:
+        raise VerificationError(failure_code)
+
+
+def _require_empty_value(
+    entries: list[dict[str, Any]], name: str, *, optional: bool = False
+) -> None:
+    matches = [entry for entry in entries if entry.get("name") == name]
+    if not matches and optional:
+        return
+    if len(matches) != 1:
+        raise VerificationError(f"{name.lower()}_missing_or_duplicate")
+    entry = matches[0]
+    if entry.get("value", "") != "" or "valueFrom" in entry:
+        raise VerificationError(f"{name.lower()}_not_empty")
 
 
 def validate_service_metadata(
@@ -117,10 +157,12 @@ def validate_service_metadata(
     if not isinstance(image_digest, str) or "@sha256:" not in image_digest:
         raise VerificationError("revision_digest_missing")
 
-    for flag in ("MYSCRIPT_ENABLED", "MYSCRIPT_POC_ROUTE_ENABLED"):
-        entry = _single_env(entries, flag)
-        if entry.get("value") != "false" or entry.get("valueFrom"):
-            raise VerificationError(f"{flag.lower()}_not_false")
+    for name, (expected, failure_code) in REQUIRED_DISABLED_VALUES.items():
+        _require_direct_value(entries, name, expected, failure_code)
+    for name in REQUIRED_EMPTY_VALUES:
+        _require_empty_value(entries, name)
+    for name in OPTIONAL_EMPTY_VALUES:
+        _require_empty_value(entries, name, optional=True)
 
     secret_references: dict[str, str] = {}
     for env_name, expected_secret in EXPECTED_SECRET_NAMES.items():
@@ -168,6 +210,15 @@ def validate_service_metadata(
         "flags": {
             "MYSCRIPT_ENABLED": "false",
             "MYSCRIPT_POC_ROUTE_ENABLED": "false",
+        },
+        "access_boundary": {
+            "MYSCRIPT_ALLOW_SHARED_ACCESS": "false",
+            "VERITY_AUTH_MODE": "off",
+            "VERITY_API_SECRET_CONFIGURED": False,
+            "VERITY_GOOGLE_CLIENT_ID_CONFIGURED": False,
+            "VERITY_AUTH_ALLOWED_SUBJECTS_CONFIGURED": False,
+            "VERITY_AUTH_ALLOWED_EMAILS_CONFIGURED": False,
+            "VERITY_AUTH_ALLOWED_DOMAINS_CONFIGURED": False,
         },
         "secret_references": secret_references,
     }
