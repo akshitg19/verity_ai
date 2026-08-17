@@ -153,6 +153,7 @@ Non-secret configuration should use explicit environment variables:
 ```text
 MYSCRIPT_ENABLED=false
 MYSCRIPT_POC_ROUTE_ENABLED=false
+MYSCRIPT_ALLOW_SHARED_ACCESS=false
 MYSCRIPT_RECOGNITION_URL=https://cloud.myscript.com/api/v4.0/iink/recognize
 MYSCRIPT_TIMEOUT_SECONDS=3
 MYSCRIPT_EVAL_REQUEST_CAP=1500
@@ -177,11 +178,12 @@ secrets before an instance starts. Do not run a command that reads a secret
 version's value merely to verify the mapping; inspect Cloud Run metadata and
 exercise the disabled route check instead.
 
-The provider flag and the separate POC-route flag stay false in production until
-the privacy, commercial, corpus, and release gates below are signed off. Even
-then, the HTTP route fails closed unless VerityAI's existing API access-control
-header is also configured. That shared header is not real user authentication;
-student rollout requires a separate authentication review.
+The provider flag, separate POC-route flag, and local shared-access escape hatch
+stay false in production until the privacy, commercial, corpus, identity, and
+release gates below are signed off. A deployed HTTP route requires the reviewed
+default-off Google ID-token boundary documented in
+`google-identity-boundary-2026-08-16.md`. The existing shared header remains a
+local speed bump only and cannot open the deployed provider route.
 
 ### 4.4 Frontend POC gates
 

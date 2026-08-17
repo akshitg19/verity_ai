@@ -997,3 +997,36 @@ page, then merge this scheduling fix. A future authenticated canary should
 measure pointer-up-to-paint latency and evaluate a true incremental MyScript
 session separately rather than treating this REST POC as streaming.
 ```
+
+```text
+Date: 2026-08-16
+Branch: codex/google-identity-boundary
+Phase: real-user authentication mechanism
+Implemented: added a default-off Google Identity Services workspace gate,
+memory-only bearer token transport, official backend ID-token verification,
+audience/issuer/expiry/verified-email checks, exact Google-sub/email/Workspace
+allow-lists, content-safe 401/403/503 responses, public-certificate caching,
+shared-key non-bypass, sign-out, and explicit disabled Cloud Build settings.
+The MyScript route can recognize this real identity boundary, while both
+provider flags and the local shared-access escape hatch remain hardcoded false.
+Vite refuses a production bundle that
+combines Google identity with the old shared frontend key.
+Tests and results: 72 focused backend tests and 15 focused frontend tests pass.
+Full backend passes 1316 with 3 expected xfails; full frontend passes 410 across
+43 files plus lint. Identity-off and identity-on production builds pass the
+API-base/provider-secret scan; the conflicting-key negative build fails as
+expected. A local production-preview browser smoke shows only the team sign-in
+gate and official Google button on /math, with no workspace mount, console
+warning/error, credential use, or MyScript request.
+Measured metrics: no provider, identity-provider sign-in, student, or paid
+traffic. Google public certificate responses are cache-controlled to avoid a
+new network fetch on every API action.
+Known risks: no OAuth client, exact reviewer subjects, approved origins,
+security decision, access-removal evidence, real-account desktop/iPad test, or
+remote PR/CI evidence exists yet. The mechanism is not an authentication
+approval and production remains disabled.
+Next action: merge the default-off mechanism after review. Security/product and
+OAuth owners must then approve and configure a stable non-production preview,
+prove allowed/denied/expiry/sign-out behavior on target devices, and issue the
+authentication-boundary evidence ID required by the rollout manifest.
+```

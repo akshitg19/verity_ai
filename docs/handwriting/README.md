@@ -53,6 +53,9 @@ for implementation decisions.
 - [Rollout runbook](rollout-runbook.md) records the disabled deployment check,
   executable content-free approval gate, activation prerequisites, monitoring,
   outage response, and kill switches.
+- [Google identity boundary evidence](google-identity-boundary-2026-08-16.md)
+  records the default-off real-user authentication mechanism, fail-closed
+  allow-list, token handling, tests, and exact external activation evidence.
 - [Rollout approval schema](rollout-approval.schema.json) defines the strict
   evidence contract that a future activation manifest must satisfy; no valid
   real approval manifest exists while the current decision is `NO_DECISION`.
@@ -129,7 +132,9 @@ for implementation decisions.
 - Alternative fallback candidate: GPT-5.6 Luna, pending a controlled benchmark.
 - Current safe work: numeric secret-version pinning is deployed and verified;
   a fail-closed verifier checks future disabled revisions before any provider
-  request can be possible.
+  request can be possible. A default-off Google ID-token boundary is implemented
+  and fully tested locally, but has no OAuth client, allow-list, external
+  security approval, real-account canary, or production activation.
 - Next gates: target-device Phase A/B exports; internal approval of the public
   terms checkpoint plus written MyScript reconciliation/commercial and
   student-privacy answers before student/production use; an approved consented

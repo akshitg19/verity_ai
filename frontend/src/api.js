@@ -1,3 +1,8 @@
+import {
+  clearGoogleIdToken,
+  getGoogleIdToken,
+} from "./auth/tokenStore";
+
 // One module, one place to change a base URL.
 //
 // Before this there were six fetch calls scattered through App.jsx, two of
@@ -94,6 +99,9 @@ async function request(path, options = {}) {
     }
 
     if (!response.ok) {
+      if (response.status === 401 && getGoogleIdToken()) {
+        clearGoogleIdToken();
+      }
       throw new ApiError(
         errorMessage(payload, `${response.status} ${response.statusText}`),
         response.status,
@@ -130,7 +138,9 @@ async function request(path, options = {}) {
 // authentication and must never be described as any.
 const API_SECRET = import.meta.env.VITE_API_SECRET ?? "";
 
-function withSecret(headers = {}) {
+function withAccess(headers = {}) {
+  const token = getGoogleIdToken();
+  if (token) return { ...headers, Authorization: `Bearer ${token}` };
   return API_SECRET ? { ...headers, "X-Verity-Key": API_SECRET } : headers;
 }
 
@@ -140,13 +150,13 @@ async function post(path, body, options = {}) {
     method: "POST",
     body: JSON.stringify(body),
     ...rest,
-    headers: withSecret({ "Content-Type": "application/json", ...headers }),
+    headers: withAccess({ "Content-Type": "application/json", ...headers }),
   });
 }
 
 async function get(path, options = {}) {
   const { headers, ...rest } = options;
-  return request(path, { ...rest, headers: withSecret(headers) });
+  return request(path, { ...rest, headers: withAccess(headers) });
 }
 
 // -- math, unchanged ---------------------------------------------------------

@@ -247,6 +247,18 @@ now also accepts `CORS_ORIGIN_REGEX`, defaulting to
 this project will ever produce. `deploy.ps1` sets both, and
 `tests/test_api.py` pins the behaviour.
 
+The optional production authentication boundary is Google Identity Services.
+It is off unless the frontend receives `VITE_GOOGLE_CLIENT_ID` and the backend
+receives `VERITY_AUTH_MODE=google`, the matching
+`VERITY_GOOGLE_CLIENT_ID`, and an explicit subject/email/Workspace-domain
+allow-list. The backend verifies the signed token, audience, issuer, expiry,
+verified email, and allow-list; the frontend keeps the token in memory only.
+The old `VITE_API_SECRET`/`VERITY_API_SECRET` pair remains a crawler deterrent,
+not authentication, and the production build rejects combining its frontend
+value with Google identity. See the
+[identity evidence](docs/handwriting/google-identity-boundary-2026-08-16.md)
+before configuring any preview.
+
 The service runs with `--min-instances 1`, so the link is live the moment
 anyone opens it rather than booting a container first. That is the only
 setting that bills while idle; the command to turn it off is printed at the

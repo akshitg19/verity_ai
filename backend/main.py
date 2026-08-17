@@ -11,10 +11,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from answer_vault import VaultConstructionError, build_vault, build_math_vault
 from chem_model import ReactionJudge
 from hints import generate_hint
+from identity_auth import (
+    GoogleIdentitySettings,
+    IdentityNotAllowed,
+    IdentityProviderUnavailable,
+    IdentityTokenInvalid,
+    verify_bearer_token,
+)
 from judge import BalanceJudge, ChemistryJudge, FunctionalGroupJudge, MathJudgeDispatcher
 from judge.chemistry import (
     ChemistryParseError,
@@ -715,11 +723,17 @@ async def recognize_myscript(req: MyScriptRecognizeRequest):
 
 def _myscript_poc_route_is_enabled() -> bool:
     route_enabled = os.getenv("MYSCRIPT_POC_ROUTE_ENABLED", "false").strip().lower()
-    # The existing shared header is only a speed bump, but requiring it still
-    # prevents an unauthenticated Cloud Run URL from becoming a quota-spending
-    # POC endpoint after one accidental flag change. A real rollout needs real
-    # user authentication and a separate review.
-    return route_enabled == "true" and bool(API_SECRET)
+    shared_access_allowed = (
+        os.getenv("MYSCRIPT_ALLOW_SHARED_ACCESS", "false").strip().lower()
+        == "true"
+    )
+    # One accidental flag change must never expose a quota-spending endpoint.
+    # The shared header can support an explicitly marked local POC only. A
+    # deployed provider route requires the reviewed Google identity boundary.
+    return route_enabled == "true" and (
+        IDENTITY_AUTH_SETTINGS.enabled
+        or (shared_access_allowed and bool(API_SECRET))
+    )
 
 
 @app.post("/chemistry/transcribe", response_model=StructureTranscribeResponse)
@@ -800,18 +814,20 @@ async def strip_api_prefix(request, call_next):
 # share with the whole programme.
 #
 # Off unless VERITY_API_SECRET is set, so development, CI, and the current
-# deployment are unchanged. Setting it requires every API call to carry the
-# same value in X-Verity-Key.
+# deployment are unchanged. When real identity is off, setting it requires
+# every API call to carry the same value in X-Verity-Key. Google identity mode
+# ignores this header and requires a verified bearer token instead.
 #
 # What this is worth, stated honestly: the frontend has to know the secret to
 # send it, and the frontend is JavaScript delivered to a browser, so anyone
 # who opens developer tools can read it. This raises the bar from "anyone who
 # finds the URL" to "anyone who looks", which is a speed bump against crawlers
-# and casual sharing, not authentication. Real authentication means accounts,
-# and that is a different piece of work.
+# and casual sharing, not authentication. The default-off Google identity
+# boundary below is the reviewed path toward account-level access.
 # ---------------------------------------------------------------------------
 API_SECRET = os.getenv("VERITY_API_SECRET", "").strip()
 API_SECRET_HEADER = "x-verity-key"
+IDENTITY_AUTH_SETTINGS = GoogleIdentitySettings.from_environ()
 
 # Built from the app's own routes so a new endpoint is covered the day it is
 # added rather than the day someone remembers to add it to a list. Computed
@@ -826,10 +842,7 @@ _PROTECTED_PATHS = {
 
 
 @app.middleware("http")
-async def require_shared_secret(request, call_next):
-    if not API_SECRET:
-        return await call_next(request)
-
+async def require_access_boundary(request, call_next):
     # This middleware is registered after strip_api_prefix, which makes it the
     # outer one, so it still sees /api/... here and has to normalise the same
     # way. Two lines of duplication, rather than an ordering dependency that
@@ -844,6 +857,34 @@ async def require_shared_secret(request, call_next):
     # A preflight carries no custom headers by definition, so rejecting it
     # would make the browser report a CORS failure and hide the real reason.
     if request.method == "OPTIONS":
+        return await call_next(request)
+
+    if IDENTITY_AUTH_SETTINGS.enabled:
+        try:
+            identity = await run_in_threadpool(
+                verify_bearer_token,
+                request.headers.get("authorization", ""),
+                IDENTITY_AUTH_SETTINGS,
+            )
+        except IdentityTokenInvalid:
+            return JSONResponse(
+                {"detail": "Authentication required"},
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        except IdentityNotAllowed:
+            return JSONResponse(
+                {"detail": "Account is not permitted"}, status_code=403
+            )
+        except IdentityProviderUnavailable:
+            return JSONResponse(
+                {"detail": "Authentication is temporarily unavailable"},
+                status_code=503,
+            )
+        request.state.verity_identity = identity
+        return await call_next(request)
+
+    if not API_SECRET:
         return await call_next(request)
 
     supplied = request.headers.get(API_SECRET_HEADER, "")

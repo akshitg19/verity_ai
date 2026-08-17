@@ -1,0 +1,93 @@
+.identity-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 10%, var(--v-primary-light), transparent 42%),
+    var(--v-bg);
+  color: var(--v-text);
+}
+
+.identity-card {
+  width: min(100%, 430px);
+  box-sizing: border-box;
+  padding: 36px;
+  border: 1px solid var(--v-border);
+  border-radius: 20px;
+  background: var(--v-surface);
+  box-shadow: var(--v-shadow-card);
+  text-align: center;
+}
+
+.identity-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 18px;
+  border-radius: 12px;
+  background: var(--v-primary);
+  color: var(--v-surface);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.identity-eyebrow {
+  margin: 0 0 8px;
+  color: var(--v-primary);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.identity-card h1 {
+  margin: 0;
+  font-size: clamp(26px, 7vw, 34px);
+  letter-spacing: -0.03em;
+}
+
+.identity-copy {
+  margin: 14px auto 24px;
+  color: var(--v-muted);
+  line-height: 1.55;
+}
+
+.identity-google-button {
+  display: flex;
+  min-height: 44px;
+  justify-content: center;
+}
+
+.identity-error {
+  margin: 18px 0 0;
+  color: var(--v-danger);
+  font-size: 14px;
+}
+
+.identity-sign-out {
+  position: fixed;
+  right: 14px;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  z-index: 90;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--v-border);
+  border-radius: 10px;
+  background: var(--v-surface);
+  box-shadow: var(--v-shadow-raised);
+  color: var(--v-muted);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+@media (max-width: 520px) {
+  .identity-card {
+    padding: 30px 20px;
+  }
+}

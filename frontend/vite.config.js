@@ -19,6 +19,15 @@ export default defineConfig({
         if (parsed.protocol !== 'https:' || parsed.pathname.endsWith('/')) {
           throw new Error('VITE_API_BASE_URL must be an HTTPS URL without a trailing slash.');
         }
+        const googleClientId = process.env.VITE_GOOGLE_CLIENT_ID?.trim();
+        if (googleClientId && !googleClientId.endsWith('.apps.googleusercontent.com')) {
+          throw new Error('VITE_GOOGLE_CLIENT_ID must be a Google web OAuth client ID.');
+        }
+        if (googleClientId && process.env.VITE_API_SECRET) {
+          throw new Error(
+            'VITE_API_SECRET must be unset when Google identity is enabled.'
+          );
+        }
       },
     },
   ],
