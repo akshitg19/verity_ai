@@ -1033,3 +1033,32 @@ stable non-production preview,
 prove allowed/denied/expiry/sign-out behavior on target devices, and issue the
 authentication-boundary evidence ID required by the rollout manifest.
 ```
+
+```text
+Date: 2026-08-17
+Branch: docs/disabled-deployment-3b1ca95
+Phase: current-main disabled deployment after identity merge
+Implemented: authorized the existing Cloud Shell session, selected the verified
+school account and project, cloned exact clean commit
+3b1ca95c91e6da62ba8ca3c0dc42cea00a91bb83 into a fresh temporary directory,
+validated numeric secret versions, and submitted the reviewed cloudbuild.yaml
+with only traceable image tag 3b1ca95 overridden. Cloud Build
+37fec1f2-8ed5-43dd-b1aa-d004e32bc760 completed SUCCESS and deployed revision
+verity-ai-00022-2vj. Both MyScript flags and the shared-access escape hatch
+remain false; Google identity mode remains off with no client or allow-list.
+Tests and results: the fail-closed verifier returned PASS for 100% traffic to
+the ready revision, expected runtime account, exact image tag/digest, pinned
+version-1 secret references, health/OpenAPI/frontend HTTP 200, route presence,
+and synthetic disabled-route HTTP 404. No secret value, token, student content,
+or MyScript response was accessed.
+Measured metrics: build and deployment integrity only. No recognition accuracy,
+provider latency, device, identity sign-in, student, or paid traffic was
+generated.
+Known risks: deployment proves the identity code and provider boundary are
+present and safely off; it does not supply security approval, OAuth
+configuration, target-device evidence, an eligible corpus, a provider decision,
+or an authenticated enabled canary.
+Next action: merge this content-free evidence. Keep identity and both provider
+flags off until every named external approval and rollout-manifest requirement
+is satisfied.
+```

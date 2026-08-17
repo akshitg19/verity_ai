@@ -6,10 +6,11 @@
 CI, Vercel, and production-frontend smoke evidence complete; external
 configuration, security review, and a real-account canary are not complete
 
-**Production state:** the Vercel frontend contains the default-off code, with no
-OAuth client configured. Cloud Build history has no PR #67 build, and Cloud Run
-still sends 100% traffic to disabled revision `verity-ai-00021-glp` from backend
-source `b9b1d76`; no identity allow-list is deployed.
+**Production state:** the Vercel frontend and Cloud Run backend contain the
+default-off code, with no OAuth client or allow-list configured. Build
+`37fec1f2-8ed5-43dd-b1aa-d004e32bc760` deploys source `3b1ca95` as fully
+disabled revision `verity-ai-00022-2vj`, which receives 100% of traffic and
+passes the fail-closed verifier.
 
 ## Purpose and decision boundary
 
@@ -105,10 +106,12 @@ from remaining in a production bundle after real identity is enabled.
 - A read-only Vercel production `/math` smoke opened the existing Gemini
   workspace directly, proving `VITE_GOOGLE_CLIENT_ID` remains unset. The page
   had no console warning/error and no recognition action was invoked.
-- Read-only Google Cloud consoles showed the newest build remains
-  `a5703e61-48d6-487a-8fe2-9e35c06aeb51` and revision
-  `verity-ai-00021-glp` still receives 100% of Cloud Run traffic. Therefore the
-  merged backend identity code is not represented as deployed evidence.
+- A later authorized disabled deployment built exact source `3b1ca95` as
+  revision `verity-ai-00022-2vj`. The repeatable verifier proved 100% traffic,
+  both MyScript flags false, pinned version-`1` secret references, and HTTP
+  health/OpenAPI/disabled-route/frontend checks. Identity remains `off` with an
+  empty client and empty allow-lists, so this proves safe deployment rather than
+  a configured authentication canary.
 
 No real user credential, OAuth client, Google account claim, student ink,
 MyScript request, or production flag was created or transmitted by these tests.

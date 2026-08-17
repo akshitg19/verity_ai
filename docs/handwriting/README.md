@@ -69,9 +69,12 @@ for implementation decisions.
   records the historical post-POC build, image digest, revision, false flags,
   numeric secret references, and repeated content-safe checks.
 - [Current-main disabled deployment evidence](current-main-disabled-deployment-evidence-2026-08-16.md)
-  records build `a5703e61-48d6-487a-8fe2-9e35c06aeb51`, revision
-  `verity-ai-00021-glp`, the exact latest-`main` image/digest, false flags,
-  numeric secret references, and the repeated fail-closed verifier result.
+  records the historical `b9b1d76` disabled deployment.
+- [2026-08-17 current-main disabled deployment evidence](current-main-disabled-deployment-evidence-2026-08-17.md)
+  records build `37fec1f2-8ed5-43dd-b1aa-d004e32bc760`, revision
+  `verity-ai-00022-2vj`, exact source `3b1ca95`, false flags, numeric secret
+  references, the deployed default-off identity boundary, and the repeated
+  fail-closed verifier result.
 - `scripts/verify_disabled_myscript_revision.py` reproduces the allowlisted
   revision-metadata and fail-closed smoke checks without accessing Secret
   Manager values.
@@ -107,16 +110,18 @@ for implementation decisions.
   PR #57 records the completed run, reconciliation, and content-free results.
   PR #59 repairs and hardens schema-v2 paired target-device A/B evidence. PR
   #61 adds the fail-closed production activation evidence gate; PR #63 records
-  the verified disabled deployment of runtime source `b9b1d76` as revision
-  `verity-ai-00021-glp`; and PR #65 prevents one-shot MyScript REST from
+  the historical disabled deployment of runtime source `b9b1d76`; and PR #65 prevents one-shot MyScript REST from
   auto-submitting partial expressions between pen strokes. PR #67 adds the
   default-off, exact-allow-list Google identity boundary and removes the shared
-  header as a sufficient deployed-MyScript access condition.
+  header as a sufficient deployed-MyScript access condition. Build
+  `37fec1f2-8ed5-43dd-b1aa-d004e32bc760` deploys current source `3b1ca95` as
+  fully disabled revision `verity-ai-00022-2vj` and passes the repeatable
+  verifier.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
 - Vector recognizer: the backend MyScript REST adapter and internal route are
-  deployed in disabled revision `verity-ai-00021-glp`. A separate local,
+  deployed in disabled revision `verity-ai-00022-2vj`. A separate local,
   synthetic-only 50-call POC proved the live REST boundary and characterized
   `x/X` geometry sensitivity. The separate v2 synthetic diagnostic completed
   300/300 calls with a 300/1500 ledger; the account-wide counter reconciles at

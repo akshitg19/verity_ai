@@ -1,14 +1,15 @@
 # Handwriting Recognition Rollout Runbook
 
-**Status date:** 2026-08-16
+**Status date:** 2026-08-17
 **Current decision:** Gemini remains the only enabled production recognizer.
 **MyScript status:** backend deployed in disabled revision
-`verity-ai-00021-glp`; frontend POC wiring is disabled by default. Separate
+`verity-ai-00022-2vj`; frontend POC wiring is disabled by default. Separate
 50-call v1 and 300-call v2 synthetic diagnostics completed without changing
-Cloud Run traffic. The deployed runtime source is `b9b1d76`; PR #63 records
-the deployment evidence, and the repeatable disabled verifier returned `PASS`.
-PR #67 merges the default-off Google identity mechanism in repository/Vercel
-source `94b3e0d`; it remains unconfigured and is not in the Cloud Run runtime.
+Cloud Run flags. The deployed runtime source is `3b1ca95`; build
+`37fec1f2-8ed5-43dd-b1aa-d004e32bc760` and the repeatable disabled verifier
+returned `PASS`. The default-off Google identity mechanism is now present in
+Cloud Run but remains off and unconfigured: there is no OAuth client or
+allow-list in deployment metadata.
 
 ## 1. Safety model
 
@@ -186,6 +187,16 @@ image digest serves 100% of traffic, both flags are false, both secret
 references remain pinned to version `1`, and the HTTP sequence is
 200/200/404/200. No MyScript request occurred. See
 [the current-main deployment evidence](current-main-disabled-deployment-evidence-2026-08-16.md).
+
+After PR #67 merged the default-off Google ID-token boundary and PR #68 recorded
+its merge evidence, build `37fec1f2-8ed5-43dd-b1aa-d004e32bc760` deployed exact
+commit `3b1ca95c91e6da62ba8ca3c0dc42cea00a91bb83` as disabled revision
+`verity-ai-00022-2vj`. The verifier returned `PASS`: 100% traffic reaches the
+ready `3b1ca95` image, both MyScript flags remain false, both secret references
+remain pinned to version `1`, and the HTTP sequence is 200/200/404/200. Identity
+mode remains `off` with no client or allow-list. No token, secret value, student
+ink, or MyScript response was accessed. See [the 2026-08-17 deployment
+evidence](current-main-disabled-deployment-evidence-2026-08-17.md).
 
 ### Repeatable disabled-revision verification
 
