@@ -958,3 +958,42 @@ current approvals, and enabled canary/rollback evidence remain external.
 Next action: merge this content-free deployment evidence. Keep all activation
 flags false until the external package and rollout-approval manifest are valid.
 ```
+
+```text
+Date: 2026-08-16
+Branch: feat/myscript-one-shot-finalization
+Phase: one-shot MyScript interaction scheduling
+Implemented: marked the MyScript REST adapter as a non-auto-finalizing vector
+recognizer. The active row now submits only through the existing explicit
+Check line action; moving to a new row still submits the completed previous
+row. The action changes to Reading... and is disabled while recognition is in
+flight, preventing repeat taps. Incremental vector providers and the Gemini
+image path retain their existing automatic finalization policies.
+Tests and results: 42 focused recognition/workflow/component tests passed. The
+full frontend passed 404 tests across 41 files, lint, App.jsx 257/260, the
+development build, and a production build with API-base and provider-secret
+bundle verification. The unchanged backend passed 1288 tests with 3 expected
+xfails. In an isolated localhost browser origin, a synthetic vertical stroke
+left the durable ledger unchanged at 22/40 after 1.2 seconds and enabled Check
+line 1. One explicit click immediately showed a disabled Reading... action and
+then the content-safe Recognized: 1 result, proving the manual submit path.
+Other local/iPad activity was concurrent with that click, so the shared
+ledger's later aggregate delta is not attributed to the isolated action.
+Measured metrics: the local one-shot diagnostic measured 360 ms provider
+latency and 390 ms backend round trip for one synthetic stroke. Combined with
+the former unconditional 350 ms quiet period, the earliest visible result was
+already about 740 ms before judge/paint time. Exploratory local/LAN writing
+consumed 22/40 attempts by the diagnosis checkpoint, confirming that short
+pauses could submit multiple partial expressions. The raw ink and recognition
+text were not inspected or recorded; two separately initiated synthetic timing
+probes are included in that ledger count.
+Known risks: this removes repeated partial submissions and the fixed wait from
+the explicit path, but a one-shot REST response still takes a network round
+trip and is not streaming iink. This exploratory owner test is not a frozen,
+paired, target-device benchmark and cannot authorize production rollout.
+Production and route flags remain false.
+Next action: obtain an owner-observed Check line validation on the local test
+page, then merge this scheduling fix. A future authenticated canary should
+measure pointer-up-to-paint latency and evaluate a true incremental MyScript
+session separately rather than treating this REST POC as streaming.
+```

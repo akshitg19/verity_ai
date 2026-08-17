@@ -41,6 +41,12 @@ describe("MyScriptVectorRecognizer", () => {
       emitMetric: (record) => metrics.push(record),
     });
 
+    expect(recognizer).toMatchObject({
+      inputMode: "vector",
+      supportsProvisional: false,
+      autoFinalize: false,
+    });
+
     await expect(recognizer.recognize({
       strokes,
       topic: "algebra",

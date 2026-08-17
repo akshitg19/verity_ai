@@ -26,6 +26,28 @@ describe("recognition finalization policy", () => {
     }).provisionalAfterStroke).toBe(false);
   });
 
+  it("does not auto-finalize a one-shot vector provider between pen strokes", async () => {
+    vi.useFakeTimers();
+    const policy = finalizationPolicyForRecognizer({
+      inputMode: "vector",
+      supportsProvisional: false,
+      autoFinalize: false,
+    });
+    const timers = new Map();
+    const finalized = vi.fn();
+
+    expect(policy).toMatchObject({
+      inputMode: "vector",
+      provisionalAfterStroke: false,
+      autoFinalize: false,
+    });
+    expect(scheduleRowFinalization(timers, 1, policy, finalized)).toBe(null);
+    await vi.runAllTimersAsync();
+
+    expect(timers.size).toBe(0);
+    expect(finalized).not.toHaveBeenCalled();
+  });
+
   it("reschedules one row without disturbing another row", async () => {
     vi.useFakeTimers();
     const timers = new Map();
