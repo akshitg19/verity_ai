@@ -26,7 +26,31 @@ DIGEST = (
 )
 
 
-def service_document(*, enabled="false", route_enabled="false", version="1"):
+def service_document(
+    *,
+    enabled="false",
+    route_enabled="false",
+    shared_access="false",
+    auth_mode="off",
+    api_secret="",
+    google_client_id="",
+    allowed_subjects="",
+    allowed_emails=None,
+    allowed_domains="",
+    version="1",
+):
+    access_environment = [
+        {"name": "MYSCRIPT_ALLOW_SHARED_ACCESS", "value": shared_access},
+        {"name": "VERITY_AUTH_MODE", "value": auth_mode},
+        {"name": "VERITY_API_SECRET", "value": api_secret},
+        {"name": "VERITY_GOOGLE_CLIENT_ID", "value": google_client_id},
+        {"name": "VERITY_AUTH_ALLOWED_SUBJECTS", "value": allowed_subjects},
+        {"name": "VERITY_AUTH_ALLOWED_DOMAINS", "value": allowed_domains},
+    ]
+    if allowed_emails is not None:
+        access_environment.append(
+            {"name": "VERITY_AUTH_ALLOWED_EMAILS", "value": allowed_emails}
+        )
     return {
         "spec": {
             "template": {
@@ -47,6 +71,7 @@ def service_document(*, enabled="false", route_enabled="false", version="1"):
                                     "name": "MYSCRIPT_POC_ROUTE_ENABLED",
                                     "value": route_enabled,
                                 },
+                                *access_environment,
                                 {
                                     "name": "MYSCRIPT_APPLICATION_KEY",
                                     "valueFrom": {
@@ -128,6 +153,15 @@ def test_verifier_returns_only_allowlisted_metadata_and_content_safe_results():
         "MYSCRIPT_APPLICATION_KEY": "verity-myscript-application-key:1",
         "MYSCRIPT_HMAC_KEY": "verity-myscript-hmac-key:1",
     }
+    assert report["metadata"]["access_boundary"] == {
+        "MYSCRIPT_ALLOW_SHARED_ACCESS": "false",
+        "VERITY_AUTH_MODE": "off",
+        "VERITY_API_SECRET_CONFIGURED": False,
+        "VERITY_GOOGLE_CLIENT_ID_CONFIGURED": False,
+        "VERITY_AUTH_ALLOWED_SUBJECTS_CONFIGURED": False,
+        "VERITY_AUTH_ALLOWED_EMAILS_CONFIGURED": False,
+        "VERITY_AUTH_ALLOWED_DOMAINS_CONFIGURED": False,
+    }
     assert report["http"] == {
         "health_status": 200,
         "openapi_status": 200,
@@ -140,25 +174,80 @@ def test_verifier_returns_only_allowlisted_metadata_and_content_safe_results():
 
 
 @pytest.mark.parametrize(
-    ("enabled", "route_enabled", "expected_code"),
+    ("overrides", "expected_code"),
     [
-        ("true", "false", "myscript_enabled_not_false"),
-        ("false", "true", "myscript_poc_route_enabled_not_false"),
+        ({"enabled": "true"}, "myscript_enabled_not_false"),
+        ({"route_enabled": "true"}, "myscript_poc_route_enabled_not_false"),
+        (
+            {"shared_access": "true"},
+            "myscript_allow_shared_access_not_false",
+        ),
+        ({"auth_mode": "google"}, "verity_auth_mode_not_off"),
+        ({"api_secret": PRIVATE_SENTINEL}, "verity_api_secret_not_empty"),
+        (
+            {"google_client_id": "configured.apps.googleusercontent.com"},
+            "verity_google_client_id_not_empty",
+        ),
+        (
+            {"allowed_subjects": PRIVATE_SENTINEL},
+            "verity_auth_allowed_subjects_not_empty",
+        ),
+        (
+            {"allowed_emails": "reviewer@example.edu"},
+            "verity_auth_allowed_emails_not_empty",
+        ),
+        (
+            {"allowed_domains": "example.edu"},
+            "verity_auth_allowed_domains_not_empty",
+        ),
     ],
 )
-def test_verifier_stops_before_http_when_either_provider_gate_is_open(
-    enabled, route_enabled, expected_code
+def test_verifier_stops_before_http_when_disabled_access_boundary_drifts(
+    overrides, expected_code
 ):
     def forbidden_request(_url, _data, _headers):
         raise AssertionError("HTTP must not run until both provider flags are false")
 
     with pytest.raises(VerificationError, match=expected_code):
         run_verification(
-            service_document(enabled=enabled, route_enabled=route_enabled),
+            service_document(**overrides),
             revision_document(),
             frontend_url=FRONTEND_URL,
             request_fn=forbidden_request,
         )
+
+
+def test_verifier_rejects_access_boundary_secret_references_before_http():
+    service = service_document()
+    client_id = next(
+        entry
+        for entry in service["spec"]["template"]["spec"]["containers"][0]["env"]
+        if entry["name"] == "VERITY_GOOGLE_CLIENT_ID"
+    )
+    client_id.clear()
+    client_id.update(
+        {
+            "name": "VERITY_GOOGLE_CLIENT_ID",
+            "valueFrom": {
+                "secretKeyRef": {"name": PRIVATE_SENTINEL, "key": "1"}
+            },
+        }
+    )
+
+    def forbidden_request(_url, _data, _headers):
+        raise AssertionError("HTTP must not run until identity metadata is empty")
+
+    with pytest.raises(
+        VerificationError, match="verity_google_client_id_not_empty"
+    ) as captured:
+        run_verification(
+            service,
+            revision_document(),
+            frontend_url=FRONTEND_URL,
+            request_fn=forbidden_request,
+        )
+
+    assert PRIVATE_SENTINEL not in str(captured.value)
 
 
 @pytest.mark.parametrize("version", ["", "0", "01", "latest", "1a"])

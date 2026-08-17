@@ -77,7 +77,9 @@ for implementation decisions.
   fail-closed verifier result.
 - `scripts/verify_disabled_myscript_revision.py` reproduces the allowlisted
   revision-metadata and fail-closed smoke checks without accessing Secret
-  Manager values.
+  Manager values. It also proves the shared-access escape hatch and Google
+  identity mode are off and that no API secret, OAuth client, or identity
+  allow-list is configured before making any HTTP request.
 - [Fixture schema](fixtures/fixture.schema.json) defines the machine-readable
   test-case format.
 - [Stroke schema](fixtures/stroke.schema.json) bounds replayable digital ink,

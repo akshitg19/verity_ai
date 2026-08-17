@@ -853,7 +853,10 @@ Safe to review now:
 - pointer-to-paint lifecycle stages are locally observable;
 - client reuse is implemented;
 - disabled-revision metadata and smoke validation is reproducible through the
-  content-safe verifier in `scripts/verify_disabled_myscript_revision.py`;
+  content-safe verifier in `scripts/verify_disabled_myscript_revision.py`,
+  including false provider/shared-access flags, identity mode off, empty
+  OAuth/API-secret/allow-list configuration, pinned secret references, and
+  HTTP status checks;
 - all current frontend/backend validation passes.
 
 Not safe to claim yet:
