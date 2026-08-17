@@ -1,12 +1,15 @@
 # Google Identity Boundary Evidence
 
-**Status date:** 2026-08-16
+**Status date:** 2026-08-17
 
-**Implementation state:** code and local tests complete; external configuration,
-security review, and a real-account canary are not complete
+**Implementation state:** merged by PR #67 at `94b3e0d`; local, PR, post-merge
+CI, Vercel, and production-frontend smoke evidence complete; external
+configuration, security review, and a real-account canary are not complete
 
-**Production state:** disabled; no OAuth client or allow-list is configured in
-the deployed frontend or Cloud Run revision
+**Production state:** the Vercel frontend contains the default-off code, with no
+OAuth client configured. Cloud Build history has no PR #67 build, and Cloud Run
+still sends 100% traffic to disabled revision `verity-ai-00021-glp` from backend
+source `b9b1d76`; no identity allow-list is deployed.
 
 ## Purpose and decision boundary
 
@@ -96,6 +99,16 @@ from remaining in a production bundle after real identity is enabled.
   gate on `/math`, then rendered the official Google button. The workspace was
   not mounted, there were no console warnings/errors, and no MyScript action was
   possible. The synthetic client ID was not used to sign in.
+- PR #67 passed Linux backend, Windows backend, frontend, Vercel preview, and
+  Vercel production checks. Post-merge `main` CI run `31996768597` passed all
+  three jobs. The Vercel deployment status pins exact merge `94b3e0d`.
+- A read-only Vercel production `/math` smoke opened the existing Gemini
+  workspace directly, proving `VITE_GOOGLE_CLIENT_ID` remains unset. The page
+  had no console warning/error and no recognition action was invoked.
+- Read-only Google Cloud consoles showed the newest build remains
+  `a5703e61-48d6-487a-8fe2-9e35c06aeb51` and revision
+  `verity-ai-00021-glp` still receives 100% of Cloud Run traffic. Therefore the
+  merged backend identity code is not represented as deployed evidence.
 
 No real user credential, OAuth client, Google account claim, student ink,
 MyScript request, or production flag was created or transmitted by these tests.

@@ -7,6 +7,8 @@
 50-call v1 and 300-call v2 synthetic diagnostics completed without changing
 Cloud Run traffic. The deployed runtime source is `b9b1d76`; PR #63 records
 the deployment evidence, and the repeatable disabled verifier returned `PASS`.
+PR #67 merges the default-off Google identity mechanism in repository/Vercel
+source `94b3e0d`; it remains unconfigured and is not in the Cloud Run runtime.
 
 ## 1. Safety model
 

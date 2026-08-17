@@ -109,7 +109,9 @@ for implementation decisions.
   #61 adds the fail-closed production activation evidence gate; PR #63 records
   the verified disabled deployment of runtime source `b9b1d76` as revision
   `verity-ai-00021-glp`; and PR #65 prevents one-shot MyScript REST from
-  auto-submitting partial expressions between pen strokes.
+  auto-submitting partial expressions between pen strokes. PR #67 adds the
+  default-off, exact-allow-list Google identity boundary and removes the shared
+  header as a sufficient deployed-MyScript access condition.
 - Production recognizer: Gemini image transcription.
 - Finalization: 750ms image policy; 350ms vector hypothesis with provisional
   support; at most two recognition workers with ordered final judgment.
