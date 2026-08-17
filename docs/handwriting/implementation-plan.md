@@ -1194,3 +1194,31 @@ enabled canary exists.
 Next action: PR #74 is merged. Keep production identity/MyScript flags false
 until the named owners supply the actual artifacts and all remaining approvals.
 ```
+
+```text
+Date: 2026-08-17
+Branch: feat/handwriting-rollout-approval-artifacts
+Phase: activation-time independent approval-artifact closure
+Implemented: closed a fail-open evidence-binding gap in the final rollout
+validator. The privacy/legal, commercial, security/authentication, and
+product-rollout approval hashes must now match four actual external files;
+missing, oversized, unreadable, or mismatched files fail with stable
+content-safe codes. The validator reads only bounded bytes for SHA-256 and does
+not parse, print, or copy private approval content into Git. Data governance
+remains independently bound to the canonical validated corpus-governance JSON.
+The rollout command and source-of-truth index list all required paths.
+Tests and results: 22 focused rollout tests pass, including an end-to-end CLI
+success case plus missing and hash-mismatched private-artifact failures that do
+not disclose marker content. The full backend passes 1336 tests with 3 expected
+xfails and the same 4 known dependency/OPSIN warnings. Python compilation and
+git diff checks pass; remote CI remains to run.
+Measured metrics: validation behavior only. No provider request, secret read,
+student data, identity sign-in, deployment, contract, purchase, or paid action
+occurred.
+Known risks: hashing proves that the supplied files are the files named by the
+approval manifest; it does not prove that their contents are substantively
+adequate or that an approver had authority. Those remain human review duties.
+Next action: run full regression and merge only after remote gates pass. Keep
+production identity and MyScript flags false until the complete external
+package exists and explicit activation authorization is separately granted.
+```

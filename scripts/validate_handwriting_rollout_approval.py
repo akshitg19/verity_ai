@@ -33,6 +33,7 @@ from handwriting_eval.validation import (  # noqa: E402
 
 MAX_MANIFEST_BYTES = 256 * 1024
 MAX_EVIDENCE_BYTES = 4 * 1024 * 1024
+MAX_APPROVAL_ARTIFACT_BYTES = 4 * 1024 * 1024
 MAX_CORPUS_MANIFEST_BYTES = 64 * 1024 * 1024
 MAX_CORPUS_GOVERNANCE_BYTES = 256 * 1024
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -41,6 +42,12 @@ APPROVAL_NAMES = (
     "commercial",
     "security_authentication",
     "data_governance",
+    "product_rollout",
+)
+EXTERNAL_APPROVAL_NAMES = (
+    "privacy_legal",
+    "commercial",
+    "security_authentication",
     "product_rollout",
 )
 AUTHORITATIVE_PATHS = {
@@ -323,6 +330,47 @@ def _validate_approvals(approvals: dict[str, Any]) -> None:
             raise RolloutApprovalError(f"approval_expired__{name}")
 
 
+def _validate_approval_artifacts(
+    approvals: dict[str, Any], artifact_paths: dict[str, Path]
+) -> None:
+    """Bind every non-governance approval to an actual external artifact.
+
+    Approval artifacts may contain private legal or security material. Read only
+    their bytes for a bounded SHA-256 calculation and never parse or emit them.
+    The data-governance approval is checked separately against the canonical
+    corpus-governance JSON hash.
+    """
+
+    for name in EXTERNAL_APPROVAL_NAMES:
+        path = artifact_paths.get(name)
+        if path is None:
+            raise RolloutApprovalError(f"approval_artifact_missing__{name}")
+        try:
+            if (
+                not path.is_file()
+                or path.stat().st_size > MAX_APPROVAL_ARTIFACT_BYTES
+            ):
+                raise RolloutApprovalError(
+                    f"approval_artifact_missing_or_too_large__{name}"
+                )
+        except RolloutApprovalError:
+            raise
+        except OSError:
+            raise RolloutApprovalError(
+                f"approval_artifact_unreadable__{name}"
+            ) from None
+        try:
+            actual_hash = _sha256_file(path)
+        except RolloutApprovalError:
+            raise RolloutApprovalError(
+                f"approval_artifact_unreadable__{name}"
+            ) from None
+        if actual_hash != approvals[name]["artifact_sha256"]:
+            raise RolloutApprovalError(
+                f"approval_artifact_hash_mismatch__{name}"
+            )
+
+
 def _validate_evidence(
     evidence: dict[str, Any], repository_root: Path
 ) -> None:
@@ -400,6 +448,7 @@ def validate_rollout_approval(
     expected_source_commit: str,
     corpus_manifest: ManifestValidation,
     corpus_governance: CorpusGovernanceValidation,
+    approval_artifacts: dict[str, Path],
 ) -> dict[str, Any]:
     """Validate every rollout gate and return an allowlisted summary."""
 
@@ -418,6 +467,7 @@ def validate_rollout_approval(
         raise RolloutApprovalError("decision_sample_count_above_maximum")
 
     _validate_approvals(manifest["approvals"])
+    _validate_approval_artifacts(manifest["approvals"], approval_artifacts)
     if (
         manifest["approvals"]["data_governance"]["artifact_sha256"]
         != decision["corpus_governance_sha256"]
@@ -476,6 +526,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--corpus-manifest")
     parser.add_argument("--corpus-governance")
+    for approval_name in EXTERNAL_APPROVAL_NAMES:
+        parser.add_argument(
+            f"--{approval_name.replace('_', '-')}-approval-artifact"
+        )
     parser.add_argument(
         "--fixture-schema",
         default=str(REPO_ROOT / "docs/handwriting/fixtures/fixture.schema.json"),
@@ -519,6 +573,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             expected_source_commit=args.expected_source_commit,
             corpus_manifest=corpus_manifest,
             corpus_governance=corpus_governance,
+            approval_artifacts={
+                name: Path(
+                    getattr(args, f"{name}_approval_artifact")
+                )
+                for name in EXTERNAL_APPROVAL_NAMES
+                if getattr(args, f"{name}_approval_artifact") is not None
+            },
         )
     except RolloutApprovalError as exc:
         print(

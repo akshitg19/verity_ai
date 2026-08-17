@@ -37,6 +37,12 @@ FIXTURE_SCHEMA = ROOT / "docs/handwriting/fixtures/fixture.schema.json"
 GOVERNANCE_SCHEMA = (
     ROOT / "docs/handwriting/fixtures/corpus-governance.schema.json"
 )
+EXTERNAL_APPROVAL_NAMES = (
+    "privacy_legal",
+    "commercial",
+    "security_authentication",
+    "product_rollout",
+)
 
 
 def sha256(path):
@@ -50,6 +56,13 @@ def evidence_file(repository_root, name, content):
     return {
         "path": f"docs/handwriting/{name}",
         "sha256": sha256(path),
+    }
+
+
+def approval_artifact_paths(repository_root):
+    return {
+        name: repository_root / "private-approvals" / f"{name}.approval"
+        for name in EXTERNAL_APPROVAL_NAMES
     }
 
 
@@ -76,6 +89,11 @@ def valid_manifest(repository_root):
             "rollback evidence\n",
         ),
     }
+    approval_paths = approval_artifact_paths(repository_root)
+    approval_paths["privacy_legal"].parent.mkdir(parents=True, exist_ok=True)
+    for name, path in approval_paths.items():
+        path.write_bytes(f"private {name} approval evidence\n".encode())
+
     approvals = {}
     for name in (
         "privacy_legal",
@@ -87,7 +105,11 @@ def valid_manifest(repository_root):
         approvals[name] = {
             "status": "approved",
             "evidence_id": f"{name.replace('_', '-')}-review-v1",
-            "artifact_sha256": hashlib.sha256(name.encode()).hexdigest(),
+            "artifact_sha256": (
+                sha256(approval_paths[name])
+                if name in approval_paths
+                else hashlib.sha256(name.encode()).hexdigest()
+            ),
             "reviewed_at": date.today().isoformat(),
             "valid_through": (date.today() + timedelta(days=90)).isoformat(),
         }
@@ -286,7 +308,12 @@ def write_valid_corpus_evidence(repository_root, manifest):
     return corpus_manifest_path, governance_path
 
 
-def validate(manifest, repository_root, expected_commit=None):
+def validate(
+    manifest,
+    repository_root,
+    expected_commit=None,
+    approval_artifacts=None,
+):
     expected_commit = expected_commit or manifest["source_commit"]
     corpus_manifest, corpus_governance = valid_corpus_evidence(manifest)
     return validate_rollout_approval(
@@ -296,6 +323,11 @@ def validate(manifest, repository_root, expected_commit=None):
         expected_source_commit=expected_commit,
         corpus_manifest=corpus_manifest,
         corpus_governance=corpus_governance,
+        approval_artifacts=(
+            approval_artifacts
+            if approval_artifacts is not None
+            else approval_artifact_paths(repository_root)
+        ),
     )
 
 
@@ -352,6 +384,7 @@ def test_external_corpus_and_governance_files_close_the_rollout_binding(tmp_path
         expected_source_commit=manifest["source_commit"],
         corpus_manifest=corpus_manifest,
         corpus_governance=corpus_governance,
+        approval_artifacts=approval_artifact_paths(tmp_path),
     )
 
     assert summary["status"] == "PASS"
@@ -376,6 +409,7 @@ def test_rollout_rejects_corpus_and_governance_binding_drift(tmp_path):
                 expected_source_commit=manifest["source_commit"],
                 corpus_manifest=checked_manifest,
                 corpus_governance=checked_governance,
+                approval_artifacts=approval_artifact_paths(tmp_path),
             )
         assert captured.value.code == expected
 
@@ -445,6 +479,28 @@ def test_every_independent_approval_requires_complete_evidence(tmp_path):
         manifest["approvals"]["privacy_legal"]["evidence_id"]
     )
     assert_code("approval_evidence_id_duplicate", manifest, tmp_path)
+
+
+def test_every_external_approval_hash_is_bound_to_an_actual_private_artifact(
+    tmp_path,
+):
+    manifest = valid_manifest(tmp_path)
+    paths = approval_artifact_paths(tmp_path)
+    del paths["privacy_legal"]
+    with pytest.raises(RolloutApprovalError) as captured:
+        validate(manifest, tmp_path, approval_artifacts=paths)
+    assert captured.value.code == "approval_artifact_missing__privacy_legal"
+
+    manifest = valid_manifest(tmp_path)
+    private_value = "private-security-review-content"
+    paths = approval_artifact_paths(tmp_path)
+    paths["security_authentication"].write_text(private_value, encoding="utf-8")
+    with pytest.raises(RolloutApprovalError) as captured:
+        validate(manifest, tmp_path, approval_artifacts=paths)
+    assert captured.value.code == (
+        "approval_artifact_hash_mismatch__security_authentication"
+    )
+    assert private_value not in str(captured.value)
 
 
 def test_rollout_decision_must_bind_the_approved_governance_artifact(tmp_path):
@@ -581,6 +637,51 @@ def test_cli_requires_and_safely_validates_external_corpus_evidence(
     ) == 1
     captured = capsys.readouterr()
     assert '"code": "corpus_evidence_invalid"' in captured.err
+    assert private_value not in captured.err
+    assert captured.out == ""
+
+
+def test_cli_requires_hash_matching_external_approval_artifacts(tmp_path, capsys):
+    manifest = valid_manifest(tmp_path)
+    corpus_path, governance_path = write_valid_corpus_evidence(tmp_path, manifest)
+    approval_path = tmp_path / "approval.json"
+    approval_path.write_text(json.dumps(manifest), encoding="utf-8")
+    common = [
+        "--manifest",
+        str(approval_path),
+        "--corpus-manifest",
+        str(corpus_path),
+        "--corpus-governance",
+        str(governance_path),
+        "--repository-root",
+        str(tmp_path),
+        "--expected-source-commit",
+        manifest["source_commit"],
+    ]
+
+    assert main(common) == 1
+    captured = capsys.readouterr()
+    assert '"code": "approval_artifact_missing__privacy_legal"' in captured.err
+    assert captured.out == ""
+
+    artifact_args = []
+    for name, path in approval_artifact_paths(tmp_path).items():
+        artifact_args.extend(
+            [f"--{name.replace('_', '-')}-approval-artifact", str(path)]
+        )
+    assert main([*common, *artifact_args]) == 0
+    captured = capsys.readouterr()
+    assert '"status": "PASS"' in captured.out
+    assert "private" not in captured.out
+    assert captured.err == ""
+
+    private_value = "private-commercial-approval-details"
+    approval_artifact_paths(tmp_path)["commercial"].write_text(
+        private_value, encoding="utf-8"
+    )
+    assert main([*common, *artifact_args]) == 1
+    captured = capsys.readouterr()
+    assert '"code": "approval_artifact_hash_mismatch__commercial"' in captured.err
     assert private_value not in captured.err
     assert captured.out == ""
 

@@ -89,6 +89,11 @@ python3 scripts/validate_handwriting_rollout_approval.py \
   --manifest /approved/path/myscript-rollout-approval.json \
   --corpus-manifest /approved/restricted/corpus-v1.jsonl \
   --corpus-governance /approved/governance/corpus-v1-governance.json \
+  --privacy-legal-approval-artifact /approved/private/privacy-legal.approval \
+  --commercial-approval-artifact /approved/private/commercial.approval \
+  --security-authentication-approval-artifact \
+    /approved/private/security-authentication.approval \
+  --product-rollout-approval-artifact /approved/private/product-rollout.approval \
   --repository-root . \
   --expected-source-commit "$(git rev-parse HEAD)"
 ```
@@ -108,7 +113,9 @@ true:
   normalization, run ID, and allowed categories are frozen;
 - privacy/legal, commercial, security/authentication, data-governance, and
   product-rollout owners each have a distinct approved evidence ID, artifact
-  hash, non-future review date, and non-expired validity date;
+  hash, non-future review date, and non-expired validity date; the four
+  non-governance hashes match the actual bounded external approval files while
+  the data-governance hash matches the validated governance JSON;
 - the authoritative provider report, target-device report, rollout runbook,
   and rollback-test evidence exist inside the repository, match their
   declared SHA-256 hashes, and match the blobs committed at the approved
@@ -124,9 +131,11 @@ true:
 - the manifest explicitly names both activation flags as `true`, preventing a
   partial-gate manifest from being mistaken for an enabled release.
 
-On success the tool prints only an allowlisted summary. It does not print
-approval IDs, evidence hashes/paths, ledger paths, or restricted content. On
-failure it prints only a stable code. Passing the JSON schema alone is not
+The external approval files may remain in their approved private store. The
+validator reads only bounded bytes to calculate SHA-256; it does not parse or
+copy them into Git. On success the tool prints only an allowlisted summary. It
+does not print approval IDs, evidence hashes/paths, ledger paths, or restricted
+content. On failure it prints only a stable code. Passing the JSON schema alone is not
 approval; passing the semantic validator also does not replace human review.
 No valid rollout manifest is committed today because the provider decision and
 external approvals are still missing. `cloudbuild.yaml` continues to hardcode
