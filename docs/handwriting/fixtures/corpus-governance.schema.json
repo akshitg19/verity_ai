@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verityai.example/schemas/handwriting-corpus-governance-v1.json",
+  "title": "VerityAI handwriting corpus governance approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "governance_id",
+    "corpus_version",
+    "manifest_sha256",
+    "fixture_count",
+    "data_sources",
+    "approved_providers",
+    "storage",
+    "consent",
+    "review"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "governance_id": { "$ref": "#/$defs/safeId" },
+    "corpus_version": { "$ref": "#/$defs/safeId" },
+    "manifest_sha256": { "$ref": "#/$defs/sha256" },
+    "fixture_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "data_sources": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["synthetic", "internal", "consented_user"]
+      }
+    },
+    "approved_providers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/safeId" }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "restricted_store_approval_id",
+        "access_policy_id",
+        "retention_policy_ids",
+        "deletion_procedure_id",
+        "deletion_test_id",
+        "encryption_at_rest_verified"
+      ],
+      "properties": {
+        "classification": { "const": "restricted" },
+        "restricted_store_approval_id": { "$ref": "#/$defs/safeId" },
+        "access_policy_id": { "$ref": "#/$defs/safeId" },
+        "retention_policy_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/safeId" }
+        },
+        "deletion_procedure_id": { "$ref": "#/$defs/safeId" },
+        "deletion_test_id": { "$ref": "#/$defs/safeId" },
+        "encryption_at_rest_verified": { "const": true }
+      }
+    },
+    "consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provenance_registry_id",
+        "withdrawal_process_id",
+        "provider_specific_consent_verified",
+        "student_data_use_approved"
+      ],
+      "properties": {
+        "provenance_registry_id": { "$ref": "#/$defs/safeId" },
+        "withdrawal_process_id": { "$ref": "#/$defs/safeId" },
+        "provider_specific_consent_verified": { "const": true },
+        "student_data_use_approved": { "type": "boolean" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "data_privacy_approval_id",
+        "corpus_owner_approval_id",
+        "ambiguous_two_reviewer_verified",
+        "reviewed_at",
+        "valid_through"
+      ],
+      "properties": {
+        "status": { "const": "approved" },
+        "data_privacy_approval_id": { "$ref": "#/$defs/safeId" },
+        "corpus_owner_approval_id": { "$ref": "#/$defs/safeId" },
+        "ambiguous_two_reviewer_verified": { "const": true },
+        "reviewed_at": { "type": "string", "format": "date" },
+        "valid_through": { "type": "string", "format": "date" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "data_sources": { "contains": { "const": "consented_user" } }
+        }
+      },
+      "then": {
+        "properties": {
+          "consent": {
+            "properties": {
+              "student_data_use_approved": { "const": true }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 100,
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from collections import Counter, defaultdict
@@ -52,18 +51,6 @@ def _rate(numerator: int, denominator: int) -> float | None:
     if denominator == 0:
         return None
     return round(numerator / denominator, 6)
-
-
-def _hash_records(records: Iterable[dict[str, Any]]) -> str:
-    digest = hashlib.sha256()
-    for record in records:
-        digest.update(
-            json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
-                "utf-8"
-            )
-        )
-        digest.update(b"\n")
-    return digest.hexdigest()
 
 
 def _targets(fixture: dict[str, Any]) -> list[str]:
@@ -240,6 +227,8 @@ def score_run(
     predictions: list[dict[str, Any]],
     *,
     corpus_version: str,
+    governance_id: str | None = None,
+    governance_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Score one uniform provider run and return an aggregate-only report."""
 
@@ -291,14 +280,18 @@ def score_run(
     ):
         reasons.add("provider_not_approved_for_all_fixtures")
 
-    manifest_sha256 = _hash_records(fixtures)
+    corpus = {
+        "version": corpus_version,
+        "sample_count": len(fixtures),
+        "manifest_sha256": manifest.manifest_sha256,
+    }
+    if governance_id is not None:
+        corpus["governance_id"] = governance_id
+    if governance_sha256 is not None:
+        corpus["governance_sha256"] = governance_sha256
     report = {
         "schema_version": 1,
-        "corpus": {
-            "version": corpus_version,
-            "sample_count": len(fixtures),
-            "manifest_sha256": manifest_sha256,
-        },
+        "corpus": corpus,
         "normalization_version": NORMALIZATION_VERSION,
         "run": {field: next(iter(run_values[field])) for field in run_fields},
         "decision_eligible": not reasons,

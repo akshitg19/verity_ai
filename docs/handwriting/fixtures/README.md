@@ -1,8 +1,8 @@
 # Handwriting Evaluation Fixtures
 
-This directory contains the fixture, stroke, and provider-prediction schemas plus
-synthetic shape examples. Do not commit real student handwriting here merely
-because it matches a schema.
+This directory contains the fixture, stroke, provider-prediction, and
+content-free corpus-governance schemas plus synthetic shape examples. Do not
+commit real student handwriting here merely because it matches a schema.
 
 ## Format
 
@@ -23,6 +23,26 @@ because it matches a schema.
 - Link each record to non-PII provenance evidence with
   `consent.provenance_id`; keep the underlying consent or generation record in
   the restricted governance store.
+
+## Governance approval
+
+`corpus-governance.schema.json` is the fail-closed approval contract for an
+exact corpus. The approval contains no handwriting, transcription, person, or
+account identifier. It binds a governance ID and corpus version to the
+canonical manifest SHA-256, fixture count, source classes, approved providers,
+retention rules, restricted-store/access/deletion evidence, consent and
+withdrawal evidence, two-reviewer confirmation, and a current approval window.
+The validator also computes a canonical SHA-256 of the governance JSON itself.
+Validation summaries, replay plans, aggregate reports, and rollout approval
+must retain that value so an approval cannot be replaced under the same ID.
+
+Every `--decision-run` requires this approval and enforces 300–500 fixtures.
+Any run containing `consented_user` records also requires it, even for a
+smaller pre-decision smoke, and the approval must explicitly authorize student
+data use. `--allow-consented-user` is therefore necessary but never sufficient
+on its own. Do not create a fake approved example in Git: the data/privacy and
+corpus owners must issue the real content-free approval alongside the
+restricted corpus.
 
 ## Data handling
 
@@ -89,6 +109,7 @@ review gates:
 python -m handwriting_eval.cli validate \
   --manifest /approved/store/corpus-v1.jsonl \
   --fixture-root /approved/store \
+  --governance /approved/governance/corpus-v1-governance.json \
   --decision-run
 ```
 
@@ -100,6 +121,7 @@ request cap, and writes the raw plan with owner-only permissions on POSIX:
 python -m handwriting_eval.cli plan \
   --manifest /approved/store/corpus-v1.jsonl \
   --fixture-root /approved/store \
+  --governance /approved/governance/corpus-v1-governance.json \
   --provider myscript \
   --run-id myscript-rest-poc-1 \
   --request-cap 1500 \
@@ -150,6 +172,7 @@ After an approved adapter writes predictions matching
 python -m handwriting_eval.cli score \
   --manifest /approved/store/corpus-v1.jsonl \
   --fixture-root /approved/store \
+  --governance /approved/governance/corpus-v1-governance.json \
   --predictions /approved/store/runs/myscript-rest-poc-1.predictions.jsonl \
   --corpus-version corpus-v1 \
   --verify-inputs \

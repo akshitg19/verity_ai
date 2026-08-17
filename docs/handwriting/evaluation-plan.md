@@ -19,6 +19,16 @@ The evaluation answers:
 Start with 300–500 consented expressions across multiple writers and target
 devices. Expand before production rollout.
 
+Before a decision run, freeze a content-free governance approval matching
+`fixtures/corpus-governance.schema.json`. The evaluator requires an exact
+canonical manifest hash and count, the same source/provider/retention sets,
+current data/privacy and corpus-owner approvals, restricted storage and tested
+deletion evidence, and confirmation of two-reviewer handling. A decision run
+fails closed outside 300–500 cases. A smaller consented-user smoke still
+requires the governance approval and explicit student-data authorization. The
+governance ID and canonical governance SHA-256 remain attached to every plan
+and aggregate.
+
 Required categories:
 
 | Domain | Cases |
@@ -141,7 +151,8 @@ gate after seeing results without recording the product decision and rationale.
 
 ## 8. Experiment protocol
 
-1. Freeze a corpus version and normalization version.
+1. Freeze a corpus version, normalization version, and exact bound governance
+   approval.
 2. Warm providers consistently or record cold/warm status.
 3. Run identical fixtures with fixed prompts/configuration.
 4. Repeat latency-sensitive calls enough times to expose variance.

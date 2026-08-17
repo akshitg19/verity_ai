@@ -16,7 +16,9 @@ from .ledger import (
 )
 from .scoring import score_run
 from .validation import (
+    CorpusGovernanceValidation,
     EvaluationDataError,
+    load_corpus_governance,
     load_manifest,
     load_predictions,
     write_json,
@@ -30,6 +32,9 @@ DEFAULT_STROKE_SCHEMA = REPO_ROOT / "docs/handwriting/fixtures/stroke.schema.jso
 DEFAULT_PREDICTION_SCHEMA = (
     REPO_ROOT / "docs/handwriting/fixtures/prediction.schema.json"
 )
+DEFAULT_GOVERNANCE_SCHEMA = (
+    REPO_ROOT / "docs/handwriting/fixtures/corpus-governance.schema.json"
+)
 SAFE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]+$")
 
 
@@ -38,17 +43,29 @@ def _common_manifest_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--fixture-schema", type=Path, default=DEFAULT_FIXTURE_SCHEMA)
     parser.add_argument("--stroke-schema", type=Path, default=DEFAULT_STROKE_SCHEMA)
     parser.add_argument("--fixture-root", type=Path)
+    parser.add_argument("--governance", type=Path)
+    parser.add_argument(
+        "--governance-schema", type=Path, default=DEFAULT_GOVERNANCE_SCHEMA
+    )
     parser.add_argument(
         "--allow-consented-user",
         action="store_true",
-        help="Allow restricted consented-user records after an external policy check.",
+        help=(
+            "Allow restricted consented-user records only with a bound corpus "
+            "governance approval."
+        ),
     )
 
 
 def _load_from_args(
-    args: argparse.Namespace, *, require_inputs: bool, decision_ready: bool
-):
-    return load_manifest(
+    args: argparse.Namespace,
+    *,
+    require_inputs: bool,
+    decision_ready: bool,
+    expected_corpus_version: str | None = None,
+    expected_provider: str | None = None,
+) -> tuple[Any, CorpusGovernanceValidation | None]:
+    manifest = load_manifest(
         args.manifest,
         args.fixture_schema,
         fixture_root=args.fixture_root,
@@ -57,20 +74,46 @@ def _load_from_args(
         require_decision_ready=decision_ready,
         allow_consented_user=args.allow_consented_user,
     )
+    governance_required = decision_ready or args.allow_consented_user
+    if governance_required and args.governance is None:
+        raise EvaluationDataError(
+            "A corpus governance approval is required for decision or consented-user runs"
+        )
+    governance = None
+    if args.governance is not None:
+        governance = load_corpus_governance(
+            args.governance,
+            args.governance_schema,
+            manifest,
+            expected_corpus_version=expected_corpus_version,
+            expected_provider=expected_provider,
+            require_decision_size=decision_ready,
+        )
+    return manifest, governance
 
 
 def _validate_command(args: argparse.Namespace) -> dict[str, Any]:
-    result = _load_from_args(
+    result, governance = _load_from_args(
         args,
         require_inputs=not args.manifest_only,
         decision_ready=args.decision_run,
     )
-    return {
+    response = {
         "valid": True,
         "record_count": len(result.records),
         "decision_eligible": result.decision_eligible,
         "ineligibility_reasons": list(result.ineligibility_reasons),
     }
+    if governance is not None:
+        response["governance"] = {
+            "governance_id": governance.governance_id,
+            "governance_sha256": governance.governance_sha256,
+            "corpus_version": governance.corpus_version,
+            "manifest_sha256": governance.manifest_sha256,
+            "fixture_count": governance.fixture_count,
+            "valid_through": governance.valid_through,
+        }
+    return response
 
 
 def _score_command(args: argparse.Namespace) -> dict[str, Any]:
@@ -78,16 +121,19 @@ def _score_command(args: argparse.Namespace) -> dict[str, Any]:
         raise EvaluationDataError(
             "corpus-version must use lowercase letters, numbers, dots, underscores, or hyphens"
         )
-    manifest = _load_from_args(
+    manifest, governance = _load_from_args(
         args,
         require_inputs=args.verify_inputs or args.decision_run,
         decision_ready=args.decision_run,
+        expected_corpus_version=args.corpus_version,
     )
     predictions = load_predictions(args.predictions, args.prediction_schema)
     report = score_run(
         manifest,
         predictions,
         corpus_version=args.corpus_version,
+        governance_id=governance.governance_id if governance else None,
+        governance_sha256=governance.governance_sha256 if governance else None,
     )
     if args.decision_run and not report["decision_eligible"]:
         raise EvaluationDataError(
@@ -110,10 +156,11 @@ def _plan_command(args: argparse.Namespace) -> dict[str, Any]:
     if not 1 <= args.repeat <= 20:
         raise EvaluationDataError("repeat must be between 1 and 20")
 
-    manifest = _load_from_args(
+    manifest, governance = _load_from_args(
         args,
         require_inputs=True,
         decision_ready=args.decision_run,
+        expected_provider=args.provider,
     )
     unapproved = [
         fixture["id"]
@@ -159,8 +206,15 @@ def _plan_command(args: argparse.Namespace) -> dict[str, Any]:
         "decision_eligible": manifest.decision_eligible,
         "requests": requests,
     }
+    if governance is not None:
+        plan["governance"] = {
+            "governance_id": governance.governance_id,
+            "governance_sha256": governance.governance_sha256,
+            "corpus_version": governance.corpus_version,
+            "manifest_sha256": governance.manifest_sha256,
+        }
     write_restricted_json(args.output, plan)
-    return {
+    response = {
         "valid": True,
         "run_id": args.run_id,
         "provider": args.provider,
@@ -168,6 +222,12 @@ def _plan_command(args: argparse.Namespace) -> dict[str, Any]:
         "request_cap": args.request_cap,
         "decision_eligible": manifest.decision_eligible,
     }
+    if governance is not None:
+        response["governance_id"] = governance.governance_id
+        response["governance_sha256"] = governance.governance_sha256
+        response["corpus_version"] = governance.corpus_version
+        response["manifest_sha256"] = governance.manifest_sha256
+    return response
 
 
 def _ledger(args: argparse.Namespace) -> DurableAttemptLedger:
@@ -240,7 +300,10 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument(
         "--decision-run",
         action="store_true",
-        help="Require two reviewers, approved retention, and device/browser groups.",
+        help=(
+            "Require 300-500 governed fixtures, two reviewers, approved retention, "
+            "and device/browser groups."
+        ),
     )
     validate_parser.set_defaults(handler=_validate_command)
 
@@ -262,7 +325,10 @@ def build_parser() -> argparse.ArgumentParser:
     score_parser.add_argument(
         "--decision-run",
         action="store_true",
-        help="Fail unless fixtures and predictions are eligible for a provider decision.",
+        help=(
+            "Fail unless 300-500 governed fixtures and predictions are eligible "
+            "for a provider decision."
+        ),
     )
     score_parser.set_defaults(handler=_score_command)
 
@@ -279,7 +345,10 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument(
         "--decision-run",
         action="store_true",
-        help="Require two-reviewer, retention, and device/browser decision gates.",
+        help=(
+            "Require 300-500 governed fixtures plus two-reviewer, retention, "
+            "and device/browser decision gates."
+        ),
     )
     plan_parser.set_defaults(handler=_plan_command)
 

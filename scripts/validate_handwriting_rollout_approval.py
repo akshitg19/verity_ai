@@ -318,8 +318,15 @@ def validate_rollout_approval(
         raise RolloutApprovalError("provider_decision_not_go")
     if decision["sample_count"] < 300:
         raise RolloutApprovalError("decision_sample_count_below_minimum")
+    if decision["sample_count"] > 500:
+        raise RolloutApprovalError("decision_sample_count_above_maximum")
 
     _validate_approvals(manifest["approvals"])
+    if (
+        manifest["approvals"]["data_governance"]["artifact_sha256"]
+        != decision["corpus_governance_sha256"]
+    ):
+        raise RolloutApprovalError("corpus_governance_approval_mismatch")
     _validate_evidence(manifest["evidence"], repository_root)
     validate_committed_evidence(
         manifest["evidence"], repository_root, expected_source_commit

@@ -53,8 +53,9 @@ All items must have an owner and attached evidence:
    transient processing, minor/student use, FERPA/COPPA, subprocessors,
    retention, deletion, residency, attribution, and publicity terms.
 2. VerityAI privacy/legal owner records approval for the exact POC data class.
-3. A reviewed target-device corpus passes fixture validation; every record
-   names MyScript in `approved_providers`.
+3. A reviewed 300–500-case target-device corpus and its current content-free
+   governance approval pass `validate --decision-run`; the approval binds the
+   exact hash/count and every record names MyScript in `approved_providers`.
 4. The restricted artifact store, access list, retention date, and deletion
    procedure are approved and exercised.
 5. The vendor dashboard's remaining trial quota is checked without exposing
@@ -96,7 +97,7 @@ true:
 - the exact 40-character source commit matches both the manifest and the
   checked-out repository `HEAD`, and a `GO` or `CATEGORY_LIMITED_GO` decision
   is pinned;
-- the decision corpus has at least 300 cases, and its version, hash,
+- the decision corpus has 300–500 cases, and its governance ID, version, hash,
   normalization, run ID, and allowed categories are frozen;
 - privacy/legal, commercial, security/authentication, data-governance, and
   product-rollout owners each have a distinct approved evidence ID, artifact

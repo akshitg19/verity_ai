@@ -58,8 +58,10 @@ for implementation decisions.
   records the default-off real-user authentication mechanism, fail-closed
   allow-list, token handling, tests, and exact external activation evidence.
 - [Rollout approval schema](rollout-approval.schema.json) defines the strict
-  evidence contract that a future activation manifest must satisfy; no valid
-  real approval manifest exists while the current decision is `NO_DECISION`.
+  evidence contract that a future activation manifest must satisfy, including
+  the exact governance ID and governance-artifact hash approved by the
+  data-governance owner; no valid real approval manifest exists while the
+  current decision is `NO_DECISION`.
 - [Disabled deployment evidence](disabled-deployment-evidence-2026-08-16.md)
   records the exact build, revision, false flags, secret references, image
   digest, and content-safe rollout checks without reading secret values.
@@ -86,6 +88,10 @@ for implementation decisions.
 - [Stroke schema](fixtures/stroke.schema.json) bounds replayable digital ink,
   and [prediction schema](fixtures/prediction.schema.json) defines restricted
   provider-run output.
+- [Corpus governance schema](fixtures/corpus-governance.schema.json) binds an
+  exact corpus hash and count to content-free storage, consent, retention,
+  deletion, provider, dual-review, and approval-window evidence; every decision
+  run must pass it before planning or scoring.
 - [Example fixtures](fixtures/cases.example.jsonl) show valid JSONL records. They
   are examples, not benchmark results.
 - [Synthetic chemistry routing fixtures](fixtures/synthetic-chemistry-routing-v1/manifest.jsonl)
