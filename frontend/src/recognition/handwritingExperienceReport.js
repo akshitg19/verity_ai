@@ -11,7 +11,12 @@ import {
   RECOGNITION_STAGES,
 } from "./recognitionMetrics.js";
 
-export const HANDWRITING_EXPERIMENT_EXPORT_SCHEMA = 2;
+export const HANDWRITING_EXPERIMENT_EXPORT_SCHEMA = 3;
+export const HANDWRITING_EXPERIMENT_CONSENT = Object.freeze({
+  voluntaryParticipation: true,
+  syntheticPromptsOnly: true,
+  contentFreeExportAcknowledged: true,
+});
 
 const REQUIRED_PAIR_COUNT = Object.freeze({ min: 3, max: 5 });
 const TASK_ID_SET = new Set(HANDWRITING_EXPERIMENT_TASK_IDS);
@@ -20,8 +25,9 @@ const DEVICE_CLASS_PATTERN = /^(touch|pointer)-(small|medium|large)$/;
 const ACCURACY_VALUES = new Set(["correct", "incorrect", "unreadable"]);
 const RUN_KEYS = new Set([
   "schemaVersion", "experiment", "variant", "pairToken", "exportedAt",
-  "policy", "environment", "assessments", "metrics",
+  "consent", "policy", "environment", "assessments", "metrics",
 ]);
+const CONSENT_KEYS = new Set(Object.keys(HANDWRITING_EXPERIMENT_CONSENT));
 const POLICY_KEYS = new Set([
   "recognizer", "quietPeriodMs", "maxRecognitionConcurrency",
 ]);
@@ -128,6 +134,26 @@ function finite(value) {
   return Number.isFinite(value) ? value : null;
 }
 
+function validateEnvironmentClass(value) {
+  if (typeof value !== "string") return false;
+  const [browser, device, extra] = value.split("/");
+  return !extra && BROWSER_CLASSES.has(browser) &&
+    DEVICE_CLASS_PATTERN.test(device ?? "");
+}
+
+function normalizeRequiredEnvironments(values = []) {
+  if (
+    !Array.isArray(values) ||
+    values.length > 10 ||
+    values.some((value) => !validateEnvironmentClass(value))
+  ) {
+    throw new TypeError(
+      "Invalid handwriting experiment export: required environment is invalid."
+    );
+  }
+  return [...new Set(values)].sort();
+}
+
 export function percentile(values, proportion) {
   const sorted = values.filter(Number.isFinite).sort((left, right) => left - right);
   if (sorted.length === 0) return null;
@@ -192,6 +218,13 @@ export function validateHandwritingExperimentRun(run) {
     !validTimestamp(run.exportedAt)
   ) {
     invalidRun("identity, pairing token, or timestamp is invalid");
+  }
+
+  exactKeys(run.consent, CONSENT_KEYS, "consent");
+  if (Object.entries(HANDWRITING_EXPERIMENT_CONSENT).some(
+    ([key, expected]) => run.consent[key] !== expected
+  )) {
+    invalidRun("consent attestation is incomplete");
   }
 
   exactKeys(run.policy, POLICY_KEYS, "policy");
@@ -329,7 +362,7 @@ function aggregateVariant(runs) {
   };
 }
 
-function pairingReadiness(runs) {
+function pairingReadiness(runs, requiredEnvironments) {
   const groups = new Map();
   for (const run of runs) {
     const group = groups.get(run.pairToken) ?? [];
@@ -341,6 +374,7 @@ function pairingReadiness(runs) {
   let unpairedRuns = 0;
   let environmentMismatchPairs = 0;
   let incompleteRuns = 0;
+  const coveredEnvironmentSet = new Set();
   const firstVariantCounts = { legacy: 0, current: 0, tie: 0 };
   for (const group of groups.values()) {
     const legacy = group.filter(({ variant }) => variant === "legacy");
@@ -368,8 +402,16 @@ function pairingReadiness(runs) {
     if (legacyTime < currentTime) firstVariantCounts.legacy += 1;
     else if (currentTime < legacyTime) firstVariantCounts.current += 1;
     else firstVariantCounts.tie += 1;
+    coveredEnvironmentSet.add(
+      `${legacy[0].environment.browserClass}/${legacy[0].environment.deviceClass}`
+    );
     completePairs += 1;
   }
+
+  const coveredEnvironments = [...coveredEnvironmentSet].sort();
+  const missingRequiredEnvironments = requiredEnvironments.filter(
+    (value) => !coveredEnvironmentSet.has(value)
+  );
 
   const issues = [];
   if (completePairs < REQUIRED_PAIR_COUNT.min) issues.push("too_few_complete_pairs");
@@ -381,6 +423,9 @@ function pairingReadiness(runs) {
   if (Math.abs(firstVariantCounts.legacy - firstVariantCounts.current) > 1) {
     issues.push("paired_order_imbalanced");
   }
+  if (missingRequiredEnvironments.length) {
+    issues.push("missing_required_environment");
+  }
   return {
     ready: issues.length === 0,
     requiredPairs: REQUIRED_PAIR_COUNT,
@@ -388,6 +433,9 @@ function pairingReadiness(runs) {
     unpairedRuns,
     environmentMismatchPairs,
     incompleteRuns,
+    requiredEnvironments,
+    coveredEnvironments,
+    missingRequiredEnvironments,
     firstVariantCounts,
     issues,
   };
@@ -412,7 +460,10 @@ function aggregateEnvironmentBreakdowns(runs) {
   ]));
 }
 
-export function aggregateHandwritingExperimentRuns(rawRuns) {
+export function aggregateHandwritingExperimentRuns(rawRuns, options = {}) {
+  const requiredEnvironments = normalizeRequiredEnvironments(
+    options.requiredEnvironments
+  );
   const runs = rawRuns.map(validateHandwritingExperimentRun);
   const variants = {};
   for (const variant of ["legacy", "current"]) {
@@ -420,11 +471,11 @@ export function aggregateHandwritingExperimentRuns(rawRuns) {
     if (matching.length) variants[variant] = aggregateVariant(matching);
   }
   return {
-    schemaVersion: 2,
+    schemaVersion: HANDWRITING_EXPERIMENT_EXPORT_SCHEMA,
     experiment: runs[0]?.experiment ?? null,
     generatedAt: new Date().toISOString(),
     totalRuns: runs.length,
-    readiness: pairingReadiness(runs),
+    readiness: pairingReadiness(runs, requiredEnvironments),
     variants,
     breakdowns: {
       environment: aggregateEnvironmentBreakdowns(runs),

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  HANDWRITING_EXPERIMENT_CONSENT,
   HANDWRITING_EXPERIMENT_EXPORT_SCHEMA,
   sanitizeHandwritingExperimentMetric,
 } from "../recognition/handwritingExperienceReport";
@@ -57,17 +58,9 @@ export default function HandwritingExperiencePanel() {
     () => resolveHandwritingExperienceExperiment(),
     []
   );
-  const pairToken = useMemo(
-    () => {
-      if (!experiment.enabled) return null;
-      try {
-        return getOrCreateHandwritingExperimentPairToken();
-      } catch {
-        return null;
-      }
-    },
-    [experiment.enabled]
-  );
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [consentError, setConsentError] = useState(false);
+  const [pairToken, setPairToken] = useState(null);
   const [taskIndex, setTaskIndex] = useState(0);
   const [assessment, setAssessment] = useState({ ...EMPTY_ASSESSMENT });
   const [assessments, setAssessments] = useState([]);
@@ -79,7 +72,7 @@ export default function HandwritingExperiencePanel() {
   }, [taskIndex]);
 
   useEffect(() => {
-    if (!experiment.enabled) return undefined;
+    if (!experiment.enabled || !consentGiven) return undefined;
     const capture = (event) => {
       metricsRef.current.push(sanitizeHandwritingExperimentMetric(
         event.detail,
@@ -88,7 +81,7 @@ export default function HandwritingExperiencePanel() {
     };
     globalThis.addEventListener(RECOGNITION_METRIC_EVENT, capture);
     return () => globalThis.removeEventListener(RECOGNITION_METRIC_EVENT, capture);
-  }, [experiment.enabled]);
+  }, [consentGiven, experiment.enabled]);
 
   if (!experiment.enabled) return null;
   const task = TASKS[taskIndex];
@@ -96,6 +89,28 @@ export default function HandwritingExperiencePanel() {
   const pairNumber = Math.floor(taskIndex / 2) + 1;
   const pairedTask = pairStart ? TASKS[taskIndex + 1] : null;
   const recordedTaskIds = new Set(assessments.map((entry) => entry.taskId));
+
+  const handleConsentChange = (event) => {
+    if (!event.target.checked) {
+      setConsentGiven(false);
+      setPairToken(null);
+      setConsentError(false);
+      setTaskIndex(0);
+      setAssessment({ ...EMPTY_ASSESSMENT });
+      setAssessments([]);
+      metricsRef.current = [];
+      return;
+    }
+    try {
+      setPairToken(getOrCreateHandwritingExperimentPairToken());
+      setConsentGiven(true);
+      setConsentError(false);
+    } catch {
+      setPairToken(null);
+      setConsentGiven(false);
+      setConsentError(true);
+    }
+  };
 
   const recordCurrent = () => {
     setAssessments((current) => [
@@ -120,6 +135,7 @@ export default function HandwritingExperiencePanel() {
       variant: experiment.variant,
       pairToken,
       exportedAt,
+      consent: HANDWRITING_EXPERIMENT_CONSENT,
       policy: {
         recognizer: "gemini",
         quietPeriodMs: experiment.quietPeriodMs,
@@ -158,6 +174,30 @@ export default function HandwritingExperiencePanel() {
         Internal handwriting A/B — {experiment.variant}
       </summary>
       <p style={{ fontSize: 12, lineHeight: 1.4 }}>
+        This optional internal test uses only the synthetic prompts shown here.
+        No metrics are collected until you agree below.
+      </p>
+      <label style={{ ...fieldStyle, margin: "8px 0 12px" }}>
+        <span>
+          <input
+            type="checkbox"
+            checked={consentGiven}
+            onChange={handleConsentChange}
+          />{" "}
+          I voluntarily agree to participate, will use only the displayed
+          synthetic prompts, and understand the anonymous export contains no
+          ink or recognized text.
+        </span>
+      </label>
+      {consentError && (
+        <p role="alert" style={{ color: "#8a2c20", fontSize: 12 }}>
+          Session storage is required to pair both variants. Enable it and
+          try again in this internal preview.
+        </p>
+      )}
+      {consentGiven && (
+        <>
+      <p style={{ fontSize: 12, lineHeight: 1.4 }}>
         {pairStart
           ? "Write both rows below without waiting between them. Wait for both " +
             "results, then rate row 1."
@@ -165,12 +205,6 @@ export default function HandwritingExperiencePanel() {
             "Question before the next pair."}
         {" "}No ink or recognized text is exported.
       </p>
-      {!pairToken && (
-        <p role="alert" style={{ color: "#8a2c20", fontSize: 12 }}>
-          Session storage is required to pair both variants. Enable it and
-          reload this internal preview before starting.
-        </p>
-      )}
       <div style={{ fontSize: 12, color: "#51605b" }}>
         Pair {pairNumber}/6 · task {taskIndex + 1}/{TASKS.length} ·{" "}
         {recordedTaskIds.size} saved
@@ -269,6 +303,8 @@ export default function HandwritingExperiencePanel() {
           Export JSON
         </button>
       </div>
+        </>
+      )}
     </details>
   );
 }

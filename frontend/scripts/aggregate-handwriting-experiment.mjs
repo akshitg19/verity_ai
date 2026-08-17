@@ -4,11 +4,33 @@ import { aggregateHandwritingExperimentRuns } from
   "../src/recognition/handwritingExperienceReport.js";
 
 const arguments_ = process.argv.slice(2);
-const requireReady = arguments_.includes("--require-ready");
-const paths = arguments_.filter((value) => value !== "--require-ready");
-if (paths.length === 0) {
+let requireReady = false;
+const requiredEnvironments = [];
+const paths = [];
+let invalidArguments = false;
+for (let index = 0; index < arguments_.length; index += 1) {
+  const value = arguments_[index];
+  if (value === "--require-ready") {
+    requireReady = true;
+  } else if (value === "--require-environment") {
+    const environment = arguments_[index + 1];
+    if (!environment || environment.startsWith("--")) {
+      invalidArguments = true;
+      break;
+    }
+    requiredEnvironments.push(environment);
+    index += 1;
+  } else if (value.startsWith("--")) {
+    invalidArguments = true;
+    break;
+  } else {
+    paths.push(value);
+  }
+}
+if (invalidArguments || paths.length === 0) {
   console.error(
     "Usage: npm run handwriting:aggregate -- [--require-ready] " +
+      "[--require-environment browser/device]... " +
       "<legacy.json> <current.json> [...]"
   );
   process.exitCode = 2;
@@ -17,7 +39,9 @@ if (paths.length === 0) {
     const runs = await Promise.all(paths.map(async (path) =>
       JSON.parse(await readFile(path, "utf8"))
     ));
-    const report = aggregateHandwritingExperimentRuns(runs);
+    const report = aggregateHandwritingExperimentRuns(runs, {
+      requiredEnvironments,
+    });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     if (requireReady && !report.readiness.ready) {
       console.error("Handwriting A/B evidence readiness gate failed.");

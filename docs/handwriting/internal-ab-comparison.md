@@ -1,6 +1,6 @@
 # Internal Gemini Scheduling A/B Comparison
 
-**Status:** Validated schema-v2 tooling ready; teammate/device runs pending
+**Status:** Validated schema-v3 consent-gated tooling ready; teammate/device runs pending
 
 **Experiment:** `gemini-scheduling-ab-v1`
 
@@ -27,9 +27,9 @@ Local:
 - `http://localhost:5173/math?hwr_ab=legacy`
 - `http://localhost:5173/math?hwr_ab=current`
 
-Vercel preview base URL for the schema-v2 tooling merged by PR #59:
-`https://verity-ai-git-feat-handwriting-ab-evidence-integrity-verity-ai2.vercel.app`.
-Use that same base URL followed by `/math?hwr_ab=legacy` or
+Do not use the earlier PR #59 schema-v2 preview: its exports are intentionally
+rejected by the schema-v3 consent gate. Use the preview generated from the
+schema-v3 change for both variants, followed by `/math?hwr_ab=legacy` or
 `/math?hwr_ab=current`; do not compare two different code revisions or
 providers. The preview is protected by Vercel Authentication, so each teammate
 must have access to the `verity-ai2` Vercel team and sign in before the app is
@@ -60,20 +60,26 @@ one-worker/two-worker policy.
 The experiment panel displays the same list. It records only task IDs, coarse
 browser/device classes, content-free lifecycle metrics, and the teammate's
 ratings. It never exports ink, images, recognized text, expected text, problem
-text, notebook/page IDs, names, or email addresses. Export schema v2 adds one
-random UUID held only in the browser tab's session storage so the offline tool
-can prove that Legacy and Current came from the same anonymous session. The
-token is not a participant identity, does not survive the tab session, and is
-not copied into the aggregate report.
+text, notebook/page IDs, names, or email addresses. Export schema v3 adds a
+fixed anonymous consent attestation and one random UUID held only in the
+browser tab's session storage so the offline tool can prove that Legacy and
+Current came from the same anonymous session. The token is not a participant
+identity, does not survive the tab session, and is not copied into the
+aggregate report. The panel creates that token and begins listening for
+content-free timing events only after the teammate voluntarily checks the
+consent statement. Withdrawing consent clears the in-memory ratings and
+metrics. The attestation proves that the UI gate was accepted; it does not
+identify the participant or replace team/security approval.
 
 ## Teammate instructions
 
-1. Open the PR #32 preview link above with one variant query and complete the
+1. Open the schema-v3 PR preview with one variant query and complete the
    existing Vercel team sign-in if prompted.
-2. Confirm the panel heading names the intended variant.
-   If the panel says session storage is unavailable, enable session storage for
-   this internal preview and reload; export stays disabled until anonymous
-   pairing can be retained.
+2. Confirm the panel heading names the intended variant. Read and voluntarily
+   check the anonymous consent statement before writing. No experiment metrics
+   are collected before it is checked. If the panel says session storage is
+   unavailable, enable session storage for this internal preview and try again;
+   export stays disabled until anonymous pairing can be retained.
 3. Use the math notebook. For each pair, write row 1 and row 2 exactly as shown,
    with no pause to wait for recognition between them.
 4. After row 2, wait for both recognition results and verdict painting.
@@ -97,20 +103,33 @@ not substitute real student work or identifying content.
 From `frontend/`, run:
 
 ```bash
+APPROVED_ENVIRONMENT='safari/touch-medium'
 npm run handwriting:aggregate -- \
   --require-ready \
+  --require-environment "$APPROVED_ENVIRONMENT" \
   /approved/path/verity-hwr-legacy-*.json \
   /approved/path/verity-hwr-current-*.json \
   > /approved/path/handwriting-ab-summary.json
 ```
 
-The command rejects unsupported schemas, policy drift, missing/duplicated task
-ratings, out-of-range values, unsafe fields, invalid environment classes, and
-malformed metrics before aggregation. `--require-ready` returns nonzero unless
+The value above is an example coarse class, not a pre-approved device matrix.
+Before collecting completed evidence, the experiment owner must replace it
+with every approved target class. Repeat `--require-environment` for multiple
+classes. Browser classes are `firefox`, `edge`, `chromium`, `safari`, or
+`other`; device classes are `touch` or `pointer` combined with `small`,
+`medium`, or `large`. Running once without `--require-ready` can reveal the
+automatically detected coarse class without exposing a device model or tester
+identity.
+
+The command rejects unsupported schemas, missing/incomplete consent
+attestations, policy drift, missing/duplicated task ratings, out-of-range
+values, unsafe fields, invalid environment classes, and malformed metrics
+before aggregation. `--require-ready` returns nonzero unless
 there are 3–5 anonymous Legacy/Current pairs from matching device/browser
 classes, every run has exactly 12 committed painted results and 12 provider
 requests, stale/error counts are zero, and first-variant order is balanced to
-within one pair with no equal/ambiguous export timestamps.
+within one pair with no equal/ambiguous export timestamps. Each class named by
+`--require-environment` must also have at least one complete pair.
 
 The machine-readable report contains readiness codes, run/task counts, p50/p95
 lifecycle and provider-request durations, mean responsiveness/confidence,

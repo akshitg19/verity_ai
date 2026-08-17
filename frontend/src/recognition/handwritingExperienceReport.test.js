@@ -33,11 +33,16 @@ function run(
     ? { recognizer: "gemini", quietPeriodMs: 1500, maxRecognitionConcurrency: 1 }
     : { recognizer: "gemini", quietPeriodMs: 750, maxRecognitionConcurrency: 2 };
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     experiment: "gemini-scheduling-ab-v1",
     variant,
     pairToken,
     exportedAt,
+    consent: {
+      voluntaryParticipation: true,
+      syntheticPromptsOnly: true,
+      contentFreeExportAcknowledged: true,
+    },
     policy,
     environment: { browserClass: "chromium", deviceClass: "touch-large" },
     assessments: HANDWRITING_EXPERIMENT_TASK_IDS.map((taskId) => ({
@@ -144,6 +149,9 @@ describe("handwriting experience report", () => {
       unpairedRuns: 0,
       environmentMismatchPairs: 0,
       incompleteRuns: 0,
+      requiredEnvironments: [],
+      coveredEnvironments: ["chromium/touch-large"],
+      missingRequiredEnvironments: [],
       firstVariantCounts: { legacy: 2, current: 1, tie: 0 },
       issues: [],
     });
@@ -173,7 +181,13 @@ describe("handwriting experience report", () => {
       );
       const report = JSON.parse(execFileSync(
         process.execPath,
-        [script, "--require-ready", ...paths],
+        [
+          script,
+          "--require-ready",
+          "--require-environment",
+          "chromium/touch-large",
+          ...paths,
+        ],
         { encoding: "utf8" }
       ));
       expect(report.readiness.ready).toBe(true);
@@ -181,6 +195,20 @@ describe("handwriting experience report", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  it("requires complete-pair coverage for each declared target environment", () => {
+    const report = aggregateHandwritingExperimentRuns(
+      TOKENS.flatMap(pairedRuns),
+      { requiredEnvironments: ["safari/touch-medium"] }
+    );
+    expect(report.readiness).toMatchObject({
+      ready: false,
+      requiredEnvironments: ["safari/touch-medium"],
+      coveredEnvironments: ["chromium/touch-large"],
+      missingRequiredEnvironments: ["safari/touch-medium"],
+      issues: ["missing_required_environment"],
+    });
   });
 
   it("does not echo malformed input content from the CLI", () => {
@@ -245,6 +273,23 @@ describe("handwriting experience report", () => {
     const unsafe = run("current");
     unsafe.metrics[0].recognizedText = "private answer";
     expect(() => validateHandwritingExperimentRun(unsafe))
+      .toThrow(/non-allowlisted field/);
+  });
+
+  it("rejects absent, incomplete, or identifying consent records", () => {
+    const absent = run("current");
+    delete absent.consent;
+    expect(() => validateHandwritingExperimentRun(absent))
+      .toThrow(/consent.*plain object/);
+
+    const declined = run("current");
+    declined.consent.voluntaryParticipation = false;
+    expect(() => validateHandwritingExperimentRun(declined))
+      .toThrow(/consent attestation is incomplete/);
+
+    const identifying = run("current");
+    identifying.consent.email = "participant@example.invalid";
+    expect(() => validateHandwritingExperimentRun(identifying))
       .toThrow(/non-allowlisted field/);
   });
 
