@@ -7,6 +7,7 @@ import {
   HANDWRITING_MODES,
   resolveHandwritingMode,
   resolveMyScriptPocEnabled,
+  TopicRecognizerRouter,
 } from "./recognitionConfig";
 
 function provider(source, text) {
@@ -62,6 +63,34 @@ describe("recognition configuration", () => {
 
     expect(createConfiguredRecognizer({ gemini, createMyScript })).toBe(myscript);
     expect(createMyScript).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes only Algebra to MyScript in presenter showcase mode", () => {
+    const gemini = provider("gemini", "image");
+    const myscript = provider("myscript", "vector");
+    const createMyScript = vi.fn(() => myscript);
+    const router = createConfiguredRecognizer({
+      mode: HANDWRITING_MODES.ALGEBRA_SHOWCASE,
+      gemini,
+      myscriptPocEnabled: true,
+      createMyScript,
+    });
+
+    expect(router).toBeInstanceOf(TopicRecognizerRouter);
+    expect(router.forTopic("algebra")).toBe(myscript);
+    expect(router.forTopic("pre-algebra")).toBe(gemini);
+    expect(router.forTopic("trigonometry")).toBe(gemini);
+    expect(router.forTopic("calculus")).toBe(gemini);
+    expect(createMyScript).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps showcase mode on Gemini unless the second gate is explicit", () => {
+    const gemini = provider("gemini", "image");
+    expect(createConfiguredRecognizer({
+      mode: HANDWRITING_MODES.ALGEBRA_SHOWCASE,
+      gemini,
+      myscriptPocEnabled: false,
+    })).toBe(gemini);
   });
 
   it("only constructs hybrid or shadow modes when a primary exists", () => {

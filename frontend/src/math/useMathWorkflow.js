@@ -65,9 +65,13 @@ export default function useMathWorkflow({
   );
   const recognitionConcurrency = maxRecognitionConcurrency ??
     experienceExperiment.maxRecognitionConcurrency;
+  const activeRecognizer = useMemo(
+    () => recognizer.forTopic?.(topicId) ?? recognizer,
+    [recognizer, topicId]
+  );
   const recognitionPolicy = useMemo(
     () => {
-      const policy = finalizationPolicyForRecognizer(recognizer);
+      const policy = finalizationPolicyForRecognizer(activeRecognizer);
       if (!experienceExperiment.enabled || policy.inputMode !== "image") {
         return policy;
       }
@@ -76,8 +80,14 @@ export default function useMathWorkflow({
         quietPeriodMs: experienceExperiment.quietPeriodMs,
       });
     },
-    [experienceExperiment, recognizer]
+    [activeRecognizer, experienceExperiment]
   );
+  const [recognitionStatus, setRecognitionStatus] = useState(() => ({
+    state: "idle",
+    source: activeRecognizer.source ?? "recognizer",
+    inputMode: recognitionPolicy.inputMode,
+    latencyMs: null,
+  }));
 
   const handleSessionFailure = useCallback((error) => {
     setHintError(error.message);
@@ -136,11 +146,18 @@ export default function useMathWorkflow({
       setProvisionalByLine(new Map());
 
       setTopicId(nextTopicId);
+      const nextRecognizer = recognizer.forTopic?.(nextTopicId) ?? recognizer;
+      setRecognitionStatus({
+        state: "idle",
+        source: nextRecognizer.source ?? "recognizer",
+        inputMode: finalizationPolicyForRecognizer(nextRecognizer).inputMode,
+        latencyMs: null,
+      });
       setVerdictsByLine(new Map());
       setFirstWrongLine(null);
       setLastResult(null);
     },
-    [cancelSession, clearHints, topicId]
+    [cancelSession, clearHints, recognizer, topicId]
   );
 
   const recheck = useCallback(
@@ -226,7 +243,7 @@ export default function useMathWorkflow({
   const recognizeJob = useCallback(async (job, { signal, onProvisional }) => {
     job.trace.mark("recognition_start");
     try {
-      return await recognizer.recognize({
+      return await activeRecognizer.recognize({
         strokes: [...job.strokes],
         expressionId: job.row,
         expressionVersion: job.version,
@@ -245,7 +262,7 @@ export default function useMathWorkflow({
         job.trace.finish({ outcome: "cancelled" });
       }
     }
-  }, [recognizer, topicId]);
+  }, [activeRecognizer, topicId]);
 
   const handleProvisionalResult = useCallback((job, result) => {
     if (!isRecognitionJobCurrent(job)) return;
@@ -265,6 +282,15 @@ export default function useMathWorkflow({
   const commitRecognizedRows = useCallback(async (entries) => {
     const current = entries.filter(({ job }) => isRecognitionJobCurrent(job));
     if (current.length === 0) return;
+    const latest = current[current.length - 1];
+    setRecognitionStatus({
+      state: latest.result.unreadable ? "failure" : "success",
+      source: latest.result.source ?? activeRecognizer.source ?? "recognizer",
+      inputMode: recognitionPolicy.inputMode,
+      latencyMs: Number.isFinite(latest.result.latencyMs)
+        ? Math.round(latest.result.latencyMs)
+        : null,
+    });
     const committedRows = new Set(current.map(({ job }) => job.row));
     const nextLines = [
       ...linesRef.current.filter((line) => !committedRows.has(line.row)),
@@ -299,7 +325,7 @@ export default function useMathWorkflow({
         outcome: isRecognitionJobCurrent(job) ? "committed" : "stale",
       });
     }
-  }, [isRecognitionJobCurrent, recheck]);
+  }, [activeRecognizer.source, isRecognitionJobCurrent, recognitionPolicy.inputMode, recheck]);
 
   const handleRecognitionError = useCallback((job, error) => {
     job.trace.finish({ outcome: "error" });
@@ -307,8 +333,15 @@ export default function useMathWorkflow({
     setProvisionalByLine((current) => new Map(
       [...current].filter(([row]) => row !== job.row)
     ));
+    setRecognitionStatus({
+      state: "failure",
+      source: error.source ?? activeRecognizer.source ?? "recognizer",
+      inputMode: recognitionPolicy.inputMode,
+      latencyMs: null,
+      code: error.code ?? "recognition_error",
+    });
     setLastResult({ error: error.message });
-  }, [isRecognitionJobCurrent]);
+  }, [activeRecognizer.source, isRecognitionJobCurrent, recognitionPolicy.inputMode]);
 
   useEffect(() => {
     const coordinator = new RecognitionCoordinator({
@@ -358,7 +391,7 @@ export default function useMathWorkflow({
       ? reportedPointerUpAt
       : queuedAt;
     const trace = createRecognitionLifecycleTrace({
-      provider: recognizer.source ?? "recognizer",
+      provider: activeRecognizer.source ?? "recognizer",
       mode: recognitionPolicy.inputMode,
       expressionVersion: version,
     }, {
@@ -386,8 +419,14 @@ export default function useMathWorkflow({
       trace.finish({ outcome: "ignored" });
       return;
     }
+    setRecognitionStatus({
+      state: "reading",
+      source: activeRecognizer.source ?? "recognizer",
+      inputMode: recognitionPolicy.inputMode,
+      latencyMs: null,
+    });
     setLastResult(null);
-  }, [emitRecognitionLifecycleMetric, recognitionPolicy.inputMode, recognizer.source]);
+  }, [activeRecognizer.source, emitRecognitionLifecycleMetric, recognitionPolicy.inputMode]);
 
   const invalidateRow = useCallback(
     (row) => {
@@ -410,8 +449,14 @@ export default function useMathWorkflow({
       setFirstWrongLine(null);
       clearHints();
       setLastResult(null);
+      setRecognitionStatus({
+        state: "idle",
+        source: activeRecognizer.source ?? "recognizer",
+        inputMode: recognitionPolicy.inputMode,
+        latencyMs: null,
+      });
     },
-    [bumpRowVersion, clearHints]
+    [activeRecognizer.source, bumpRowVersion, clearHints, recognitionPolicy.inputMode]
   );
 
   const handleLineEdit = useCallback(
@@ -592,7 +637,13 @@ export default function useMathWorkflow({
     setHintError(null);
     setLastResult(null);
     setTranscribing(false);
-  }, [cancelSession, clearHints]);
+    setRecognitionStatus({
+      state: "idle",
+      source: activeRecognizer.source ?? "recognizer",
+      inputMode: recognitionPolicy.inputMode,
+      latencyMs: null,
+    });
+  }, [activeRecognizer.source, cancelSession, clearHints, recognitionPolicy.inputMode]);
 
   const getWorkflowSnapshot = useCallback(() => {
     return serializeWorkflowSnapshot({
@@ -673,6 +724,7 @@ export default function useMathWorkflow({
     transcribing,
     provisionalByLine,
     recognitionPolicy,
+    recognitionStatus,
     experienceExperiment,
     lastResult,
     session,

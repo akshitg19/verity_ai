@@ -14,6 +14,7 @@ export {
 export const HANDWRITING_MODES = Object.freeze({
   GEMINI: "gemini",
   MYSCRIPT_POC: "myscript-poc",
+  ALGEBRA_SHOWCASE: "algebra-showcase",
   SHADOW: "shadow",
   HYBRID: "hybrid",
 });
@@ -30,6 +31,21 @@ export function resolveHandwritingMode(value) {
 
 export function resolveMyScriptPocEnabled(value) {
   return value === "true";
+}
+
+export class TopicRecognizerRouter {
+  constructor({ algebra, fallback }) {
+    if (!algebra || !fallback) {
+      throw new TypeError("Algebra and fallback recognizers are required.");
+    }
+    this.source = "topic-router";
+    this.algebra = algebra;
+    this.fallback = fallback;
+  }
+
+  forTopic(topic) {
+    return topic === "algebra" ? this.algebra : this.fallback;
+  }
 }
 
 export function createConfiguredRecognizer({
@@ -50,6 +66,13 @@ export function createConfiguredRecognizer({
   if (mode === HANDWRITING_MODES.MYSCRIPT_POC) {
     if (!myscriptPocEnabled) return gemini;
     return primary ?? createMyScript();
+  }
+  if (mode === HANDWRITING_MODES.ALGEBRA_SHOWCASE) {
+    if (!myscriptPocEnabled) return gemini;
+    return new TopicRecognizerRouter({
+      algebra: primary ?? createMyScript(),
+      fallback: gemini,
+    });
   }
   if (!primary || mode === HANDWRITING_MODES.GEMINI) return gemini;
   if (mode === HANDWRITING_MODES.SHADOW) {

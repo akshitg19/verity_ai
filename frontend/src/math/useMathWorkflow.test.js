@@ -94,6 +94,66 @@ describe("useMathWorkflow recognition lifecycle", () => {
     expect(checkSteps.mock.calls[0][2]).toEqual([{ line_number: 1, latex: "x = 1" }]);
   });
 
+  it("exposes reading, source, vector mode, latency, and success for the presenter", async () => {
+    const pending = deferred();
+    const recognizer = recognizerFrom(() => pending.promise, {
+      source: "myscript",
+      inputMode: "vector",
+      autoFinalize: false,
+    });
+    await renderWorkflow({ pageId: "page-1", recognizer, emitRecognitionLifecycleMetric: vi.fn() });
+
+    act(() => {
+      workflow.invalidateRow(1);
+      workflow.queueRow({ row: 1, pageId: "page-1", strokes: [{}] });
+    });
+    expect(workflow.recognitionStatus).toMatchObject({
+      state: "reading",
+      source: "myscript",
+      inputMode: "vector",
+      latencyMs: null,
+    });
+
+    await act(async () => pending.resolve({
+      text: "2x + 3 = 11",
+      source: "myscript",
+      latencyMs: 84,
+    }));
+    await settle();
+    expect(workflow.recognitionStatus).toMatchObject({
+      state: "success",
+      source: "myscript",
+      inputMode: "vector",
+      latencyMs: 84,
+    });
+  });
+
+  it("uses the topic router so non-Algebra topics retain Gemini", async () => {
+    const myscript = recognizerFrom(async () => ({ text: "x = 1" }), {
+      source: "myscript",
+      inputMode: "vector",
+      autoFinalize: false,
+    });
+    const gemini = recognizerFrom(async () => ({ text: "x = 1" }), {
+      source: "gemini",
+      inputMode: "image",
+    });
+    const router = { source: "topic-router", forTopic: (topic) => (
+      topic === "algebra" ? myscript : gemini
+    ) };
+    await renderWorkflow({ pageId: "page-1", recognizer: router, emitRecognitionLifecycleMetric: vi.fn() });
+    expect(workflow.recognitionPolicy.inputMode).toBe("vector");
+    expect(workflow.recognitionStatus.source).toBe("myscript");
+
+    act(() => workflow.handleTopicChange("calculus"));
+    expect(workflow.recognitionPolicy.inputMode).toBe("image");
+    expect(workflow.recognitionStatus).toMatchObject({
+      state: "idle",
+      source: "gemini",
+      inputMode: "image",
+    });
+  });
+
   it("wires the internal legacy query to 1500ms and one recognition worker", async () => {
     window.history.replaceState({}, "", "/math?hwr_ab=legacy");
     const calls = [];

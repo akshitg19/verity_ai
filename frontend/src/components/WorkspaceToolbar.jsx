@@ -4,6 +4,7 @@ import { COLORS, RADIUS, SHADOW, SUBJECTS } from "../theme";
 import Logo from "./Logo";
 import PageStrip from "../notebook/PageStrip";
 import { navigate } from "../router";
+import RecognitionStatusBadge from "./RecognitionStatusBadge";
 
 
 const PEN_WIDTHS = [
@@ -189,6 +190,7 @@ export default function WorkspaceToolbar({
   onProblemEditDone,
   canvas,
   theme,
+  recognitionStatus,
 }) {
   const [showPenSettings, setShowPenSettings] = useState(false);
   const [showEraserSettings, setShowEraserSettings] = useState(false);
@@ -404,8 +406,9 @@ export default function WorkspaceToolbar({
       )}
 
       <div className="workspace-tools" style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+        <RecognitionStatusBadge mode={mode} status={recognitionStatus} />
         <div ref={penSettingsRef} style={{ position: "relative" }}>
-          <div style={{ height: 40, display: "flex", alignItems: "stretch", border: activeTool === "pen" ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: activeTool === "pen" ? COLORS.primaryLight : COLORS.surface, overflow: "hidden", boxSizing: "border-box" }}>
+          <div style={{ height: 44, display: "flex", alignItems: "stretch", border: activeTool === "pen" ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: activeTool === "pen" ? COLORS.primaryLight : COLORS.surface, overflow: "hidden", boxSizing: "border-box" }}>
             <button
               type="button"
               aria-pressed={activeTool === "pen"}
@@ -471,7 +474,7 @@ export default function WorkspaceToolbar({
         </div>
 
         <div ref={eraserSettingsRef} style={{ position: "relative" }}>
-          <div style={{ height: 40, display: "flex", alignItems: "stretch", border: activeTool === "eraser" ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: activeTool === "eraser" ? COLORS.primaryLight : COLORS.surface, overflow: "hidden", boxSizing: "border-box" }}>
+          <div style={{ height: 44, display: "flex", alignItems: "stretch", border: activeTool === "eraser" ? `2px solid ${COLORS.primary}` : `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, background: activeTool === "eraser" ? COLORS.primaryLight : COLORS.surface, overflow: "hidden", boxSizing: "border-box" }}>
             <button
               type="button"
               aria-pressed={activeTool === "eraser"}
@@ -548,7 +551,7 @@ export default function WorkspaceToolbar({
           title={`${themeLabel.title}. Tap to change`}
           aria-label={themeLabel.title}
           onClick={theme.cycle}
-          style={{ width: 42, height: 40, padding: 0, display: "grid", placeItems: "center", background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, fontSize: 17, cursor: "pointer" }}
+          style={{ width: 44, height: 44, padding: 0, display: "grid", placeItems: "center", background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, fontSize: 17, cursor: "pointer" }}
         >
           {themeLabel.glyph}
         </button>
